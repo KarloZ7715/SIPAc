@@ -1,0 +1,142 @@
+@startuml 03c-secuencia-verificacion
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 200
+
+title SIPAc — Diagrama de Secuencia 3.3\nFlujo de Revisión y Verificación de Producto Académico
+
+actor "Docente" as Docente
+participant "Browser\n(Docente)" as BrowserDoc #LightGreen
+participant "API Route\n/api/products/[id]" as APIProducts #LightBlue
+database "MongoDB\nAcademicProduct" as DB #Khaki
+actor "Coordinador" as Coord
+participant "Browser\n(Coordinador)" as BrowserCoord #LightSkyBlue
+participant "API Route\n/api/products/[id]/verify" as APIVerify #LightCoral
+participant "AuditLog\nService" as Audit #Plum
+participant "Notification\nService" as Notif #LightYellow
+
+== Fase 1: Revisión de Entidades por el Docente ==
+
+Docente -> BrowserDoc : Abre interfaz de\nrevisión de entidades (RF-049)
+activate BrowserDoc
+
+BrowserDoc -> APIProducts : GET /api/products/{id}
+activate APIProducts
+APIProducts -> DB : AcademicProduct.findById(id)\n.populate('sourceFile')
+activate DB
+DB --> APIProducts : producto con\nextractedEntities
+deactivate DB
+APIProducts --> BrowserDoc : 200 OK — producto completo
+deactivate APIProducts
+
+BrowserDoc --> Docente : Mostrar entidades extraídas\ny formulario de corrección
+
+Docente -> BrowserDoc : Corrige/confirma entidades\n(título, autores, keywords, etc.)
+
+BrowserDoc -> APIProducts : PATCH /api/products/{id}\n{ manualMetadata: {\n  title, authors, institution,\n  date, doi, keywords, notes } }
+activate APIProducts
+
+APIProducts -> DB : AcademicProduct.findByIdAndUpdate(\nid, { manualMetadata: {...} })
+activate DB
+
+note right of DB
+  verificationStatus permanece
+  en 'pending_review'
+end note
+
+DB --> APIProducts : producto actualizado
+deactivate DB
+
+APIProducts --> BrowserDoc : 200 OK\n{ message: "Metadatos actualizados" }
+deactivate APIProducts
+
+BrowserDoc --> Docente : Confirmar guardado exitoso
+deactivate BrowserDoc
+
+== Fase 2: Verificación por el Coordinador ==
+
+Coord -> BrowserCoord : Consulta productos\npendientes de verificación
+activate BrowserCoord
+
+BrowserCoord -> APIProducts : GET /api/products\n?verificationStatus=pending_review
+activate APIProducts
+APIProducts -> DB : AcademicProduct.find(\n{ verificationStatus:\n'pending_review' })\n.populate('owner sourceFile')
+activate DB
+DB --> APIProducts : lista de productos pendientes
+deactivate DB
+APIProducts --> BrowserCoord : 200 OK — productos []
+deactivate APIProducts
+
+BrowserCoord --> Coord : Mostrar lista de\nproductos pendientes
+
+Coord -> BrowserCoord : Selecciona producto\npara revisar
+
+BrowserCoord -> APIProducts : GET /api/products/{id}
+activate APIProducts
+APIProducts -> DB : AcademicProduct.findById(id)
+activate DB
+DB --> APIProducts : producto completo
+deactivate DB
+APIProducts --> BrowserCoord : 200 OK
+deactivate APIProducts
+
+BrowserCoord --> Coord : Mostrar detalle del producto\n(entidades + metadatos + archivo)
+
+alt Coordinador decide VERIFICAR
+  Coord -> BrowserCoord : Clic en "Verificar"
+
+  BrowserCoord -> APIVerify : PATCH /api/products/{id}/verify\n{ verificationStatus: 'verified' }
+  activate APIVerify
+
+  APIVerify -> DB : AcademicProduct.findByIdAndUpdate(id, {\n  verificationStatus: 'verified',\n  verifiedBy: coordinadorId,\n  verificationDate: new Date() })
+  activate DB
+  DB --> APIVerify : producto verificado
+  deactivate DB
+
+  APIVerify -> Audit : Registrar en audit_logs\n{ action: 'verify',\nresource: 'academic_product',\nresourceId: id,\nuserId: coordinadorId }
+  activate Audit
+  Audit --> APIVerify : log registrado
+  deactivate Audit
+
+  APIVerify -> Notif : Crear notificación para docente\n{ type: 'verification_update',\nrecipientId: ownerId,\ntitle: "Producto verificado" }
+  activate Notif
+  Notif --> APIVerify : notificación creada
+  deactivate Notif
+
+  APIVerify --> BrowserCoord : 200 OK\n{ message: "Producto verificado" }
+  deactivate APIVerify
+
+  BrowserCoord --> Coord : Confirmar verificación exitosa
+
+else Coordinador decide RECHAZAR
+  Coord -> BrowserCoord : Clic en "Rechazar"\ne ingresa motivo
+
+  BrowserCoord -> APIVerify : PATCH /api/products/{id}/verify\n{ verificationStatus: 'rejected',\nrejectionReason: "..." }
+  activate APIVerify
+
+  APIVerify -> DB : AcademicProduct.findByIdAndUpdate(id, {\n  verificationStatus: 'rejected',\n  verifiedBy: coordinadorId,\n  verificationDate: new Date(),\n  rejectionReason: "..." })
+  activate DB
+  DB --> APIVerify : producto rechazado
+  deactivate DB
+
+  APIVerify -> Audit : Registrar en audit_logs\n{ action: 'reject',\nresource: 'academic_product',\nresourceId: id }
+  activate Audit
+  Audit --> APIVerify : log registrado
+  deactivate Audit
+
+  APIVerify -> Notif : Crear notificación para docente\n{ type: 'verification_update',\nrecipientId: ownerId,\ntitle: "Producto rechazado",\nmessage: rejectionReason }
+  activate Notif
+  Notif --> APIVerify : notificación creada
+  deactivate Notif
+
+  APIVerify --> BrowserCoord : 200 OK\n{ message: "Producto rechazado" }
+  deactivate APIVerify
+
+  BrowserCoord --> Coord : Confirmar rechazo registrado
+
+end
+
+deactivate BrowserCoord
+
+@enduml

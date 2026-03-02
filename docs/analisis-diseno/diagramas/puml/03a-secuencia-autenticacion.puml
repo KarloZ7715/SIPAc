@@ -1,0 +1,78 @@
+@startuml 03a-secuencia-autenticacion
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 200
+
+title SIPAc — Diagrama de Secuencia 3.1\nFlujo de Autenticación (Login con JWT)
+
+actor "Usuario" as User
+participant "Browser\n(Nuxt Client)" as Browser #LightBlue
+participant "API Route\n/api/auth/login.post.ts" as API #LightGreen
+database "MongoDB\n(User Model)" as DB #Khaki
+participant "bcrypt" as Bcrypt #LightCoral
+participant "jose\n(JWT)" as Jose #Plum
+
+== Inicio de Sesión ==
+
+User -> Browser : Ingresa email y contraseña\nen el formulario
+activate Browser
+
+Browser -> API : POST /api/auth/login\n{ email, password }
+activate API
+
+API -> DB : User.findOne({ email })\n.select('+passwordHash')
+activate DB
+DB --> API : documento usuario (o null)
+deactivate DB
+
+alt Usuario no encontrado
+  API --> Browser : 401 Unauthorized\n{ error: "Credenciales inválidas" }
+  Browser --> User : Mostrar error de autenticación
+else Usuario encontrado
+  API -> API : Verificar isLocked()
+
+  alt Cuenta bloqueada (lockUntil > now)
+    API --> Browser : 403 Forbidden\n{ error: "Cuenta bloqueada",\nretryAfter: tiempoRestante }
+    Browser --> User : Mostrar mensaje de bloqueo\ncon tiempo restante
+  else Cuenta no bloqueada
+    API -> Bcrypt : bcrypt.compare(\npassword, user.passwordHash)
+    activate Bcrypt
+    Bcrypt --> API : resultado (true/false)
+    deactivate Bcrypt
+
+    alt Contraseña incorrecta
+      API -> DB : user.incrementLoginAttempts()
+      activate DB
+      note right of DB
+        Si failedLoginAttempts >= 5:
+        lockUntil = now + 15 min
+        (RF-012)
+      end note
+      DB --> API : guardado
+      deactivate DB
+      API --> Browser : 401 Unauthorized\n{ error: "Credenciales inválidas" }
+      Browser --> User : Mostrar error de autenticación
+
+    else Contraseña correcta
+      API -> DB : user.resetLoginAttempts()
+      activate DB
+      DB --> API : guardado
+      deactivate DB
+
+      API -> Jose : new SignJWT({ userId, role })\n.setExpirationTime('8h')\n.sign(secret)
+      activate Jose
+      Jose --> API : token JWT firmado
+      deactivate Jose
+
+      API --> Browser : 200 OK\n{ token, user: { id, fullName, role } }
+      Browser -> Browser : Almacenar token\n(cookie httpOnly)
+      Browser --> User : Redirigir al dashboard\no página principal
+    end
+  end
+end
+
+deactivate API
+deactivate Browser
+
+@enduml

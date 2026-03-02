@@ -1,0 +1,150 @@
+@startuml 04a-actividad-pipeline
+!theme plain
+skinparam activityFontSize 12
+skinparam swimlaneTitleFontSize 13
+
+title SIPAc — Diagrama de Actividades 4.1\nPipeline Completo de Procesamiento de Documento
+
+|#LightBlue|Usuario|
+|#LightGreen|API Route|
+|#LightCoral|OCR Service|
+|#Orange|NER Service|
+|#Khaki|MongoDB|
+
+|Usuario|
+start
+:Seleccionar archivo
+(PDF o imagen);
+:Seleccionar tipo de
+producto académico;
+:Enviar formulario
+de carga;
+
+|API Route|
+:Recibir archivo
+(multipart/form-data);
+
+:Validar MIME real
+del archivo (RF-022);
+
+if (¿MIME válido?\n(PDF/JPG/PNG)) then (sí)
+else (no)
+  :Retornar error 400:\n"Tipo de archivo\nno permitido";
+  |Usuario|
+  :Ver mensaje de error;
+  stop
+endif
+
+:Validar tamaño del
+archivo (RF-023);
+
+if (¿Tamaño <= 20 MB?) then (sí)
+else (no)
+  :Retornar error 400:\n"Archivo supera\nel límite de 20 MB";
+  |Usuario|
+  :Ver mensaje de error;
+  stop
+endif
+
+:Guardar archivo en
+filesystem (/storage/uploads);
+
+|MongoDB|
+:Crear documento uploaded_files\n{ status: 'pending',\nuploadedBy, mimeType,\nfileSizeBytes };
+
+|API Route|
+:Responder 202 Accepted\nal usuario;
+
+|Usuario|
+:Ver indicador de
+procesamiento;
+
+|MongoDB|
+:Actualizar status\na 'processing';
+
+|API Route|
+if (¿Tipo de archivo?) then (PDF)
+
+  |OCR Service|
+  if (¿PDF tiene texto\nembebido? (nativo)) then (sí)
+    :Extraer texto con\npdfjs-dist\n(sin API externa);
+    note right
+      ocrProvider:
+      'pdfjs_native'
+    end note
+  else (no — escaneado)
+    if (¿OCR_PROVIDER env?) then (gemini)
+      :Invocar Gemini 2.0\nFlash Vision\nvía Vercel AI SDK;
+      note right
+        ocrProvider:
+        'gemini_vision'
+      end note
+    else (mistral)
+      :Invocar Mistral\nOCR 3 vía API;
+      note right
+        ocrProvider:
+        'mistral_ocr_3'
+      end note
+    endif
+  endif
+
+else (imagen JPG/PNG)
+
+  |OCR Service|
+  if (¿OCR_PROVIDER env?) then (gemini)
+    :Invocar Gemini 2.0\nFlash Vision\nvía Vercel AI SDK;
+  else (mistral)
+    :Invocar Mistral\nOCR 3 vía API;
+  endif
+
+endif
+
+|OCR Service|
+:Limpiar y normalizar\ntexto extraído;
+
+|MongoDB|
+:Guardar rawExtractedText,\nocrProvider, ocrConfidence\nen uploaded_files;
+
+|NER Service|
+:Obtener esquema Zod\nsegún productType;
+
+:Invocar generateObject\n(Vercel AI SDK)\ncon Gemini 2.0 Flash;
+
+:Calcular\nextractionConfidence;
+
+if (¿Confianza >= 0.70?) then (sí)
+  :Entidades extraídas\ncon confianza alta;
+else (no — RF-048)
+  :Retry con prompt\nenriquecido\n(más contexto y ejemplos);
+
+  :Recalcular confianza;
+
+  if (¿Confianza >= 0.70\ntras retry?) then (sí)
+    :Entidades mejoradas;
+  else (no)
+    :Marcar con flag\nde baja confianza;
+    note right
+      Se guardan las
+      entidades pero
+      requieren revisión
+      prioritaria
+    end note
+  endif
+endif
+
+|MongoDB|
+:Crear documento\nacademic_products\n{ productType, owner,\nsourceFile, extractedEntities,\nverificationStatus:\n'pending_review' };
+
+:Actualizar uploaded_files\nprocessingStatus: 'completed';
+
+:Crear notificación\n{ type: 'processing_complete',\nrecipientId: owner };
+
+|API Route|
+:Enviar email de\nnotificación (RF-084);
+
+|Usuario|
+:Recibir notificación:\n"Documento procesado\nexitosamente";
+
+stop
+
+@enduml

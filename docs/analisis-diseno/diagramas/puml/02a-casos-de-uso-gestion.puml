@@ -1,0 +1,95 @@
+@startuml 02a-casos-de-uso-gestion
+!theme plain
+skinparam actorStyle awesome
+skinparam packageStyle rectangle
+skinparam usecaseFontSize 11
+skinparam packageFontSize 13
+skinparam nodesep 30
+
+title SIPAc — Diagrama de Casos de Uso\nParte A: Gestión de Usuarios, Perfil, Seguridad y Auditoría (M1 + M6 + M7)
+
+' ─── ACTORES ─────────────────────────────────────────
+' Se usa generalización de actores para reducir líneas:
+' - "Usuario Autenticado" agrupa casos comunes a los 4 roles
+' - Admin y Coordinador se muestran aparte para sus casos exclusivos
+
+actor "Usuario Autenticado\n(todos los roles)" as Auth #LightSteelBlue
+actor "Administrador" as Admin #LightCoral
+
+Auth <|-- Admin
+
+note right of Auth
+  Representa a cualquier
+  usuario autenticado:
+  admin, coordinador,
+  docente o estudiante.
+end note
+
+' ─── M1: AUTENTICACIÓN Y GESTIÓN DE USUARIOS ────────
+
+rectangle "M1 — Autenticación y Gestión de Usuarios" #E8F5E9 {
+
+  usecase "Registrarse en\nel sistema" as UC_REG
+  usecase "Iniciar sesión\ncon JWT" as UC_LOGIN
+  usecase "Cerrar sesión" as UC_LOGOUT
+  usecase "Recuperar\ncontraseña" as UC_RECOVER
+
+  usecase "Crear cuentas\nde usuario" as UC_CREATE_USER
+  usecase "Editar cuentas\nde usuario" as UC_EDIT_USER
+  usecase "Activar/desactivar\ncuentas" as UC_TOGGLE_USER
+  usecase "Asignar/modificar\nroles" as UC_ASSIGN_ROLE
+
+  usecase "Validar credenciales\ny estado de cuenta" as UC_VALIDATE_CRED
+  usecase "Bloquear cuenta tras\n5 intentos fallidos" as UC_LOCK
+
+  UC_LOGIN ..> UC_VALIDATE_CRED : <<include>>
+  UC_VALIDATE_CRED ..> UC_LOCK : <<extend>>\n[intentos >= 5]
+}
+
+' ─── M6: PERFIL DE USUARIO ──────────────────────────
+
+rectangle "M6 — Perfil de Usuario" #F3E5F5 {
+
+  usecase "Ver perfil propio" as UC_VIEW_PROFILE
+  usecase "Editar nombre" as UC_EDIT_NAME
+  usecase "Cambiar contraseña" as UC_CHANGE_PASS
+  usecase "Ver resumen de\nproductos propios" as UC_SUMMARY
+}
+
+' ─── M7: SEGURIDAD Y AUDITORÍA ──────────────────────
+
+rectangle "M7 — Seguridad y Auditoría" #FFEBEE {
+
+  usecase "Consultar log\nde auditoría" as UC_VIEW_LOGS
+  usecase "Registrar evento\nen audit_logs" as UC_LOG_EVENT
+
+  note bottom of UC_LOG_EVENT
+    Transversal: se invoca
+    automáticamente en
+    create/update/delete/
+    verify/reject/login
+  end note
+}
+
+' ─── RELACIONES ──────────────────────────────────────
+
+' Todos los roles — autenticación y perfil
+Auth --> UC_REG
+Auth --> UC_LOGIN
+Auth --> UC_LOGOUT
+Auth --> UC_RECOVER
+Auth --> UC_VIEW_PROFILE
+Auth --> UC_EDIT_NAME
+Auth --> UC_CHANGE_PASS
+Auth --> UC_SUMMARY
+
+' Solo admin — gestión de usuarios
+Admin --> UC_CREATE_USER
+Admin --> UC_EDIT_USER
+Admin --> UC_TOGGLE_USER
+Admin --> UC_ASSIGN_ROLE
+
+' Solo admin — auditoría
+Admin --> UC_VIEW_LOGS
+
+@enduml

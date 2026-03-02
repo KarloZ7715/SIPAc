@@ -1,0 +1,226 @@
+@startuml 04b-actividad-gestion-usuarios
+skinparam activityFontSize 12
+skinparam swimlaneTitleFontSize 13
+skinparam activityBackgroundColor #FAFAFA
+skinparam activityBorderColor #666666
+
+title SIPAc — Diagrama de Actividades 4.2\nFlujo de Gestión de Usuarios y Roles (M1)
+
+|#LightBlue|Visitante|
+|#LightGreen|API Auth|
+|#Khaki|MongoDB|
+|#LightCoral|Admin|
+
+|Visitante|
+start
+:Acceder a la pagina
+de registro;
+:Completar formulario;
+:Enviar formulario;
+
+|API Auth|
+:Recibir datos de registro;
+:Sanitizar inputs;
+
+|MongoDB|
+:Buscar usuario por email;
+
+if (Email ya registrado?) then (si)
+  |API Auth|
+  :Retornar error 409;
+  |Visitante|
+  :Ver mensaje de error;
+  stop
+else (no)
+endif
+
+|API Auth|
+:Hash contrasena
+con bcrypt (10 rounds);
+
+|MongoDB|
+:Crear documento user
+role por defecto: docente
+isActive: true;
+
+|API Auth|
+:Retornar 201 Created;
+
+|Visitante|
+:Registro exitoso;
+
+note right
+  Fin del flujo de registro.
+  A continuacion: Login.
+end note
+
+:Ingresar email y contrasena;
+:Enviar formulario de login;
+
+|API Auth|
+:Recibir credenciales;
+
+|MongoDB|
+:Buscar usuario por email;
+
+if (Usuario existe?) then (si)
+else (no)
+  |API Auth|
+  :Retornar 401;
+  |Visitante|
+  :Ver error;
+  stop
+endif
+
+|API Auth|
+if (Cuenta activa?) then (si)
+else (no)
+  :Retornar 403
+  Cuenta desactivada;
+  |Visitante|
+  :Ver mensaje;
+  stop
+endif
+
+if (Cuenta bloqueada?) then (si)
+  :Retornar 403
+  Reintente en X min;
+  |Visitante|
+  :Ver tiempo restante;
+  stop
+else (no)
+endif
+
+:Comparar contrasena
+con bcrypt.compare();
+
+if (Contrasena correcta?) then (si)
+  |MongoDB|
+  :resetLoginAttempts();
+
+  |API Auth|
+  :Generar JWT con jose
+  userId, role, exp 8h;
+
+  :Retornar 200 OK;
+
+  |Visitante|
+  :Almacenar token
+  cookie httpOnly;
+  :Redirigir a
+  pagina principal;
+
+else (no)
+  |MongoDB|
+  :incrementLoginAttempts();
+
+  if (intentos >= 5?) then (si RF-012)
+    :lockUntil = now + 15 min;
+    note right
+      Bloqueo temporal
+      por seguridad.
+      Se desbloquea
+      automaticamente.
+    end note
+  else (no)
+  endif
+
+  |API Auth|
+  :Retornar 401;
+
+  |Visitante|
+  :Ver error;
+  stop
+endif
+
+note right
+  Fin del flujo de login.
+  A continuacion:
+  Recuperacion de contrasena.
+end note
+
+:Solicitar recuperacion
+de contrasena;
+
+|API Auth|
+:Generar token temporal;
+
+|MongoDB|
+:Guardar token y
+expiracion 1 hora;
+
+|API Auth|
+:Enviar email con
+enlace de recuperacion;
+
+|Visitante|
+:Recibir email y
+clic en enlace;
+:Ingresar nueva contrasena;
+
+|API Auth|
+:Validar token y expiracion;
+
+if (Token valido?) then (si)
+  :Hash nueva contrasena;
+
+  |MongoDB|
+  :Actualizar passwordHash
+  limpiar token;
+
+  |API Auth|
+  :Retornar 200;
+
+  |Visitante|
+  :Redirigir a login;
+else (no)
+  |API Auth|
+  :Retornar 400
+  Token invalido o expirado;
+  |Visitante|
+  :Ver error;
+  stop
+endif
+
+note right
+  Fin de recuperacion.
+  A continuacion:
+  Gestion por Admin.
+end note
+
+|Admin|
+:Acceder a panel
+de administracion;
+:Seleccionar accion;
+
+if (Accion?) then (Crear)
+  :Completar datos
+  del nuevo usuario;
+  |API Auth|
+  :Crear usuario con
+  rol asignado;
+  |MongoDB|
+  :Insertar documento;
+elseif (Accion?) then (Editar)
+  |Admin|
+  :Modificar datos;
+  |MongoDB|
+  :Actualizar documento;
+elseif (Accion?) then (Cambiar rol)
+  |Admin|
+  :Seleccionar nuevo rol;
+  |MongoDB|
+  :Actualizar campo role;
+else (Activar/Desactivar)
+  |Admin|
+  :Toggle isActive;
+  |MongoDB|
+  :Actualizar isActive;
+endif
+
+|Admin|
+:Operacion exitosa;
+
+stop
+
+@enduml

@@ -1,0 +1,58 @@
+# ─── Nuxt dev/build outputs ──────────────────────────
+.output/
+.data/
+.nuxt/
+.nitro/
+.cache/
+dist/
+
+# ─── Node dependencies ──────────────────────────────
+node_modules/
+
+# ─── Logs ────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── Variables de entorno ────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── IDE / Editores ─────────────────────────────────
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.cursor/*
+.idea/
+.fleet/
+.agent/*
+.agents/*
+.github/skills/*
+.github/prompts/*
+*.swp
+*.swo
+*~
+
+# ─── OS ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# ─── Archivos cargados por usuarios ─────────────────
+uploads/
+
+# ─── Testing ────────────────────────────────────────
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+
+# ─── Misceláneos ────────────────────────────────────
+*.tsbuildinfo
+*.local

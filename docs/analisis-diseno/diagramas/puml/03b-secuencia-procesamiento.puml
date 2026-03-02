@@ -1,0 +1,150 @@
+@startuml 03b-secuencia-procesamiento
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 220
+
+title SIPAc — Diagrama de Secuencia 3.2\nFlujo Completo de Procesamiento de Documento\n(Carga → OCR → NER → Almacenamiento)
+
+actor "Usuario\n(Docente/Estudiante)" as User
+participant "Browser\n(Nuxt Client)" as Browser #LightBlue
+participant "API Route\n/api/documents/upload" as APIUpload #LightGreen
+participant "Filesystem\n/storage/uploads" as FS #LightYellow
+database "MongoDB\nUploadedFile" as DBFile #Khaki
+participant "OCR Service\n(factory.ts)" as OCRFactory #LightCoral
+participant "pdfjs-dist" as PDFJS #Pink
+participant "Gemini Vision\n(API externa)" as GeminiVision #Plum
+participant "NER Service\n(extractor.ts)" as NER #Orange
+participant "Gemini Flash\n(API externa)" as GeminiFlash #MediumPurple
+participant "Zod\n(validación)" as Zod #LightGray
+database "MongoDB\nAcademicProduct" as DBProduct #Khaki
+participant "Notification\nService" as Notif #LightSkyBlue
+
+== Carga del Documento ==
+
+User -> Browser : Selecciona archivo y\ntipo de producto
+activate Browser
+
+Browser -> APIUpload : POST /api/documents/upload\nmultipart/form-data\n{ file, productType }
+activate APIUpload
+
+APIUpload -> APIUpload : Validar MIME real del archivo\n(RF-022)
+APIUpload -> APIUpload : Validar tamaño <= 20 MB\n(RF-023)
+
+alt Validación fallida (MIME o tamaño)
+  APIUpload --> Browser : 400 Bad Request\n{ error: "Tipo o tamaño no válido" }
+  Browser --> User : Mostrar error de validación
+else Validación exitosa
+
+  APIUpload -> FS : Guardar archivo en\n/storage/uploads/{id}.ext
+  activate FS
+  FS --> APIUpload : storagePath confirmado
+  deactivate FS
+
+  APIUpload -> DBFile : Crear doc uploaded_files\n{ status: 'pending',\nuploadedBy, originalFilename,\nmimeType, fileSizeBytes }
+  activate DBFile
+  DBFile --> APIUpload : documento creado
+  deactivate DBFile
+
+  APIUpload --> Browser : 202 Accepted\n{ fileId, status: 'pending' }
+  Browser --> User : Mostrar indicador\nde procesamiento
+
+  == Pipeline de OCR ==
+
+  APIUpload -> DBFile : Actualizar status: 'processing'
+  activate DBFile
+  DBFile --> APIUpload
+  deactivate DBFile
+
+  APIUpload -> OCRFactory : extractText(fileBuffer, mimeType)
+  activate OCRFactory
+
+  alt PDF nativo (texto embebido)
+    OCRFactory -> PDFJS : getDocument(buffer)\ngetPage().getTextContent()
+    activate PDFJS
+    PDFJS --> OCRFactory : texto extraído
+    deactivate PDFJS
+    OCRFactory --> APIUpload : { text, provider: 'pdfjs_native' }
+
+  else PDF escaneado o imagen
+    note over OCRFactory
+      Determina proveedor
+      según OCR_PROVIDER env
+    end note
+    OCRFactory -> GeminiVision : generateObject(\n{ model: 'gemini-2.0-flash',\nimage: fileBuffer,\nprompt: 'Extraer texto...' })
+    activate GeminiVision
+    GeminiVision --> OCRFactory : texto extraído
+    deactivate GeminiVision
+    OCRFactory --> APIUpload : { text, provider: 'gemini_vision',\nconfidence }
+  end
+  deactivate OCRFactory
+
+  APIUpload -> DBFile : Guardar rawExtractedText,\nocrProvider, ocrConfidence
+  activate DBFile
+  DBFile --> APIUpload
+  deactivate DBFile
+
+  == Pipeline de NER ==
+
+  APIUpload -> NER : extractEntities(rawText,\nproductType)
+  activate NER
+
+  NER -> Zod : Obtener esquema Zod\npara el productType
+  activate Zod
+  Zod --> NER : schema tipado
+  deactivate Zod
+
+  NER -> GeminiFlash : generateObject(\n{ model: 'gemini-2.0-flash',\nschema: zodSchema,\nprompt: rawText })
+  activate GeminiFlash
+  GeminiFlash --> NER : objeto tipado con entidades
+  deactivate GeminiFlash
+
+  NER -> NER : Calcular extractionConfidence
+
+  alt Confianza < 0.70 (RF-048)
+    NER -> GeminiFlash : Retry con prompt enriquecido\n(más contexto y ejemplos)
+    activate GeminiFlash
+    GeminiFlash --> NER : objeto mejorado
+    deactivate GeminiFlash
+    NER -> NER : Recalcular confianza
+
+    note over NER
+      Si sigue < 0.70,
+      guardar con flag
+      de baja confianza
+    end note
+  end
+
+  NER --> APIUpload : { extractedEntities,\nextractionConfidence }
+  deactivate NER
+
+  == Almacenamiento del Producto ==
+
+  APIUpload -> DBProduct : Crear academic_products\n{ productType, owner,\nsourceFile: fileId,\nextractedEntities,\nverificationStatus:\n'pending_review' }
+  activate DBProduct
+  DBProduct --> APIUpload : producto creado
+  deactivate DBProduct
+
+  APIUpload -> DBFile : Actualizar\nprocessingStatus: 'completed'
+  activate DBFile
+  DBFile --> APIUpload
+  deactivate DBFile
+
+  == Notificación ==
+
+  APIUpload -> Notif : Crear notificación\n{ type: 'processing_complete',\nrecipientId: owner }
+  activate Notif
+  Notif -> Notif : Guardar en notifications
+  Notif -> Notif : Enviar email (RF-084)
+  Notif --> APIUpload : notificación enviada
+  deactivate Notif
+
+  APIUpload --> Browser : Evento: procesamiento\ncompletado
+  Browser --> User : Actualizar interfaz:\n"Documento procesado\nexitosamente"
+
+end
+
+deactivate APIUpload
+deactivate Browser
+
+@enduml

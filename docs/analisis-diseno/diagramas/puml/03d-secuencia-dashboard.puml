@@ -1,0 +1,112 @@
+@startuml 03d-secuencia-dashboard
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 200
+
+title SIPAc — Diagrama de Secuencia 3.4\nFlujo de Consulta del Dashboard Analítico
+
+actor "Coordinador" as Coord
+participant "Browser\n(Nuxt Client)" as Browser #LightBlue
+participant "Pinia Store\n(dashboardStore)" as Pinia #LightGreen
+participant "API Route\n/api/dashboard/summary" as APIDash #LightCoral
+database "MongoDB\nAcademicProduct\n(Aggregation)" as DB #Khaki
+participant "Charting Library\n(Vue Components)" as Charts #Plum
+
+== Carga Inicial del Dashboard ==
+
+Coord -> Browser : Navega a /dashboard
+activate Browser
+
+Browser -> Pinia : dashboardStore.fetchSummary()
+activate Pinia
+
+Pinia -> APIDash : GET /api/dashboard/summary
+activate APIDash
+
+APIDash -> DB : countByProductType()\naggregate: $match + $group
+activate DB
+DB --> APIDash : [{ _id: "article", count: 42 },\n{ _id: "thesis", count: 15 }, ...]
+deactivate DB
+
+APIDash -> DB : productsByYear()\naggregate: $match + $group by $year
+activate DB
+DB --> APIDash : [{ _id: 2025, total: 30,\nbyType: [...] }, ...]
+deactivate DB
+
+APIDash -> DB : productivityByUser()\naggregate: $group + $lookup users
+activate DB
+DB --> APIDash : [{ fullName: "...",\ntotalProducts: 12,\ntypes: [...] }, ...]
+deactivate DB
+
+APIDash --> Pinia : 200 OK\n{ byType, byYear, byUser,\ntotalProducts }
+deactivate APIDash
+
+Pinia -> Pinia : Almacenar datos\nen el store
+
+Pinia --> Browser : Estado actualizado
+deactivate Pinia
+
+Browser -> Charts : Renderizar gráficas\ncon datos del store
+activate Charts
+Charts -> Charts : Gráfica de barras:\nconteo por tipo (RF-069)
+Charts -> Charts : Gráfica de líneas:\ndistribución temporal
+Charts -> Charts : Gráfica de torta:\nproporción por tipo
+Charts --> Browser : Gráficas renderizadas
+deactivate Charts
+
+Browser --> Coord : Dashboard con indicadores\ny gráficas interactivas
+
+== Aplicar Filtro por Rango de Fechas ==
+
+Coord -> Browser : Selecciona filtro\nfecha inicio y fecha fin (RF-066)
+activate Browser
+
+Browser -> Pinia : dashboardStore.fetchFiltered(\n{ dateFrom, dateTo })
+activate Pinia
+
+Pinia -> APIDash : GET /api/dashboard/summary\n?dateFrom=2025-01-01\n&dateTo=2025-12-31
+activate APIDash
+
+APIDash -> DB : Re-ejecutar aggregations\ncon $match filtrado por\nrango de fechas
+activate DB
+DB --> APIDash : datos filtrados
+deactivate DB
+
+APIDash --> Pinia : 200 OK\n{ byType, byYear, byUser }\n(datos filtrados)
+deactivate APIDash
+
+Pinia --> Browser : Estado actualizado
+deactivate Pinia
+
+Browser -> Charts : Re-renderizar gráficas\ncon datos filtrados
+activate Charts
+Charts --> Browser : Gráficas actualizadas
+deactivate Charts
+
+Browser --> Coord : Dashboard actualizado\ncon filtro aplicado
+deactivate Browser
+
+== Exportación de Reporte PDF ==
+
+Coord -> Browser : Clic en "Exportar PDF" (RF-070)
+activate Browser
+
+Browser -> APIDash : GET /api/dashboard/export/pdf\n?dateFrom=2025-01-01\n&dateTo=2025-12-31
+activate APIDash
+
+APIDash -> DB : Re-ejecutar aggregations\npara datos del reporte
+activate DB
+DB --> APIDash : datos agregados
+deactivate DB
+
+APIDash -> APIDash : Generar documento PDF\ncon indicadores y tablas
+
+APIDash --> Browser : 200 OK\nContent-Type: application/pdf\nContent-Disposition: attachment
+
+Browser --> Coord : Descarga del archivo\nreporte-productividad.pdf
+
+deactivate APIDash
+deactivate Browser
+
+@enduml

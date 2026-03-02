@@ -1,0 +1,72 @@
+@startuml 02c-casos-de-uso-repositorio
+skinparam actorStyle awesome
+skinparam packageStyle rectangle
+skinparam usecaseFontSize 11
+skinparam packageFontSize 13
+skinparam nodesep 25
+skinparam ranksep 20
+
+title SIPAc — Casos de Uso (Parte C)\nRepositorio, Dashboard y Notificaciones (M5A + M5B + M8)
+
+' ─── ACTORES ─────────────────────────────────────────
+
+actor "Usuario Académico\n(Docente / Estudiante)" as Acad #LightGreen
+actor "Coordinador" as Coord #LightBlue
+actor "Administrador" as Admin #Plum
+
+' ─── M5A: REPOSITORIO ───────────────────────────────
+
+rectangle "M5A — Repositorio Estructurado" #FCE4EC {
+
+  usecase "Consultar productos\npropios" as UC_LIST_OWN
+  usecase "Editar metadatos\nde producto propio" as UC_EDIT
+  usecase "Eliminar producto\npropio" as UC_DELETE
+  usecase "Buscar productos\npor texto completo" as UC_SEARCH
+  usecase "Consultar productos\nde todos los usuarios" as UC_LIST_ALL
+  usecase "Verificar o rechazar\nproducto académico" as UC_VERIFY
+}
+
+' ─── M5B: DASHBOARD ─────────────────────────────────
+
+rectangle "M5B — Dashboard Analítico" #F3E5F5 {
+
+  usecase "Consultar indicadores\nde productividad" as UC_DASHBOARD
+  usecase "Filtrar por fecha,\ntipo o usuario" as UC_FILTER
+  usecase "Exportar reporte PDF" as UC_EXPORT_PDF
+  usecase "Exportar datos\nExcel/CSV" as UC_EXPORT_EXCEL
+}
+
+' ─── M8: NOTIFICACIONES ─────────────────────────────
+
+rectangle "M8 — Notificaciones" #FFFDE7 {
+
+  usecase "Notificación en\ninterfaz (in-app)" as UC_NOTIF_UI
+  usecase "Notificación por\ncorreo electrónico" as UC_NOTIF_EMAIL
+}
+
+' ─── RELACIONES ──────────────────────────────────────
+
+' Usuario Académico — Repositorio (datos propios) + Notificaciones
+Acad --> UC_LIST_OWN
+Acad --> UC_EDIT
+Acad --> UC_DELETE
+Acad --> UC_SEARCH
+Acad --> UC_NOTIF_UI
+Acad --> UC_NOTIF_EMAIL
+
+' Coordinador — Verificación + Dashboard + Vista global
+Coord --> UC_VERIFY
+Coord --> UC_LIST_ALL
+Coord --> UC_SEARCH
+Coord --> UC_DASHBOARD
+Coord --> UC_FILTER
+Coord --> UC_EXPORT_PDF
+
+' Administrador — Dashboard completo + Vista global
+Admin --> UC_LIST_ALL
+Admin --> UC_DASHBOARD
+Admin --> UC_FILTER
+Admin --> UC_EXPORT_PDF
+Admin --> UC_EXPORT_EXCEL
+
+@enduml

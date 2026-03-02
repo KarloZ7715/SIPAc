@@ -1,0 +1,71 @@
+@startuml 02b-casos-de-uso-documentos
+skinparam actorStyle awesome
+skinparam packageStyle rectangle
+skinparam usecaseFontSize 11
+skinparam packageFontSize 13
+skinparam nodesep 25
+skinparam ranksep 20
+
+title SIPAc — Casos de Uso (Parte B)\nPipeline de Documentos: Carga, OCR y NER (M2 + M3 + M4)
+
+' ─── ACTOR ÚNICO ─────────────────────────────────────
+
+actor "Usuario Académico\n(Docente / Estudiante)" as Acad #LightGreen
+
+note bottom of Acad
+  Agrupa a Docente y Estudiante:
+  mismos permisos funcionales
+  sobre sus propios documentos.
+end note
+
+' ─── M2: CARGA DE DOCUMENTOS ────────────────────────
+
+rectangle "M2 — Carga de Documentos" #E3F2FD {
+
+  usecase "Cargar documento PDF" as UC_UPLOAD_PDF
+  usecase "Cargar imagen\nJPG/PNG" as UC_UPLOAD_IMG
+  usecase "Cargar múltiples\ndocumentos" as UC_UPLOAD_MULTI
+  usecase "Consultar estado\nde procesamiento" as UC_CHECK_STATUS
+  usecase "Eliminar documento\npropio no verificado" as UC_DELETE_DOC
+
+  usecase "Validar MIME\ny tamaño" as UC_VALIDATE
+}
+
+' ─── M3 + M4: OCR y NER ─────────────────────────────
+
+rectangle "M3/M4 — Extracción de Texto y Entidades (automático)" #E8F5E9 {
+
+  usecase "OCR texto nativo\n(pdfjs-dist)" as UC_OCR_NATIVE
+  usecase "OCR escaneado\n(Gemini Vision)" as UC_OCR_SCAN
+  usecase "Revisar texto\nextraído" as UC_REVIEW_OCR
+
+  usecase "NER entidades\nautomático" as UC_NER_EXTRACT
+  usecase "Revisar y corregir\nentidades" as UC_NER_REVIEW
+  usecase "Reintentar NER\n(confianza < 0.70)" as UC_NER_RETRY
+
+  UC_NER_EXTRACT ..> UC_NER_RETRY : <<extend>>
+}
+
+' ─── INCLUDES: pipeline carga → OCR → NER ───────────
+
+UC_UPLOAD_PDF ..> UC_VALIDATE : <<include>>
+UC_UPLOAD_IMG ..> UC_VALIDATE : <<include>>
+UC_UPLOAD_MULTI ..> UC_VALIDATE : <<include>>
+
+UC_UPLOAD_PDF ..> UC_OCR_NATIVE : <<include>>
+UC_UPLOAD_IMG ..> UC_OCR_SCAN : <<include>>
+
+UC_OCR_NATIVE ..> UC_NER_EXTRACT : <<include>>
+UC_OCR_SCAN ..> UC_NER_EXTRACT : <<include>>
+
+' ─── RELACIONES ACTOR ────────────────────────────────
+
+Acad --> UC_UPLOAD_PDF
+Acad --> UC_UPLOAD_IMG
+Acad --> UC_UPLOAD_MULTI
+Acad --> UC_CHECK_STATUS
+Acad --> UC_DELETE_DOC
+Acad --> UC_REVIEW_OCR
+Acad --> UC_NER_REVIEW
+
+@enduml

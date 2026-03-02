@@ -1,0 +1,138 @@
+@startuml 05-estados-ciclo-vida
+!theme plain
+skinparam stateFontSize 12
+skinparam stateAttributeFontSize 11
+
+title SIPAc — Diagrama de Estados Compuesto\nCiclo de Vida: Archivo Cargado → Producto Académico
+
+' ─────────────────────────────────────────────────────
+' ESTADO COMPUESTO: uploaded_files.processingStatus
+' ─────────────────────────────────────────────────────
+
+state "Ciclo de Vida del Archivo (uploaded_files)" as FileStates {
+
+  [*] --> Pending
+
+  state "pending" as Pending #LightYellow {
+    Pending : Archivo guardado en filesystem
+    Pending : Documento creado en MongoDB
+  }
+
+  state "processing" as Processing #LightBlue {
+    Processing : Pipeline OCR + NER en ejecución
+    Processing : Se determina tipo (PDF nativo,
+    Processing : escaneado, imagen)
+  }
+
+  state "completed" as Completed #LightGreen {
+    Completed : Texto extraído y guardado
+    Completed : Entidades extraídas
+    Completed : Producto académico creado
+  }
+
+  state "error" as ErrorState #LightCoral {
+    ErrorState : processingError contiene
+    ErrorState : el detalle del fallo
+  }
+
+  Pending --> Processing : Iniciar pipeline\nde procesamiento
+  Processing --> Completed : OCR + NER exitosos\n/ crear academic_product\n/ enviar notificación (RF-084)
+  Processing --> ErrorState : Fallo en OCR o NER\n/ registrar processingError\n/ enviar notificación (RF-085)
+  ErrorState --> Processing : Reintentar procesamiento\n(acción manual del usuario)
+
+}
+
+' ─────────────────────────────────────────────────────
+' ESTADO COMPUESTO: academic_products.verificationStatus
+' ─────────────────────────────────────────────────────
+
+state "Ciclo de Vida del Producto Académico (academic_products)" as ProductStates {
+
+  [*] --> PendingReview
+
+  state "pending_review" as PendingReview #LightYellow {
+    PendingReview : Entidades extraídas automáticamente
+    PendingReview : Esperando revisión del docente
+    PendingReview : y verificación del coordinador
+  }
+
+  state "verified" as Verified #LightGreen {
+    Verified : Coordinador verificó el producto
+    Verified : verifiedBy = coordinadorId
+    Verified : verificationDate registrada
+  }
+
+  state "rejected" as Rejected #LightCoral {
+    Rejected : Coordinador rechazó el producto
+    Rejected : rejectionReason contiene
+    Rejected : el motivo del rechazo
+  }
+
+  PendingReview --> PendingReview : Docente edita\nmanualMetadata\n[mantiene status]
+  PendingReview --> Verified : Coordinador verifica\n/ registrar en audit_logs\n/ notificar al docente
+  PendingReview --> Rejected : Coordinador rechaza\n/ registrar rejectionReason\n/ registrar en audit_logs\n/ notificar al docente
+  Rejected --> PendingReview : Docente corrige\nmetadatos y\nresolicita revisión
+
+}
+
+' ─────────────────────────────────────────────────────
+' ESTADO COMPUESTO: users (cuenta)
+' ─────────────────────────────────────────────────────
+
+state "Estado de Cuenta de Usuario (users)" as UserStates {
+
+  [*] --> Active
+
+  state "Activa" as Active #LightGreen {
+    Active : isActive = true
+    Active : lockUntil = null
+    Active : Usuario puede operar
+    Active : normalmente
+  }
+
+  state "Bloqueada temporalmente" as Locked #Orange {
+    Locked : isActive = true
+    Locked : lockUntil > now
+    Locked : failedLoginAttempts >= 5
+    Locked : Duración: 15 minutos (RF-012)
+  }
+
+  state "Desactivada" as Inactive #LightGray {
+    Inactive : isActive = false
+    Inactive : Admin desactivó la cuenta
+    Inactive : No puede iniciar sesión
+  }
+
+  Active --> Locked : 5 intentos fallidos\nde login\n/ lockUntil = now + 15 min
+  Locked --> Active : lockUntil expirado\n(automático) o\nresetLoginAttempts()
+  Active --> Inactive : Admin desactiva\ncuenta\n/ isActive = false
+  Inactive --> Active : Admin reactiva\ncuenta\n/ isActive = true
+  Locked --> Inactive : Admin desactiva\ncuenta bloqueada
+
+}
+
+' ─────────────────────────────────────────────────────
+' TRANSICIÓN ENTRE CICLOS
+' ─────────────────────────────────────────────────────
+
+Completed -[dashed]-> PendingReview : Se crea el producto\nacadémico al completar\nel procesamiento
+
+note bottom of FileStates
+  El ciclo de vida del archivo termina
+  cuando el procesamiento se completa o falla.
+  Al completarse, se inicia el ciclo del producto.
+end note
+
+note bottom of ProductStates
+  El coordinador puede verificar o rechazar.
+  Un producto rechazado puede volver a
+  pending_review tras correcciones del docente.
+end note
+
+note bottom of UserStates
+  El bloqueo temporal es automático
+  y se resuelve solo. La desactivación
+  es manual y requiere acción del admin.
+end note
+
+@enduml

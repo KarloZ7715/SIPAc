@@ -1,0 +1,6 @@
+ignoredBuiltDependencies:
+  - '@parcel/watcher'
+  - bcrypt
+  - esbuild
+
+onlyBuiltDependencies: bcrypt,esbuild,@parcel/watcher
