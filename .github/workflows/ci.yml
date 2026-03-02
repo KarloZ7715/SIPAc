@@ -36,7 +36,7 @@ jobs:
         run: pnpm typecheck
 
       - name: Unit & integration tests
-        run: pnpm test -- --passWithNoTests
+        run: pnpm exec vitest run --passWithNoTests
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
