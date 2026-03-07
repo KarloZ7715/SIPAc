@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { PRODUCT_TYPES, VERIFICATION_STATUSES } from '~~/app/types'
+import { PRODUCT_TYPES } from '~~/app/types'
 
 export const manualMetadataSchema = z.object({
   title: z.string().trim().optional(),
@@ -15,17 +15,8 @@ export const updateProductSchema = z.object({
   manualMetadata: manualMetadataSchema.optional(),
 })
 
-export const verifyProductSchema = z.object({
-  verificationStatus: z.enum(['verified', 'rejected']),
-  rejectionReason: z
-    .string()
-    .max(500, 'El motivo de rechazo no puede superar los 500 caracteres')
-    .optional(),
-})
-
 export const productQuerySchema = z.object({
   productType: z.enum(PRODUCT_TYPES).optional(),
-  verificationStatus: z.enum(VERIFICATION_STATUSES).optional(),
   owner: z.string().optional(),
   search: z.string().optional(),
   cursor: z.string().optional(),

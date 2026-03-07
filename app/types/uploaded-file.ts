@@ -1,4 +1,4 @@
-import { type Types } from 'mongoose'
+import type { DatabaseId } from './database'
 
 export const PROCESSING_STATUSES = ['pending', 'processing', 'completed', 'error'] as const
 export type ProcessingStatus = (typeof PROCESSING_STATUSES)[number]
@@ -12,10 +12,10 @@ export type OcrProvider = (typeof OCR_PROVIDERS)[number]
 export const MAX_FILE_SIZE_BYTES = 20_971_520 // 20 MB
 
 export interface IUploadedFile {
-  _id: Types.ObjectId
-  uploadedBy: Types.ObjectId
+  _id: DatabaseId
+  uploadedBy: DatabaseId
   originalFilename: string
-  storagePath: string
+  gridfsFileId: DatabaseId
   mimeType: AllowedMimeType
   fileSizeBytes: number
   processingStatus: ProcessingStatus

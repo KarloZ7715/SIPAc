@@ -1,5 +1,5 @@
-import { type Types } from 'mongoose'
-import { type OcrProvider } from './uploaded-file'
+import type { DatabaseId } from './database'
+import type { OcrProvider } from './uploaded-file'
 
 export const PRODUCT_TYPES = [
   'article',
@@ -9,9 +9,6 @@ export const PRODUCT_TYPES = [
   'research_project',
 ] as const
 export type ProductType = (typeof PRODUCT_TYPES)[number]
-
-export const VERIFICATION_STATUSES = ['pending_review', 'verified', 'rejected'] as const
-export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number]
 
 export interface IExtractedEntities {
   authors: string[]
@@ -37,14 +34,10 @@ export interface IManualMetadata {
 }
 
 export interface IAcademicProduct {
-  _id: Types.ObjectId
+  _id: DatabaseId
   productType: ProductType
-  owner: Types.ObjectId
-  sourceFile: Types.ObjectId
-  verificationStatus: VerificationStatus
-  verifiedBy?: Types.ObjectId
-  verificationDate?: Date
-  rejectionReason?: string
+  owner: DatabaseId
+  sourceFile: DatabaseId
   extractedEntities: IExtractedEntities
   manualMetadata: IManualMetadata
   isDeleted: boolean
