@@ -35,10 +35,51 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Unit & integration tests
-        run: pnpm exec vitest run --passWithNoTests
+      - name: Unit & integration tests with coverage
+        run: pnpm exec vitest run --coverage --passWithNoTests
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           OCR_PROVIDER: gemini
+
+      - name: Build
+        run: pnpm build
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          OCR_PROVIDER: gemini
+
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=high
+
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps
+
+      - name: E2E tests
+        run: pnpm test:e2e
+        env:
+          CI: true
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}

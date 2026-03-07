@@ -7,6 +7,7 @@ export default defineVitestConfig({
     include: ['tests/**/*.{test,spec}.ts'],
     coverage: {
       provider: 'v8',
+      reporter: ['text', 'lcov'],
       include: ['server/**/*.ts', 'app/**/*.{ts,vue}'],
       exclude: ['server/plugins/**', '**/*.d.ts', 'tests/**'],
     },

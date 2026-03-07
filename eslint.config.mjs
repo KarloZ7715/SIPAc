@@ -4,9 +4,11 @@ import prettierConfig from 'eslint-config-prettier'
 
 export default withNuxt(
   {
-    files: ['*.ts', '*.mjs'],
+    files: ['**/*.vue'],
     languageOptions: {
-      parser: tseslint.parser,
+      parserOptions: {
+        parser: tseslint.parser,
+      },
     },
   },
   prettierConfig,
