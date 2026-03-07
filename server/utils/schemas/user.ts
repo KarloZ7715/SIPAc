@@ -7,7 +7,7 @@ export const createUserSchema = z.object({
     .min(3, 'El nombre debe tener al menos 3 caracteres')
     .max(120, 'El nombre no puede superar los 120 caracteres')
     .trim(),
-  email: z.string().email('Formato de correo electrónico inválido').toLowerCase().trim(),
+  email: z.email({ error: 'Formato de correo electrónico inválido' }).toLowerCase().trim(),
   password: z
     .string()
     .min(8, 'La contraseña debe tener al menos 8 caracteres')

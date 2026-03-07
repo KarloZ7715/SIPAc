@@ -1,10 +1,10 @@
-import { type Types } from 'mongoose'
+import type { DatabaseId } from './database'
 
-export const USER_ROLES = ['admin', 'coordinador', 'docente', 'estudiante'] as const
+export const USER_ROLES = ['admin', 'docente'] as const
 export type UserRole = (typeof USER_ROLES)[number]
 
 export interface IUser {
-  _id: Types.ObjectId
+  _id: DatabaseId
   fullName: string
   email: string
   passwordHash: string
