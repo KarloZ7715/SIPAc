@@ -10,12 +10,13 @@ title SIPAc — Casos de Uso (Parte B)\nPipeline de Documentos: Carga, OCR y NER
 
 ' ─── ACTOR ÚNICO ─────────────────────────────────────
 
-actor "Usuario Académico\n(Docente / Estudiante)" as Acad #LightGreen
+actor "Docente" as Acad #LightGreen
 
 note bottom of Acad
-  Agrupa a Docente y Estudiante:
-  mismos permisos funcionales
-  sobre sus propios documentos.
+  El rol docente incluye
+  coordinadores y directivos.
+  Mismos permisos funcionales
+  sobre documentos.
 end note
 
 ' ─── M2: CARGA DE DOCUMENTOS ────────────────────────
@@ -26,7 +27,7 @@ rectangle "M2 — Carga de Documentos" #E3F2FD {
   usecase "Cargar imagen\nJPG/PNG" as UC_UPLOAD_IMG
   usecase "Cargar múltiples\ndocumentos" as UC_UPLOAD_MULTI
   usecase "Consultar estado\nde procesamiento" as UC_CHECK_STATUS
-  usecase "Eliminar documento\npropio no verificado" as UC_DELETE_DOC
+  usecase "Eliminar documento\npropio" as UC_DELETE_DOC
 
   usecase "Validar MIME\ny tamaño" as UC_VALIDATE
 }

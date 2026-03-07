@@ -9,11 +9,14 @@
 
 ## Control de Versiones
 
-| Versión | Fecha      | Autor                     | Descripción del cambio                                                                                                                                                                                                |
-| ------- | ---------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.0     | 2026-02-09 | Carlos A. Canabal Cordero | Versión inicial — borrador fase de análisis                                                                                                                                                                           |
-| 1.1     | 2026-02-27 | Carlos A. Canabal Cordero | Revisión completa: adición de módulos M6-M8, RNF extendidos, matriz de trazabilidad                                                                                                                                   |
-| 1.2     | 2026-02-27 | Carlos A. Canabal Cordero | Actualización de stack tecnológico: eliminación de Tesseract/PyMuPDF/spaCy/Google NL API; adopción de `pdfjs-dist`, Vercel AI SDK, `generateObject` + Zod con Gemini 2.0 Flash; Mistral OCR 3 como proveedor opcional |
+| Versión | Fecha      | Autor                     | Descripción del cambio                                                                                                                                                                                                                                                                                         |
+| ------- | ---------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-02-09 | Carlos A. Canabal Cordero | Versión inicial — borrador fase de análisis                                                                                                                                                                                                                                                                    |
+| 1.1     | 2026-02-27 | Carlos A. Canabal Cordero | Revisión completa: adición de módulos M6-M8, RNF extendidos, matriz de trazabilidad                                                                                                                                                                                                                            |
+| 1.2     | 2026-02-27 | Carlos A. Canabal Cordero | Actualización de stack tecnológico: eliminación de Tesseract/PyMuPDF/spaCy/Google NL API; adopción de `pdfjs-dist`, Vercel AI SDK, `generateObject` + Zod con Gemini 2.0 Flash; Mistral OCR 3 como proveedor opcional                                                                                          |
+| 1.3     | 2026-03-04 | Carlos A. Canabal Cordero | Simplificación a 2 roles (`admin`, `docente`), eliminación de roles `coordinador` y `estudiante`, nuevo módulo M9 — Chat Inteligente con IA (Prioridad Alta), almacenamiento en MongoDB GridFS, eliminación del flujo de verificación/aprobación, actualización de 8 RFs existentes y adición de 12 nuevos RFs |
+| 1.4     | 2026-03-05 | Carlos A. Canabal Cordero | Reorganización del cronograma de implementación: M5A adelantado a semana 6 junto con M4 NER Avanzado, M5B separado a semana 7, M9 Chat aislado en semana 8, M7 continuación completa en semana 9 junto con integración y testing, despliegue separado a semana 10                                              |
+| 1.5     | 2026-03-06 | Carlos A. Canabal Cordero | Alineación a los cambios de la arquitectura: RF-082 ajustado a estado Parcial (rate limiting global `nuxt-security` 150 tokens/5 min, no per-endpoint 10/min)                                                                                                                                                  |
 
 ---
 
@@ -21,30 +24,31 @@
 
 Este documento especifica los requisitos funcionales y no funcionales del **Sistema Inteligente de Productividad Académica (SIPAc)**, desarrollado como parte del Plan de Pasantía del Programa de Ingeniería de Sistemas de la Universidad de Córdoba (Semestre 2026-I).
 
-El sistema está orientado a la **Maestría en Innovación Educativa con Tecnología e Inteligencia Artificial**, y tiene como propósito automatizar la gestión, extracción y análisis de la producción académica de sus docentes y estudiantes, aplicando técnicas de OCR y Procesamiento de Lenguaje Natural.
+El sistema está orientado a la **Maestría en Innovación Educativa con Tecnología e Inteligencia Artificial**, y tiene como propósito automatizar la gestión, extracción y análisis de la producción académica de sus docentes, aplicando técnicas de OCR y Procesamiento de Lenguaje Natural.
 
 ---
 
 ## 2. Glosario de Términos
 
-| Término                  | Definición                                                                                                                                         |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **RF**                   | Requisito Funcional — comportamiento concreto que el sistema debe exhibir                                                                          |
-| **RNF**                  | Requisito No Funcional — atributo de calidad del sistema (rendimiento, seguridad, etc.)                                                            |
-| **OCR**                  | Optical Character Recognition — extracción de texto desde imágenes y PDFs escaneados                                                               |
-| **NLP**                  | Natural Language Processing — procesamiento de lenguaje natural                                                                                    |
-| **NER**                  | Named Entity Recognition — identificación de entidades en texto (personas, lugares, fechas)                                                        |
-| **Producto Académico**   | Cualquier output intelectual verificable: artículo, ponencia, tesis, certificado, etc.                                                             |
-| **Documento Probatorio** | Archivo (PDF/imagen) que certifica la existencia de un producto académico                                                                          |
-| **Pipeline**             | Secuencia automatizada de pasos de procesamiento: carga → OCR → NER → almacenamiento                                                               |
-| **JWT**                  | JSON Web Token — mecanismo de autenticación sin estado                                                                                             |
-| **Rol**                  | Nivel de acceso y permisos asignado a un usuario del sistema                                                                                       |
-| **Vercel AI SDK**        | Librería TypeScript oficial de Vercel para integrar LLMs; provee `generateObject` para retornar objetos tipados desde un LLM                       |
-| **generateObject**       | Función del Vercel AI SDK que invoca un LLM y garantiza que la respuesta cumpla un esquema Zod, retornando un objeto TypeScript estructurado       |
-| **Zod**                  | Librería TypeScript de validación de esquemas; define la forma exacta de los datos que `generateObject` debe retornar                              |
-| **pdfjs-dist**           | Librería npm oficial de Mozilla para extraer texto de PDFs nativos (con texto seleccionable) sin necesidad de OCR ni LLM                           |
-| **Gemini 2.0 Flash**     | Modelo multimodal de Google (DeepMind); proveedor LLM principal del sistema — procesa texto e imágenes; plan gratuito: 1.500 solicitudes/día       |
-| **Mistral OCR 3**        | Motor OCR de alta precisión de Mistral AI (99,54 % en español); proveedor opcional activable vía variable de entorno; plan de pago ($0,002/página) |
+| Término                  | Definición                                                                                                                                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **RF**                   | Requisito Funcional — comportamiento concreto que el sistema debe exhibir                                                                                                                             |
+| **RNF**                  | Requisito No Funcional — atributo de calidad del sistema (rendimiento, seguridad, etc.)                                                                                                               |
+| **OCR**                  | Optical Character Recognition — extracción de texto desde imágenes y PDFs escaneados                                                                                                                  |
+| **NLP**                  | Natural Language Processing — procesamiento de lenguaje natural                                                                                                                                       |
+| **NER**                  | Named Entity Recognition — identificación de entidades en texto (personas, lugares, fechas)                                                                                                           |
+| **Producto Académico**   | Cualquier output intelectual verificable: artículo, ponencia, tesis, certificado, etc.                                                                                                                |
+| **Documento Probatorio** | Archivo (PDF/imagen) que certifica la existencia de un producto académico                                                                                                                             |
+| **Pipeline**             | Secuencia automatizada de pasos de procesamiento: carga → OCR → NER → almacenamiento                                                                                                                  |
+| **JWT**                  | JSON Web Token — mecanismo de autenticación sin estado                                                                                                                                                |
+| **Rol**                  | Nivel de acceso y permisos asignado a un usuario del sistema                                                                                                                                          |
+| **Vercel AI SDK**        | Librería TypeScript oficial de Vercel para integrar LLMs; provee `generateObject` para retornar objetos tipados desde un LLM                                                                          |
+| **generateObject**       | Función del Vercel AI SDK que invoca un LLM y garantiza que la respuesta cumpla un esquema Zod, retornando un objeto TypeScript estructurado                                                          |
+| **Zod**                  | Librería TypeScript de validación de esquemas; define la forma exacta de los datos que `generateObject` debe retornar                                                                                 |
+| **pdfjs-dist**           | Librería npm oficial de Mozilla para extraer texto de PDFs nativos (con texto seleccionable) sin necesidad de OCR ni LLM                                                                              |
+| **Gemini 2.0 Flash**     | Modelo multimodal de Google (DeepMind); proveedor LLM principal del sistema — procesa texto e imágenes; plan gratuito: 1.500 solicitudes/día                                                          |
+| **Mistral OCR 3**        | Motor OCR de alta precisión de Mistral AI (99,54 % en español); proveedor opcional activable vía variable de entorno; plan de pago ($0,002/página)                                                    |
+| **MVP**                  | Minimum Viable Product (Producto Mínimo Viable) — versión más básica pero funcional del sistema que ya cumple su propósito principal y puede ser entregada; agrupa los requisitos de prioridad `Alta` |
 
 ---
 
@@ -83,7 +87,7 @@ mindmap
     M1 Autenticación
       Registro de usuarios
       Login con JWT
-      Gestión de roles
+      Gestión de 2 roles
       Recuperación de contraseña
     M2 Documentos
       Carga de archivos
@@ -119,6 +123,12 @@ mindmap
     M8 Notificaciones
       Email de procesamiento
       Alertas en interfaz
+    M9 Chat Inteligente
+      Interfaz conversacional
+      Búsqueda por metadatos
+      Tool calling con Gemini
+      Historial de conversaciones
+      Enlaces a documentos
 ```
 
 ---
@@ -139,21 +149,21 @@ mindmap
 
 > Semana 2 del cronograma · 16 Feb 2026
 
-| ID     | Descripción                                                                                                                         | Prioridad | Estado    |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
-| RF-001 | El sistema debe permitir el registro de nuevos usuarios con nombre completo, correo electrónico institucional y contraseña          | Alta      | Pendiente |
-| RF-002 | El sistema debe validar que el correo ingresado en el registro tenga formato válido de dirección de correo electrónico              | Alta      | Pendiente |
-| RF-003 | El sistema debe impedir el registro de un correo electrónico que ya exista en la base de datos                                      | Alta      | Pendiente |
-| RF-004 | El sistema debe permitir el inicio de sesión mediante correo y contraseña, emitiendo un token JWT firmado                           | Alta      | Pendiente |
-| RF-005 | El sistema debe gestionar cuatro roles de usuario: `admin`, `coordinador`, `docente` y `estudiante`                                 | Alta      | Pendiente |
-| RF-006 | El sistema debe restringir el acceso a rutas y funcionalidades según el rol del usuario autenticado                                 | Alta      | Pendiente |
-| RF-007 | El sistema debe permitir al administrador crear nuevas cuentas de usuario                                                           | Alta      | Pendiente |
-| RF-008 | El sistema debe permitir al administrador editar los datos de cualquier cuenta de usuario                                           | Alta      | Pendiente |
-| RF-009 | El sistema debe permitir al administrador activar o desactivar cuentas de usuario sin eliminarlas                                   | Alta      | Pendiente |
-| RF-010 | El sistema debe permitir al administrador asignar y modificar el rol de cualquier usuario                                           | Alta      | Pendiente |
-| RF-011 | El sistema debe implementar cierre de sesión que elimine el token del lado del cliente e invalide la sesión                         | Media     | Pendiente |
-| RF-012 | El sistema debe bloquear temporalmente una cuenta tras 5 intentos fallidos consecutivos de inicio de sesión (bloqueo de 15 minutos) | Alta      | Pendiente |
-| RF-013 | El sistema debe permitir la recuperación de contraseña mediante envío de un enlace temporal al correo del usuario                   | Media     | Pendiente |
+| ID     | Descripción                                                                                                                         | Prioridad | Estado     |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
+| RF-001 | El sistema debe permitir el registro de nuevos usuarios con nombre completo, correo electrónico institucional y contraseña          | Alta      | Completado |
+| RF-002 | El sistema debe validar que el correo ingresado en el registro tenga formato válido de dirección de correo electrónico              | Alta      | Completado |
+| RF-003 | El sistema debe impedir el registro de un correo electrónico que ya exista en la base de datos                                      | Alta      | Completado |
+| RF-004 | El sistema debe permitir el inicio de sesión mediante correo y contraseña, emitiendo un token JWT firmado                           | Alta      | Completado |
+| RF-005 | El sistema debe gestionar dos roles de usuario: `admin` y `docente`                                                                 | Alta      | Completado |
+| RF-006 | El sistema debe restringir el acceso a rutas y funcionalidades según el rol del usuario autenticado                                 | Alta      | Completado |
+| RF-007 | El sistema debe permitir al administrador crear nuevas cuentas de usuario                                                           | Alta      | Completado |
+| RF-008 | El sistema debe permitir al administrador editar los datos de cualquier cuenta de usuario                                           | Alta      | Completado |
+| RF-009 | El sistema debe permitir al administrador activar o desactivar cuentas de usuario sin eliminarlas                                   | Alta      | Completado |
+| RF-010 | El sistema debe permitir al administrador asignar y modificar el rol de cualquier usuario                                           | Alta      | Completado |
+| RF-011 | El sistema debe implementar cierre de sesión que elimine el token del lado del cliente e invalide la sesión                         | Media     | Completado |
+| RF-012 | El sistema debe bloquear temporalmente una cuenta tras 5 intentos fallidos consecutivos de inicio de sesión (bloqueo de 15 minutos) | Alta      | Completado |
+| RF-013 | El sistema debe permitir la recuperación de contraseña mediante envío de un enlace temporal al correo del usuario                   | Media     | Pendiente  |
 
 ---
 
@@ -161,19 +171,19 @@ mindmap
 
 > Semana 3 del cronograma · 23 Feb 2026
 
-| ID     | Descripción                                                                                                                                    | Prioridad | Estado    |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
-| RF-020 | El sistema debe permitir a usuarios con rol `docente` y `estudiante` cargar archivos en formato PDF                                            | Alta      | Pendiente |
-| RF-021 | El sistema debe permitir a usuarios con rol `docente` y `estudiante` cargar archivos en formato JPG, JPEG y PNG                                | Alta      | Pendiente |
-| RF-022 | El sistema debe validar el tipo MIME real del archivo cargado (no solo la extensión) antes de aceptarlo                                        | Alta      | Pendiente |
-| RF-023 | El sistema debe rechazar archivos cuyo tamaño supere los 20 MB, mostrando un mensaje de error descriptivo                                      | Alta      | Pendiente |
-| RF-024 | El sistema debe asociar cada documento cargado al usuario que lo subió                                                                         | Alta      | Pendiente |
-| RF-025 | El sistema debe registrar la fecha y hora exacta en que el documento fue cargado                                                               | Alta      | Pendiente |
-| RF-026 | El sistema debe requerir que el usuario indique el tipo de producto académico al cargar un documento                                           | Alta      | Pendiente |
-| RF-027 | El sistema debe permitir cargar múltiples documentos de forma simultánea en una misma sesión                                                   | Media     | Pendiente |
-| RF-028 | El sistema debe mostrar en tiempo real el estado de procesamiento de cada documento cargado (`pendiente`, `procesando`, `completado`, `error`) | Alta      | Pendiente |
-| RF-029 | El sistema debe permitir al usuario eliminar documentos propios que aún no hayan sido verificados por un coordinador                           | Media     | Pendiente |
-| RF-030 | El sistema debe almacenar los archivos cargados en un directorio seguro no accesible públicamente desde el navegador                           | Alta      | Pendiente |
+| ID     | Descripción                                                                                                                                                                  | Prioridad | Estado    |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
+| RF-020 | El sistema debe permitir a usuarios con rol `docente` cargar archivos en formato PDF                                                                                         | Alta      | Pendiente |
+| RF-021 | El sistema debe permitir a usuarios con rol `docente` cargar archivos en formato JPG, JPEG y PNG                                                                             | Alta      | Pendiente |
+| RF-022 | El sistema debe validar el tipo MIME real del archivo cargado (no solo la extensión) antes de aceptarlo                                                                      | Alta      | Pendiente |
+| RF-023 | El sistema debe rechazar archivos cuyo tamaño supere los 20 MB, mostrando un mensaje de error descriptivo                                                                    | Alta      | Pendiente |
+| RF-024 | El sistema debe asociar cada documento cargado al usuario que lo subió                                                                                                       | Alta      | Pendiente |
+| RF-025 | El sistema debe registrar la fecha y hora exacta en que el documento fue cargado                                                                                             | Alta      | Pendiente |
+| RF-026 | El sistema debe requerir que el usuario indique el tipo de producto académico al cargar un documento                                                                         | Alta      | Pendiente |
+| RF-027 | El sistema debe permitir cargar múltiples documentos de forma simultánea en una misma sesión                                                                                 | Media     | Pendiente |
+| RF-028 | El sistema debe mostrar en tiempo real el estado de procesamiento de cada documento cargado (`pendiente`, `procesando`, `completado`, `error`)                               | Alta      | Pendiente |
+| RF-029 | El sistema debe permitir al usuario eliminar sus documentos propios, solicitando confirmación explícita antes de ejecutar la acción                                          | Media     | Pendiente |
+| RF-030 | El sistema debe almacenar los archivos cargados directamente en la base de datos mediante MongoDB GridFS, garantizando que no sean accesibles públicamente sin autenticación | Alta      | Pendiente |
 
 ---
 
@@ -216,41 +226,41 @@ mindmap
 
 ### Módulo M5A — Repositorio Estructurado
 
-> Semana 7 del cronograma · 23 Mar 2026
+> Semana 6 del cronograma · 16 Mar 2026 (adelantado — implementado junto con M4 NER Avanzado)
 
-| ID     | Descripción                                                                                                                                   | Prioridad | Estado    |
-| ------ | --------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
-| RF-051 | El sistema debe almacenar cada producto académico con sus metadatos completos en la colección `academic_products` de MongoDB                  | Alta      | Pendiente |
-| RF-052 | El sistema debe permitir consultar productos académicos filtrando por tipo de producto                                                        | Alta      | Pendiente |
-| RF-053 | El sistema debe permitir consultar productos académicos filtrando por año de producción                                                       | Alta      | Pendiente |
-| RF-054 | El sistema debe permitir consultar productos académicos filtrando por usuario propietario                                                     | Alta      | Pendiente |
-| RF-055 | El sistema debe permitir consultar productos académicos filtrando por institución                                                             | Media     | Pendiente |
-| RF-056 | El sistema debe permitir al usuario editar manualmente los metadatos de sus propios productos académicos                                      | Alta      | Pendiente |
-| RF-057 | El sistema debe permitir al usuario eliminar sus propios productos académicos, solicitando confirmación explícita antes de ejecutar la acción | Media     | Pendiente |
-| RF-058 | El sistema debe implementar búsqueda de texto completo sobre títulos, autores y palabras clave                                                | Media     | Pendiente |
-| RF-059 | El sistema debe paginar los resultados de consultas con un mínimo de 10 y máximo de 50 registros por página                                   | Media     | Pendiente |
-| RF-060 | Los roles `coordinador` y `admin` deben poder consultar y visualizar los productos académicos de todos los usuarios                           | Alta      | Pendiente |
-| RF-061 | Los roles `docente` y `estudiante` deben solo poder visualizar y gestionar sus propios productos académicos                                   | Alta      | Pendiente |
+| ID     | Descripción                                                                                                                                                              | Prioridad | Estado    |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | --------- |
+| RF-051 | El sistema debe almacenar cada producto académico con sus metadatos completos en la colección `academic_products` de MongoDB                                             | Alta      | Pendiente |
+| RF-052 | El sistema debe permitir consultar productos académicos filtrando por tipo de producto                                                                                   | Alta      | Pendiente |
+| RF-053 | El sistema debe permitir consultar productos académicos filtrando por año de producción                                                                                  | Alta      | Pendiente |
+| RF-054 | El sistema debe permitir consultar productos académicos filtrando por usuario propietario                                                                                | Alta      | Pendiente |
+| RF-055 | El sistema debe permitir consultar productos académicos filtrando por institución                                                                                        | Media     | Pendiente |
+| RF-056 | El sistema debe permitir al usuario editar manualmente los metadatos de sus propios productos académicos                                                                 | Alta      | Pendiente |
+| RF-057 | El sistema debe permitir al usuario eliminar sus propios productos académicos, solicitando confirmación explícita antes de ejecutar la acción                            | Media     | Pendiente |
+| RF-058 | El sistema debe implementar búsqueda de texto completo sobre títulos, autores y palabras clave                                                                           | Media     | Pendiente |
+| RF-059 | El sistema debe paginar los resultados de consultas con un mínimo de 10 y máximo de 50 registros por página                                                              | Media     | Pendiente |
+| RF-060 | Cualquier usuario autenticado debe poder consultar y visualizar los productos académicos de todos los usuarios del sistema                                               | Alta      | Pendiente |
+| RF-061 | Los usuarios solo pueden editar y eliminar sus propios productos académicos; la visualización del repositorio completo es irrestricta para cualquier usuario autenticado | Alta      | Pendiente |
 
 ---
 
 ### Módulo M5B — Dashboard Analítico y Reportes
 
-> Semana 8 del cronograma · 6 Abr 2026
+> Semana 7 del cronograma · 23 Mar 2026
 
-| ID     | Descripción                                                                                                       | Prioridad | Estado    |
-| ------ | ----------------------------------------------------------------------------------------------------------------- | --------- | --------- |
-| RF-062 | El dashboard debe mostrar el número total de productos académicos registrados en el sistema                       | Alta      | Pendiente |
-| RF-063 | El dashboard debe mostrar el número de productos por tipo (artículo, ponencia, tesis, certificado, etc.)          | Alta      | Pendiente |
-| RF-064 | El dashboard debe mostrar el número de productos registrados por cada usuario activo                              | Alta      | Pendiente |
-| RF-065 | El dashboard debe mostrar la distribución temporal de publicaciones agrupadas por año                             | Alta      | Pendiente |
-| RF-066 | El dashboard debe permitir filtrar todos sus indicadores por rango de fechas                                      | Media     | Pendiente |
-| RF-067 | El dashboard debe permitir filtrar todos sus indicadores por tipo de producto                                     | Media     | Pendiente |
-| RF-068 | El dashboard debe permitir filtrar todos sus indicadores por usuario                                              | Media     | Pendiente |
-| RF-069 | El dashboard debe mostrar gráficas de barras, líneas y torta de los principales indicadores de productividad      | Alta      | Pendiente |
-| RF-070 | El sistema debe permitir exportar un reporte consolidado de indicadores en formato PDF                            | Media     | Pendiente |
-| RF-071 | El sistema debe permitir exportar los datos del repositorio en formato Excel/CSV                                  | Media     | Pendiente |
-| RF-072 | El acceso al dashboard con datos de todos los usuarios debe estar restringido a los roles `coordinador` y `admin` | Alta      | Pendiente |
+| ID     | Descripción                                                                                                          | Prioridad | Estado    |
+| ------ | -------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
+| RF-062 | El dashboard debe mostrar el número total de productos académicos registrados en el sistema                          | Alta      | Pendiente |
+| RF-063 | El dashboard debe mostrar el número de productos por tipo (artículo, ponencia, tesis, certificado, etc.)             | Alta      | Pendiente |
+| RF-064 | El dashboard debe mostrar el número de productos registrados por cada usuario activo                                 | Alta      | Pendiente |
+| RF-065 | El dashboard debe mostrar la distribución temporal de publicaciones agrupadas por año                                | Alta      | Pendiente |
+| RF-066 | El dashboard debe permitir filtrar todos sus indicadores por rango de fechas                                         | Media     | Pendiente |
+| RF-067 | El dashboard debe permitir filtrar todos sus indicadores por tipo de producto                                        | Media     | Pendiente |
+| RF-068 | El dashboard debe permitir filtrar todos sus indicadores por usuario                                                 | Media     | Pendiente |
+| RF-069 | El dashboard debe mostrar gráficas de barras, líneas y torta de los principales indicadores de productividad         | Alta      | Pendiente |
+| RF-070 | El sistema debe permitir exportar un reporte consolidado de indicadores en formato PDF                               | Media     | Pendiente |
+| RF-071 | El sistema debe permitir exportar los datos del repositorio en formato Excel/CSV                                     | Media     | Pendiente |
+| RF-072 | El dashboard con indicadores de todos los usuarios debe ser accesible para cualquier usuario autenticado del sistema | Alta      | Pendiente |
 
 ---
 
@@ -258,28 +268,30 @@ mindmap
 
 > Implementado junto al Módulo M1
 
-| ID     | Descripción                                                                                                                                  | Prioridad | Estado    |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
-| RF-073 | El sistema debe permitir a cualquier usuario autenticado consultar su propio perfil (nombre, correo, rol, fecha de registro)                 | Alta      | Pendiente |
-| RF-074 | El sistema debe permitir a cualquier usuario autenticado editar su nombre completo                                                           | Media     | Pendiente |
-| RF-075 | El sistema debe permitir a cualquier usuario autenticado cambiar su contraseña, requiriendo la contraseña actual para confirmar la operación | Alta      | Pendiente |
-| RF-076 | El sistema debe mostrar en el perfil un resumen de la cantidad de productos académicos propios registrados por tipo                          | Media     | Pendiente |
+| ID     | Descripción                                                                                                                                  | Prioridad | Estado     |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
+| RF-073 | El sistema debe permitir a cualquier usuario autenticado consultar su propio perfil (nombre, correo, rol, fecha de registro)                 | Alta      | Completado |
+| RF-074 | El sistema debe permitir a cualquier usuario autenticado editar su nombre completo                                                           | Media     | Completado |
+| RF-075 | El sistema debe permitir a cualquier usuario autenticado cambiar su contraseña, requiriendo la contraseña actual para confirmar la operación | Alta      | Completado |
+| RF-076 | El sistema debe mostrar en el perfil un resumen de la cantidad de productos académicos propios registrados por tipo                          | Media     | Pendiente  |
 
 ---
 
 ### Módulo M7 — Seguridad y Auditoría
 
-> Transversal a todos los módulos
+> Transversal a todos los módulos · Base: Semana 2 (sanitización y log inicial junto a M1) · Continuación completa: Semana 9 (hardening global, auditoría integral y rate limiting en todos los endpoints)
 
-| ID     | Descripción                                                                                                                      | Prioridad | Estado    |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
-| RF-077 | El sistema debe sanitizar todas las entradas de usuario para prevenir ataques de tipo XSS (Cross-Site Scripting)                 | Alta      | Pendiente |
-| RF-078 | El sistema debe sanitizar todas las entradas de usuario para prevenir ataques de inyección de código                             | Alta      | Pendiente |
-| RF-079 | El sistema debe registrar en un log de auditoría cada operación crítica: creación, edición y eliminación de productos académicos | Alta      | Pendiente |
-| RF-080 | El log de auditoría debe registrar para cada evento: usuario que lo ejecutó, tipo de acción, timestamp y dirección IP            | Alta      | Pendiente |
-| RF-081 | El log de auditoría debe ser de solo lectura para todos los usuarios; solo el `admin` puede consultarlo                          | Alta      | Pendiente |
-| RF-082 | El sistema debe implementar rate limiting en los endpoints de autenticación: máximo 10 peticiones por minuto por IP              | Alta      | Pendiente |
-| RF-083 | El sistema debe rechazar cualquier archivo cuya extensión real no corresponda a los formatos permitidos (PDF, JPG, JPEG, PNG)    | Alta      | Pendiente |
+| ID     | Descripción                                                                                                                      | Prioridad | Estado     |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
+| RF-077 | El sistema debe sanitizar todas las entradas de usuario para prevenir ataques de tipo XSS (Cross-Site Scripting)                 | Alta      | Completado |
+| RF-078 | El sistema debe sanitizar todas las entradas de usuario para prevenir ataques de inyección de código                             | Alta      | Completado |
+| RF-079 | El sistema debe registrar en un log de auditoría cada operación crítica: creación, edición y eliminación de productos académicos | Alta      | Completado |
+| RF-080 | El log de auditoría debe registrar para cada evento: usuario que lo ejecutó, tipo de acción, timestamp y dirección IP            | Alta      | Completado |
+| RF-081 | El log de auditoría debe ser de solo lectura para todos los usuarios; solo el `admin` puede consultarlo                          | Alta      | Pendiente  |
+| RF-082 | El sistema debe implementar rate limiting en los endpoints de autenticación: máximo 10 peticiones por minuto por IP              | Alta      | Parcial    |
+| RF-083 | El sistema debe rechazar cualquier archivo cuya extensión real no corresponda a los formatos permitidos (PDF, JPG, JPEG, PNG)    | Alta      | Pendiente  |
+
+> **Nota RF-082:** La implementación actual utiliza `nuxt-security` con rate limiting **global** de 150 tokens por intervalo de 5 minutos (30 req/min), no específico para endpoints de autenticación a 10 req/min. Cubre el objetivo de protección base pero no la granularidad descrita.
 
 ---
 
@@ -295,23 +307,46 @@ mindmap
 
 ---
 
+### Módulo M9 — Chat Inteligente con IA
+
+> Semana 8 del cronograma · 30 Mar 2026 (Módulo aislado, trabajo continuo)
+
+| ID     | Descripción                                                                                                                                                                           | Prioridad | Estado    |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
+| RF-090 | El sistema debe proveer una interfaz de chat conversacional donde el usuario pueda formular consultas en lenguaje natural sobre los documentos académicos almacenados en el sistema   | Alta      | Pendiente |
+| RF-091 | El sistema debe permitir, a través del chat, buscar documentos académicos por rango de fechas de publicación                                                                          | Alta      | Pendiente |
+| RF-092 | El sistema debe permitir, a través del chat, buscar documentos académicos por autor o autores                                                                                         | Alta      | Pendiente |
+| RF-093 | El sistema debe permitir, a través del chat, buscar documentos académicos por tema o palabras clave                                                                                   | Alta      | Pendiente |
+| RF-094 | El sistema debe permitir, a través del chat, buscar documentos académicos por título (coincidencia parcial o completa)                                                                | Alta      | Pendiente |
+| RF-095 | El sistema debe permitir, a través del chat, buscar documentos académicos por tipo de producto académico (`article`, `conference_paper`, `thesis`, `certificate`, `research_project`) | Alta      | Pendiente |
+| RF-096 | El sistema debe permitir, a través del chat, buscar documentos académicos por institución                                                                                             | Alta      | Pendiente |
+| RF-097 | El sistema debe permitir consultas combinadas a través del chat, aplicando múltiples criterios de búsqueda de forma simultánea en una sola pregunta                                   | Alta      | Pendiente |
+| RF-098 | El sistema debe presentar los resultados de búsqueda del chat de forma organizada, incluyendo una explicación breve generada por IA para cada documento encontrado                    | Alta      | Pendiente |
+| RF-099 | El sistema debe mantener contexto conversacional dentro de una sesión de chat, permitiendo preguntas de seguimiento relacionadas con consultas anteriores                             | Alta      | Pendiente |
+| RF-100 | El sistema debe almacenar el historial de conversaciones del chat en la base de datos, permitiendo al usuario consultar y retomar conversaciones previas                              | Media     | Pendiente |
+| RF-101 | Los resultados del chat deben incluir enlaces directos para visualizar (visor embebido) o descargar el documento original asociado a cada producto encontrado                         | Alta      | Pendiente |
+
+---
+
 ## 8. Requisitos No Funcionales
 
-| ID      | Descripción                                                                                                                                          | Categoría      | Criterio de Aceptación                                                                           |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
-| RNF-001 | La interfaz debe ser completamente responsiva y funcional en dispositivos móviles, tabletas y escritorio                                             | Usabilidad     | Verificado en viewport 375px, 768px y 1280px                                                     |
-| RNF-002 | El tiempo de respuesta del pipeline completo (OCR → NER) no debe superar los 30 segundos por documento bajo condiciones normales de uso              | Rendimiento    | Medido con documentos PDF de hasta 20 MB en entorno de desarrollo                                |
-| RNF-003 | Las contraseñas deben almacenarse cifradas con bcrypt usando un mínimo de 10 salt rounds                                                             | Seguridad      | Inspección directa de la BD: ningún campo de contraseña debe estar en texto plano                |
-| RNF-004 | Los tokens JWT deben tener un tiempo de expiración máximo de 8 horas                                                                                 | Seguridad      | Verificado en la configuración del módulo de autenticación                                       |
-| RNF-005 | El sistema debe operar correctamente en los navegadores Chrome, Firefox y Edge en sus versiones actuales                                             | Compatibilidad | Pruebas manuales en los tres navegadores                                                         |
-| RNF-006 | El código fuente debe gestionarse en un repositorio Git con commits organizados por módulo y mensajes descriptivos                                   | Mantenibilidad | Inspección del historial de Git                                                                  |
-| RNF-007 | El sistema debe operar exclusivamente bajo HTTPS en el ambiente de producción                                                                        | Seguridad      | Verificado mediante inspección del certificado SSL en el ambiente de despliegue                  |
-| RNF-008 | El servidor debe configurar CORS para aceptar peticiones únicamente desde el dominio autorizado de la aplicación                                     | Seguridad      | Verificado mediante petición cross-origin desde un origen no autorizado: debe retornar error 403 |
-| RNF-009 | El sistema debe implementar rate limiting global de máximo 100 peticiones por minuto por IP en todos los endpoints                                   | Seguridad      | Verificado mediante prueba de carga: petición 101 debe retornar código HTTP 429                  |
-| RNF-010 | La interfaz debe cumplir con el nivel A de las pautas de accesibilidad WCAG 2.1 (contraste mínimo, etiquetas en formularios, navegación por teclado) | Accesibilidad  | Verificado con herramienta axe o Lighthouse Accessibility                                        |
-| RNF-011 | El sistema debe estar disponible un mínimo del 95% del tiempo durante el horario laboral (7:00–19:00, lunes a viernes)                               | Disponibilidad | Medido durante el período de pruebas de la semana 9                                              |
-| RNF-012 | La base de datos debe contar con un mecanismo de respaldo (backup) al menos cada 24 horas                                                            | Confiabilidad  | Verificado mediante la existencia y ejecución del script de backup                               |
-| RNF-013 | Los módulos de autenticación y procesamiento de documentos deben contar con pruebas de integración que cubran los flujos principales                 | Mantenibilidad | Evidenciado por la existencia de archivos de prueba y su ejecución exitosa                       |
+| ID      | Descripción                                                                                                                                                        | Categoría      | Criterio de Aceptación                                                                                            |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| RNF-001 | La interfaz debe ser completamente responsiva y funcional en dispositivos móviles, tabletas y escritorio                                                           | Usabilidad     | Verificado en viewport 375px, 768px y 1280px                                                                      |
+| RNF-002 | El tiempo de respuesta del pipeline completo (OCR → NER) no debe superar los 30 segundos por documento bajo condiciones normales de uso                            | Rendimiento    | Medido con documentos PDF de hasta 20 MB en entorno de desarrollo                                                 |
+| RNF-003 | Las contraseñas deben almacenarse cifradas con bcrypt usando un mínimo de 10 salt rounds                                                                           | Seguridad      | Inspección directa de la BD: ningún campo de contraseña debe estar en texto plano                                 |
+| RNF-004 | Los tokens JWT deben tener un tiempo de expiración máximo de 8 horas                                                                                               | Seguridad      | Verificado en la configuración del módulo de autenticación                                                        |
+| RNF-005 | El sistema debe operar correctamente en los navegadores Chrome, Firefox y Edge en sus versiones actuales                                                           | Compatibilidad | Pruebas manuales en los tres navegadores                                                                          |
+| RNF-006 | El código fuente debe gestionarse en un repositorio Git con commits organizados por módulo y mensajes descriptivos                                                 | Mantenibilidad | Inspección del historial de Git                                                                                   |
+| RNF-007 | El sistema debe operar exclusivamente bajo HTTPS en el ambiente de producción                                                                                      | Seguridad      | Verificado mediante inspección del certificado SSL en el ambiente de despliegue                                   |
+| RNF-008 | El servidor debe configurar CORS para aceptar peticiones únicamente desde el dominio autorizado de la aplicación                                                   | Seguridad      | Verificado mediante petición cross-origin desde un origen no autorizado: debe retornar error 403                  |
+| RNF-009 | El sistema debe implementar rate limiting global de máximo 100 peticiones por minuto por IP en todos los endpoints                                                 | Seguridad      | Verificado mediante prueba de carga: petición 101 debe retornar código HTTP 429                                   |
+| RNF-010 | La interfaz debe cumplir con el nivel A de las pautas de accesibilidad WCAG 2.1 (contraste mínimo, etiquetas en formularios, navegación por teclado)               | Accesibilidad  | Verificado con herramienta axe o Lighthouse Accessibility                                                         |
+| RNF-011 | El sistema debe estar disponible un mínimo del 95% del tiempo durante el horario laboral (7:00–19:00, lunes a viernes)                                             | Disponibilidad | Medido durante el período de pruebas de la semana 9                                                               |
+| RNF-012 | La base de datos debe contar con un mecanismo de respaldo (backup) al menos cada 24 horas                                                                          | Confiabilidad  | Verificado mediante la existencia y ejecución del script de backup                                                |
+| RNF-013 | Los módulos de autenticación y procesamiento de documentos deben contar con pruebas de integración que cubran los flujos principales                               | Mantenibilidad | Evidenciado por la existencia de archivos de prueba y su ejecución exitosa                                        |
+| RNF-014 | El tiempo de respuesta del chat de IA no debe superar los 15 segundos por consulta bajo condiciones normales de uso                                                | Rendimiento    | Medido con consultas típicas en entorno de desarrollo con conexión estable a la API de Gemini                     |
+| RNF-015 | El sistema debe soportar el almacenamiento de archivos de hasta 20 MB directamente en MongoDB GridFS sin degradación perceptible en los tiempos de carga de página | Rendimiento    | Medido con archivos de 20 MB: tiempo de upload < 10 s y tiempo de descarga/preview < 5 s en entorno de desarrollo |
 
 ---
 
@@ -332,11 +367,15 @@ timeline
         Semana 5 · 9 Mar    : M3 OCR Parte 2
                             : M4 NLP/NER Básico
         Semana 6 · 16 Mar   : M4 NER Avanzado
-    section Fase 3 · Repositorio y Analítica
-        Semana 7 · 23 Mar   : M5A Repositorio Estructurado
-        Semana 8 · 6 Abr    : M5B Dashboard Analítico
+                            : M5A Repositorio Estructurado
+    section Fase 3 · Repositorio, Analítica y Chat
+        Semana 7 · 23 Mar   : M5B Dashboard Analítico
+        Semana 8 · 30 Mar   : M9 Chat Inteligente con IA
+                            : Semana Santa — trabajo continuo
     section Fase 4 · Cierre
-        Semana 9 · 13 Abr   : Integración, Pruebas y Despliegue
+        Semana 9 · 6 Abr    : M7 Seguridad y Auditoría (completo)
+                            : Integración y Testing
+        Semana 10 · 13 Abr  : Despliegue
 ```
 
 ---
@@ -356,12 +395,13 @@ timeline
 | M6 — Perfil         | RF-073 a RF-076 |                |                              |              ✓              |
 | M7 — Seguridad      | RF-077 a RF-083 |                |                              |              ✓              |
 | M8 — Notificaciones | RF-084 a RF-086 |       ✓        |              ✓               |                             |
+| M9 — Chat IA        | RF-090 a RF-101 |       ✓        |              ✓               |                             |
 
 **Totales por objetivo:**
 
 ```mermaid
 pie title Distribución de RFs por Objetivo Específico
-    "OE-1 OCR y NLP (captura)" : 28
+    "OE-1 OCR, NLP y Chat IA (captura e interacción)" : 40
     "OE-2 Repositorio y Dashboard" : 22
     "OE-3 Infraestructura y Auth" : 26
 ```

@@ -10,8 +10,7 @@ title SIPAc — Casos de Uso (Parte C)\nRepositorio, Dashboard y Notificaciones 
 
 ' ─── ACTORES ─────────────────────────────────────────
 
-actor "Usuario Académico\n(Docente / Estudiante)" as Acad #LightGreen
-actor "Coordinador" as Coord #LightBlue
+actor "Docente" as Acad #LightGreen
 actor "Administrador" as Admin #Plum
 
 ' ─── M5A: REPOSITORIO ───────────────────────────────
@@ -23,7 +22,6 @@ rectangle "M5A — Repositorio Estructurado" #FCE4EC {
   usecase "Eliminar producto\npropio" as UC_DELETE
   usecase "Buscar productos\npor texto completo" as UC_SEARCH
   usecase "Consultar productos\nde todos los usuarios" as UC_LIST_ALL
-  usecase "Verificar o rechazar\nproducto académico" as UC_VERIFY
 }
 
 ' ─── M5B: DASHBOARD ─────────────────────────────────
@@ -44,23 +42,28 @@ rectangle "M8 — Notificaciones" #FFFDE7 {
   usecase "Notificación por\ncorreo electrónico" as UC_NOTIF_EMAIL
 }
 
+' ─── M9: CHAT INTELIGENTE ──────────────────────────────
+
+rectangle "M9 — Chat Inteligente" #E8EAF6 {
+  usecase "Buscar documentos\nen lenguaje natural" as UC_CHAT_SEARCH
+  usecase "Consultar historial\nde conversaciones" as UC_CHAT_HISTORY
+}
+
 ' ─── RELACIONES ──────────────────────────────────────
 
-' Usuario Académico — Repositorio (datos propios) + Notificaciones
+' Docente — Repositorio + Dashboard + Notificaciones + Chat
 Acad --> UC_LIST_OWN
 Acad --> UC_EDIT
 Acad --> UC_DELETE
 Acad --> UC_SEARCH
+Acad --> UC_LIST_ALL
+Acad --> UC_DASHBOARD
+Acad --> UC_FILTER
+Acad --> UC_EXPORT_PDF
 Acad --> UC_NOTIF_UI
 Acad --> UC_NOTIF_EMAIL
-
-' Coordinador — Verificación + Dashboard + Vista global
-Coord --> UC_VERIFY
-Coord --> UC_LIST_ALL
-Coord --> UC_SEARCH
-Coord --> UC_DASHBOARD
-Coord --> UC_FILTER
-Coord --> UC_EXPORT_PDF
+Acad --> UC_CHAT_SEARCH
+Acad --> UC_CHAT_HISTORY
 
 ' Administrador — Dashboard completo + Vista global
 Admin --> UC_LIST_ALL

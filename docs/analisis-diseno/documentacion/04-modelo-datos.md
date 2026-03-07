@@ -6,10 +6,12 @@
 
 ## Control de Versiones
 
-| Versión | Fecha      | Autor                     | Descripción del cambio                                                                                                                                                                                             |
-| ------- | ---------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1.0     | 2026-02-09 | Carlos A. Canabal Cordero | Borrador inicial — esquemas pseudocódigo con stack Python (spaCy, Tesseract)                                                                                                                                       |
-| 1.1     | 2026-02-27 | Carlos A. Canabal Cordero | Reescritura completa — esquemas TypeScript con Mongoose ODM, validaciones, índices compuestos, middlewares, colecciones de auditoría y notificaciones, alineación con stack unificado (Vercel AI SDK, Gemini, Zod) |
+| Versión | Fecha      | Autor                     | Descripción del cambio                                                                                                                                                                                                                                                 |
+| ------- | ---------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-02-09 | Carlos A. Canabal Cordero | Borrador inicial — esquemas pseudocódigo con stack Python (spaCy, Tesseract)                                                                                                                                                                                           |
+| 1.1     | 2026-02-27 | Carlos A. Canabal Cordero | Reescritura completa — esquemas TypeScript con Mongoose ODM, validaciones, índices compuestos, middlewares, colecciones de auditoría y notificaciones, alineación con stack unificado (Vercel AI SDK, Gemini, Zod)                                                     |
+| 1.2     | 2026-03-04 | Carlos A. Canabal Cordero | Simplificación a 2 roles (`admin`, `docente`), almacenamiento en MongoDB GridFS (eliminar `storagePath`), eliminación de campos de verificación en `academic_products`, nueva colección `chat_conversations`, actualización de enums en `audit_logs` y `notifications` |
+| 1.3     | 2026-03-06 | Carlos A. Canabal Cordero | Alineación a los cambios de la arquitectura: `gridfsFileId` en `uploaded_files`, eliminación del flujo obsoleto de verificación/rechazo y su notificación asociada, implementación del hook pre-save de hash de contraseña                                             |
 
 ---
 
@@ -37,7 +39,6 @@
 | `owner` en `academic_products`             | **Reference** → `users`          | Los usuarios existen independientemente y se actualizan sin afectar los productos                                                    |
 | `sourceFile` en `academic_products`        | **Reference** → `uploaded_files` | El archivo tiene su propio ciclo de vida y metadatos de procesamiento; puede referenciarse desde múltiples vistas                    |
 | `uploadedBy` en `uploaded_files`           | **Reference** → `users`          | Un usuario puede tener muchos archivos; el dato del usuario cambia independientemente                                                |
-| `verifiedBy` en `academic_products`        | **Reference** → `users`          | El coordinador que verificó existe como usuario independiente                                                                        |
 | `userId` en `audit_logs`                   | **Reference** → `users`          | Los logs deben sobrevivir incluso si el usuario se desactiva                                                                         |
 
 ### 2.2 Normalización y Desnormalización
@@ -65,7 +66,7 @@ export interface IUser extends Document {
   fullName: string
   email: string
   passwordHash: string
-  role: 'admin' | 'coordinador' | 'docente' | 'estudiante'
+  role: 'admin' | 'docente'
   isActive: boolean
   program?: string
 
@@ -113,7 +114,7 @@ const userSchema = new Schema<IUser>(
     role: {
       type: String,
       enum: {
-        values: ['admin', 'coordinador', 'docente', 'estudiante'],
+        values: ['admin', 'docente'],
         message: 'El rol {VALUE} no es válido',
       },
       default: 'docente',
@@ -195,7 +196,7 @@ export interface IUploadedFile extends Document {
   _id: Types.ObjectId
   uploadedBy: Types.ObjectId // ref: User
   originalFilename: string
-  storagePath: string
+  gridfsFileId: Types.ObjectId
   mimeType: 'application/pdf' | 'image/jpeg' | 'image/png'
   fileSizeBytes: number
   processingStatus: 'pending' | 'processing' | 'completed' | 'error'
@@ -227,9 +228,9 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
       trim: true,
       maxlength: 255,
     },
-    storagePath: {
-      type: String,
-      required: true,
+    gridfsFileId: {
+      type: Schema.Types.ObjectId,
+      required: [true, 'El archivo debe tener una referencia GridFS'],
     },
     mimeType: {
       type: String,
@@ -334,10 +335,6 @@ export interface IAcademicProduct extends Document {
   productType: string // discriminador
   owner: Types.ObjectId // ref: User
   sourceFile: Types.ObjectId // ref: UploadedFile
-  verificationStatus: 'pending_review' | 'verified' | 'rejected'
-  verifiedBy?: Types.ObjectId // ref: User
-  verificationDate?: Date
-  rejectionReason?: string
 
   extractedEntities: IExtractedEntities
   manualMetadata: IManualMetadata
@@ -415,18 +412,6 @@ const academicProductSchema = new Schema<IAcademicProduct>(
       ref: 'UploadedFile',
       required: [true, 'El producto debe tener un archivo fuente'],
     },
-    verificationStatus: {
-      type: String,
-      enum: ['pending_review', 'verified', 'rejected'],
-      default: 'pending_review',
-    },
-    verifiedBy: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      default: null,
-    },
-    verificationDate: { type: Date, default: null },
-    rejectionReason: { type: String, default: null, maxlength: 500 },
 
     extractedEntities: {
       type: extractedEntitiesSchema,
@@ -613,9 +598,6 @@ academicProductSchema.index(
   { name: 'idx_owner_type' },
 )
 
-// Filtro por estado de verificación
-academicProductSchema.index({ verificationStatus: 1, owner: 1 }, { name: 'idx_verification' })
-
 // Consultas temporales para dashboard (RF-065)
 academicProductSchema.index(
   { 'manualMetadata.date': -1, productType: 1 },
@@ -644,7 +626,6 @@ academicProductSchema.index(
 | Índice                                         | Tipo                     | Soporta (RF)                                                          |
 | ---------------------------------------------- | ------------------------ | --------------------------------------------------------------------- |
 | `{ owner, productType, isDeleted, createdAt }` | Compuesto                | RF-052/054: listar productos por tipo y usuario                       |
-| `{ verificationStatus, owner }`                | Compuesto                | RF-060/061: coordinador ve todos, docente ve solo propios             |
 | `{ manualMetadata.date, productType }`         | Compuesto                | RF-065/066: distribución temporal y filtro por rango                  |
 | Text index con pesos                           | Texto completo (español) | RF-058: búsqueda full-text priorizada por título > autores > keywords |
 
@@ -661,7 +642,7 @@ export interface IAuditLog extends Document {
   _id: Types.ObjectId
   userId: Types.ObjectId // ref: User — quien ejecutó la acción
   userName: string // desnormalizado: nombre al momento del evento
-  action: 'create' | 'update' | 'delete' | 'verify' | 'reject' | 'login' | 'login_failed'
+  action: 'create' | 'update' | 'delete' | 'login' | 'login_failed'
   resource: 'academic_product' | 'uploaded_file' | 'user' | 'session'
   resourceId?: Types.ObjectId // _id del recurso afectado
   details?: string // descripción breve del cambio
@@ -689,7 +670,7 @@ const auditLogSchema = new Schema<IAuditLog>(
     action: {
       type: String,
       required: true,
-      enum: ['create', 'update', 'delete', 'verify', 'reject', 'login', 'login_failed'],
+      enum: ['create', 'update', 'delete', 'login', 'login_failed'],
     },
     resource: {
       type: String,
@@ -742,7 +723,7 @@ auditLogSchema.index({ userId: 1, createdAt: -1 }, { name: 'idx_user_timeline' }
 export interface INotification extends Document {
   _id: Types.ObjectId
   recipientId: Types.ObjectId // ref: User
-  type: 'processing_complete' | 'processing_error' | 'verification_update' | 'system'
+  type: 'processing_complete' | 'processing_error' | 'system'
   title: string
   message: string
   relatedResource?: {
@@ -768,7 +749,7 @@ const notificationSchema = new Schema<INotification>(
     type: {
       type: String,
       required: true,
-      enum: ['processing_complete', 'processing_error', 'verification_update', 'system'],
+      enum: ['processing_complete', 'processing_error', 'system'],
     },
     title: {
       type: String,
@@ -827,6 +808,111 @@ notificationSchema.index(
 
 ---
 
+### 3.6 `chat_conversations` — Historial de conversaciones del chat (M9)
+
+#### Interfaz TypeScript
+
+```typescript
+export interface IChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  toolCalls?: {
+    toolName: string
+    args: Record<string, unknown>
+    result?: unknown
+  }[]
+  timestamp: Date
+}
+
+export interface IChatConversation extends Document {
+  _id: Types.ObjectId
+  userId: Types.ObjectId // ref: User
+  title: string
+  messages: IChatMessage[]
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+```
+
+#### Esquema Mongoose
+
+```typescript
+const chatMessageSchema = new Schema<IChatMessage>(
+  {
+    role: {
+      type: String,
+      required: true,
+      enum: ['user', 'assistant'],
+    },
+    content: {
+      type: String,
+      required: true,
+    },
+    toolCalls: [
+      {
+        toolName: { type: String },
+        args: { type: Schema.Types.Mixed },
+        result: { type: Schema.Types.Mixed },
+      },
+    ],
+    timestamp: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false },
+)
+
+const chatConversationSchema = new Schema<IChatConversation>(
+  {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'La conversación debe estar asociada a un usuario'],
+    },
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 200,
+    },
+    messages: {
+      type: [chatMessageSchema],
+      default: [],
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  { timestamps: true },
+)
+```
+
+#### Índices
+
+```typescript
+chatConversationSchema.index(
+  { userId: 1, isActive: 1, updatedAt: -1 },
+  { name: 'idx_user_conversations' },
+)
+chatConversationSchema.index(
+  { updatedAt: 1 },
+  {
+    expireAfterSeconds: 15_552_000, // TTL: 180 días
+    name: 'idx_ttl_conversations',
+  },
+)
+```
+
+| Índice                            | Tipo      | Soporta (RF)                                                                      |
+| --------------------------------- | --------- | --------------------------------------------------------------------------------- |
+| `{ userId, isActive, updatedAt }` | Compuesto | RF-100: listar conversaciones activas del usuario, ordenadas por última actividad |
+| `{ updatedAt }` TTL 180 días      | TTL       | Limpieza automática: conversaciones inactivas se eliminan tras 6 meses            |
+
+---
+
 ## 4. Diagrama de Relaciones (ER)
 
 ```mermaid
@@ -846,6 +932,7 @@ erDiagram
         ObjectId _id PK
         ObjectId uploadedBy FK
         string originalFilename
+        ObjectId gridfsFileId
         string mimeType
         string processingStatus
         string ocrProvider
@@ -858,8 +945,6 @@ erDiagram
         string productType
         ObjectId owner FK
         ObjectId sourceFile FK
-        string verificationStatus
-        ObjectId verifiedBy FK
         object extractedEntities
         object manualMetadata
         boolean isDeleted
@@ -884,12 +969,20 @@ erDiagram
         boolean emailSent
     }
 
+    CHAT_CONVERSATIONS {
+        ObjectId _id PK
+        ObjectId userId FK
+        string title
+        array messages
+        boolean isActive
+    }
+
     USERS ||--o{ UPLOADED_FILES : "uploadedBy"
     USERS ||--o{ ACADEMIC_PRODUCTS : "owner"
     USERS ||--o{ AUDIT_LOGS : "userId"
     USERS ||--o{ NOTIFICATIONS : "recipientId"
     UPLOADED_FILES ||--o| ACADEMIC_PRODUCTS : "sourceFile"
-    USERS ||--o{ ACADEMIC_PRODUCTS : "verifiedBy"
+    USERS ||--o{ CHAT_CONVERSATIONS : "userId"
 ```
 
 ---
@@ -901,10 +994,9 @@ erDiagram
 ```typescript
 import bcrypt from 'bcrypt'
 
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('passwordHash')) return next()
+userSchema.pre('save', async function (this: IUserDocument) {
+  if (!this.isModified('passwordHash')) return
   this.passwordHash = await bcrypt.hash(this.passwordHash, 10)
-  next()
 })
 ```
 
@@ -1170,14 +1262,14 @@ await AcademicProduct.find({ isDeleted: true })
 
 ## 9. Datos de Ejemplo
 
-### 9.1 Usuario coordinador
+### 9.1 Usuario docente
 
 ```json
 {
   "_id": "67bf3a1e2c8f4e001a234567",
   "fullName": "Martha Cecilia Pacheco Lora",
   "email": "mpacheco@correo.unicordoba.edu.co",
-  "role": "coordinador",
+  "role": "docente",
   "isActive": true,
   "program": "Maestría en Innovación Educativa con Tecnología e IA",
   "failedLoginAttempts": 0,
@@ -1194,7 +1286,7 @@ await AcademicProduct.find({ isDeleted: true })
   "_id": "67bf3b4a2c8f4e001a234568",
   "uploadedBy": "67bf3a1e2c8f4e001a234567",
   "originalFilename": "articulo-innovacion-IA-2025.pdf",
-  "storagePath": "/storage/uploads/67bf3b4a2c8f4e001a234568.pdf",
+  "gridfsFileId": "67bf3b4a2c8f4e001a234570",
   "mimeType": "application/pdf",
   "fileSizeBytes": 2458624,
   "processingStatus": "completed",
@@ -1215,7 +1307,6 @@ await AcademicProduct.find({ isDeleted: true })
   "productType": "article",
   "owner": "67bf3a1e2c8f4e001a234567",
   "sourceFile": "67bf3b4a2c8f4e001a234568",
-  "verificationStatus": "pending_review",
   "extractedEntities": {
     "authors": ["Martha C. Pacheco Lora", "Daniel J. Salas Álvarez"],
     "title": "Innovación pedagógica mediada por IA en posgrados colombianos",
@@ -1266,13 +1357,14 @@ await AcademicProduct.find({ isDeleted: true })
 
 ## 10. Resumen de Colecciones e Índices
 
-| Colección           | Documentos esperados          | Índices                    | Patrón de acceso primario                                              |
-| ------------------- | ----------------------------- | -------------------------- | ---------------------------------------------------------------------- |
-| `users`             | Decenas (~50-100)             | 3                          | Login por email, listado por rol                                       |
-| `uploaded_files`    | Centenas (~500-2000)          | 2                          | Listado por usuario, cola de procesamiento                             |
-| `academic_products` | Centenas (~500-2000)          | 4 (incluye texto completo) | Listado por owner+tipo, búsqueda full-text, aggregation para dashboard |
-| `audit_logs`        | Miles (crecimiento ilimitado) | 2                          | Consulta por recurso/acción, timeline por usuario                      |
-| `notifications`     | Centenas (TTL auto-limpia)    | 2 (incluye TTL)            | No leídas por usuario, limpieza automática a 90 días                   |
+| Colección            | Documentos esperados          | Índices                    | Patrón de acceso primario                                              |
+| -------------------- | ----------------------------- | -------------------------- | ---------------------------------------------------------------------- |
+| `users`              | Decenas (~50-100)             | 3                          | Login por email, listado por rol                                       |
+| `uploaded_files`     | Centenas (~500-2000)          | 2                          | Listado por usuario, cola de procesamiento                             |
+| `academic_products`  | Centenas (~500-2000)          | 3 (incluye texto completo) | Listado por owner+tipo, búsqueda full-text, aggregation para dashboard |
+| `audit_logs`         | Miles (crecimiento ilimitado) | 2                          | Consulta por recurso/acción, timeline por usuario                      |
+| `notifications`      | Centenas (TTL auto-limpia)    | 2 (incluye TTL)            | No leídas por usuario, limpieza automática a 90 días                   |
+| `chat_conversations` | Centenas (TTL auto-limpia)    | 2 (incluye TTL)            | Conversaciones activas por usuario, limpieza automática a 180 días     |
 
 ---
 
@@ -1281,6 +1373,7 @@ await AcademicProduct.find({ isDeleted: true })
 - **Discriminator pattern extensible:** Agregar nuevos tipos de productos (`book_chapter`, `patent`, `software`) requiere solo crear un nuevo discriminador, sin migración de datos.
 - **Índice de texto completo en español:** Configurado con `default_language: 'spanish'` y pesos diferenciados, permite búsqueda semántica básica sin motores externos.
 - **TTL en notificaciones:** La limpieza automática evita crecimiento descontrolado de la colección de notificaciones.
+- **TTL en conversaciones del chat:** La limpieza automática a 180 días evita crecimiento descontrolado del historial de chat, manteniendo solo las conversaciones relevantes.
 - **Paginación cursor-based:** Rendimiento constante O(log n) para el repositorio, independientemente del tamaño de la base.
 - **Soft delete + pre-find hooks:** Los documentos eliminados lógicamente no aparecen en consultas normales pero se preservan para auditoría y recuperación.
 - **Lean queries en lecturas:** Todas las consultas de lectura usan `.lean()` para evitar la hidratación completa de Mongoose y reducir la huella de memoria.

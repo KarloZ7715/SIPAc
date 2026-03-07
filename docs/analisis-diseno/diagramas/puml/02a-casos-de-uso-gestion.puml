@@ -11,9 +11,9 @@ title SIPAc — Diagrama de Casos de Uso\nParte A: Gestión de Usuarios, Perfil,
 ' ─── ACTORES ─────────────────────────────────────────
 ' Se usa generalización de actores para reducir líneas:
 ' - "Usuario Autenticado" agrupa casos comunes a los 4 roles
-' - Admin y Coordinador se muestran aparte para sus casos exclusivos
+' - Admin se muestra aparte para sus casos exclusivos de gestión
 
-actor "Usuario Autenticado\n(todos los roles)" as Auth #LightSteelBlue
+actor "Usuario Autenticado\n(admin o docente)" as Auth #LightSteelBlue
 actor "Administrador" as Admin #LightCoral
 
 Auth <|-- Admin
@@ -21,8 +21,7 @@ Auth <|-- Admin
 note right of Auth
   Representa a cualquier
   usuario autenticado:
-  admin, coordinador,
-  docente o estudiante.
+  admin o docente.
 end note
 
 ' ─── M1: AUTENTICACIÓN Y GESTIÓN DE USUARIOS ────────
@@ -67,7 +66,7 @@ rectangle "M7 — Seguridad y Auditoría" #FFEBEE {
     Transversal: se invoca
     automáticamente en
     create/update/delete/
-    verify/reject/login
+    login/login_failed
   end note
 }
 

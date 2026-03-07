@@ -6,10 +6,12 @@
 
 ## Control de Versiones
 
-| Versión | Fecha      | Autor                     | Descripción del cambio                                                                                               |
-| ------- | ---------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 1.0     | 2026-02-09 | Carlos A. Canabal Cordero | Borrador inicial — arquitectura de dos servicios: Nuxt 4 + microservicio Python (FastAPI, spaCy, Tesseract)          |
-| 1.1     | 2026-02-27 | Carlos A. Canabal Cordero | Reescritura completa — stack unificado TypeScript: Nuxt 4 monolito, Vercel AI SDK, Gemini 2.0 Flash, pdfjs-dist, Zod |
+| Versión | Fecha      | Autor                     | Descripción del cambio                                                                                                                                                                                                                                             |
+| ------- | ---------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1.0     | 2026-02-09 | Carlos A. Canabal Cordero | Borrador inicial — arquitectura de dos servicios: Nuxt 4 + microservicio Python (FastAPI, spaCy, Tesseract)                                                                                                                                                        |
+| 1.1     | 2026-02-27 | Carlos A. Canabal Cordero | Reescritura completa — stack unificado TypeScript: Nuxt 4 monolito, Vercel AI SDK, Gemini 2.0 Flash, pdfjs-dist, Zod                                                                                                                                               |
+| 1.2     | 2026-03-04 | Carlos A. Canabal Cordero | Simplificación a 2 roles (`admin`, `docente`), nuevo módulo Chat Inteligente, almacenamiento en MongoDB GridFS, eliminación del flujo de verificación, nuevos ADR-07 y ADR-08                                                                                      |
+| 1.3     | 2026-03-06 | Carlos A. Canabal Cordero | Alineación a los cambios de la arquitectura: corrección de versión Mongoose (9.x), corrección de mecanismo de autenticación (cookie httpOnly), actualización de estructura de directorios a estado real, adición de @nuxt/ui, nuxt-security y @ai-sdk/vue en stack |
 
 ---
 
@@ -26,12 +28,16 @@ graph TD
         API["API Routes: /server/api/**"]
         OCR["Módulo OCR: /server/services/ocr/"]
         NER["Módulo NER: /server/services/ner/"]
+        Chat["Módulo Chat: /server/services/chat/"]
+        Storage["Módulo Storage: /server/services/storage/"]
         ODM["Mongoose ODM"]
     end
 
     MongoDB[("MongoDB Atlas (Cloud)")]
+    GridFS[("MongoDB GridFS (Archivos)")]
     GeminiVision["☁ Gemini 2.0 Flash Vision (Vercel AI SDK) OCR multimodal"]
     GeminiText["☁ Gemini 2.0 Flash (Vercel AI SDK) generateObject + Zod"]
+    GeminiChat["☁ Gemini 2.0 Flash (Vercel AI SDK) streamText + Tool Calling"]
     MistralOCR["☁ Mistral OCR 3 (Opcional — .env) $0,002/pág"]
     PdfjsDist["pdfjs-dist (Node.js, sin red) PDF nativo → texto"]
 
@@ -39,12 +45,17 @@ graph TD
     Browser -- "HTTPS (REST JSON)" --> API
     API --> OCR
     API --> NER
+    API --> Chat
+    API --> Storage
     API --> ODM
     ODM --> MongoDB
+    Storage --> GridFS
     OCR --> PdfjsDist
     OCR -- "PDF escaneado / imagen" --> GeminiVision
     OCR -. "OCR_PROVIDER=mistral (.env, opcional)" .-> MistralOCR
     NER --> GeminiText
+    Chat --> GeminiChat
+    Chat --> ODM
 ```
 
 > **Principio guía:** Un solo lenguaje (TypeScript), un solo proceso (Node.js), un solo despliegue. El procesamiento con IA se delega a APIs externas de bajo costo (free tier en desarrollo), manteniendo la base de código simple y sin dependencias de entorno Python.
@@ -55,23 +66,26 @@ graph TD
 
 ### 2.1 Capa de Interfaz de Usuario (UI)
 
-| Tecnología      | Versión | Rol                         | Justificación                                                                                      |
-| --------------- | ------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
-| **Nuxt 4**      | 4.x     | Framework principal SSR/SPA | SSR mejora el tiempo de primera carga y habilita API Routes                                        |
-| **Vue 3**       | 3.x     | Framework UI reactivo       | Base oficial de Nuxt 4; Composition API facilita componentes complejos y reutilizables             |
-| **TypeScript**  | 5.x     | Tipado estático end-to-end  | Compartir tipos entre servidor y cliente; reducción de errores en tiempo de edición                |
-| **TailwindCSS** | 4.x     | Estilos utilitarios         | Desarrollo rápido de UI responsive profesional sin CSS personalizado extenso                       |
-| **Pinia**       | 3.x     | Gestión de estado global    | Store oficial de Vue 3; manejo reactivo de sesión de usuario, documentos cargados y estado del NER |
+| Tecnología        | Versión | Rol                         | Justificación                                                                                      |
+| ----------------- | ------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Nuxt 4**        | 4.x     | Framework principal SSR/SPA | SSR mejora el tiempo de primera carga y habilita API Routes                                        |
+| **Vue 3**         | 3.x     | Framework UI reactivo       | Base oficial de Nuxt 4; Composition API facilita componentes complejos y reutilizables             |
+| **TypeScript**    | 5.x     | Tipado estático end-to-end  | Compartir tipos entre servidor y cliente; reducción de errores en tiempo de edición                |
+| **TailwindCSS**   | 4.x     | Estilos utilitarios         | Desarrollo rápido de UI responsive profesional sin CSS personalizado extenso                       |
+| **@nuxt/ui**      | 4.x     | Librería de componentes UI  | 125+ componentes accesibles con theming Tailwind CSS; base de la UI del sistema                    |
+| **Pinia**         | 3.x     | Gestión de estado global    | Store oficial de Vue 3; manejo reactivo de sesión de usuario, documentos cargados y estado del NER |
+| **`@ai-sdk/vue`** | 3.x     | Composables de IA para Vue  | Proporciona `useChat` y `useCompletion` para streaming de respuestas del chat IA en el cliente     |
 
 ### 2.2 Capa de Backend / API
 
-| Tecnología                             | Versión   | Rol                                   | Justificación                                                                              |
-| -------------------------------------- | --------- | ------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **Nuxt Server Routes** (`/server/api`) | 4.x       | Endpoints REST del sistema            | Evita un servidor Express separado; compilados junto con la app en el mismo bundle Node.js |
-| **H3 Multipart**                       | integrado | Carga de archivos multipart/form-data | Integrado en el runtime H3 de Nuxt; sin dependencias adicionales                           |
-| **Mongoose ODM**                       | 8.x       | Modelado de documentos MongoDB        | Esquemas tipados, discriminator pattern por tipo de producto, validaciones personalizadas  |
-| **JWT (`jose`)**                       | latest    | Autenticación sin estado              | Estándar para APIs REST; `jose` opera en Edge Runtime (compatible con Nuxt middleware)     |
-| **bcrypt**                             | 6.0       | Hash seguro de contraseñas            | Estándar de industria; mínimo 10 salt rounds para resistencia a fuerza bruta               |
+| Tecnología                             | Versión   | Rol                                   | Justificación                                                                                               |
+| -------------------------------------- | --------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Nuxt Server Routes** (`/server/api`) | 4.x       | Endpoints REST del sistema            | Evita un servidor Express separado; compilados junto con la app en el mismo bundle Node.js                  |
+| **H3 Multipart**                       | integrado | Carga de archivos multipart/form-data | Integrado en el runtime H3 de Nuxt; sin dependencias adicionales                                            |
+| **Mongoose ODM**                       | 9.x       | Modelado de documentos MongoDB        | Esquemas tipados, discriminator pattern por tipo de producto, validaciones personalizadas                   |
+| **JWT (`jose`)**                       | latest    | Autenticación sin estado              | Tokens JWT firmados con HS256; almacenados en cookie httpOnly `sipac_session`; `jose` opera en Edge Runtime |
+| **bcrypt**                             | 6.0       | Hash seguro de contraseñas            | Estándar de industria; mínimo 10 salt rounds para resistencia a fuerza bruta                                |
+| **nuxt-security**                      | 2.5.1     | Endurecimiento HTTP y rate limiting   | Headers de seguridad, CSP, rate limiting global, límites de tamaño de request                               |
 
 ### 2.3 Capa de Procesamiento Inteligente
 
@@ -171,6 +185,26 @@ graph TD
 
 ---
 
+### ADR-07 — MongoDB GridFS vs. Filesystem local para almacenamiento de archivos
+
+**Decisión:** Todos los archivos cargados se almacenan directamente en MongoDB mediante GridFS, independientemente de su tamaño.
+
+**Justificación técnica:** El almacenamiento en filesystem local (`./uploads/`) presenta limitaciones significativas para el proyecto: (a) los archivos no son accesibles desde la UI sin implementar un servidor de archivos estáticos con autenticación; (b) el despliegue en plataformas serverless (ej: Vercel) no garantiza persistencia del filesystem; (c) la previsualización y descarga de documentos desde la interfaz requiere servir los archivos como streams HTTP, lo cual se integra naturalmente con GridFS. MongoDB GridFS divide los archivos en chunks de 255 KB almacenados en las colecciones `uploads.files` y `uploads.chunks`, soportando archivos de cualquier tamaño dentro del límite del cluster. En MongoDB Atlas M0 (free tier), el almacenamiento disponible es de 512 MB, suficiente para la fase de desarrollo y pruebas de la pasantía.
+
+**Alternativa descartada:** Filesystem local con interfaz `StorageService` abstracta para migrar a S3/Cloudinary en producción. Se descartó porque agrega complejidad de abstracción sin beneficio inmediato.
+
+---
+
+### ADR-08 — Function Calling vs. RAG para el Chat Inteligente (M9)
+
+**Decisión:** El módulo de chat utiliza **function calling** (tool use) del Vercel AI SDK con Gemini 2.0 Flash para traducir preguntas en lenguaje natural a queries MongoDB sobre metadatos estructurados.
+
+**Justificación técnica:** Los documentos académicos de SIPAc tienen metadatos estructurados bien definidos (autores, título, fecha, tipo, institución, DOI, palabras clave) almacenados en campos tipados de MongoDB. Este escenario favorece el enfoque de function calling sobre RAG (Retrieval Augmented Generation) porque: (a) no se requiere búsqueda semántica sobre texto libre — las consultas operan sobre campos discretos y filtros combinables; (b) function calling permite al LLM invocar herramientas de búsqueda tipadas con esquemas Zod, garantizando queries válidas; (c) no se necesitan embeddings vectoriales ni infraestructura adicional de vector search; (d) el LLM puede encadenar múltiples herramientas en una sola respuesta para queries complejas. La arquitectura define un conjunto de herramientas (`searchByDateRange`, `searchByAuthor`, `searchByKeywords`, `searchByTitle`, `searchByProductType`, `searchByInstitution`, `searchCombined`) que el LLM invoca según la intención del usuario.
+
+**Alternativa descartada:** RAG con MongoDB Atlas Vector Search. Se descartó porque requiere generar y almacenar embeddings para cada documento, un modelo de embeddings adicional, y un índice vectorial en Atlas (no disponible en M0 free tier). La complejidad y el costo no se justifican cuando la búsqueda es sobre metadatos estructurados y no sobre contenido semántico del texto completo.
+
+---
+
 ## 4. Flujo de Procesamiento de Documentos
 
 El siguiente diagrama describe el pipeline completo desde la carga del archivo hasta el almacenamiento de entidades estructuradas.
@@ -178,7 +212,7 @@ El siguiente diagrama describe el pipeline completo desde la carga del archivo h
 ```mermaid
 flowchart TD
     A(["👤 Usuario carga archivo (PDF / JPG / PNG)"]) --> B["/server/api/documents/upload (Nuxt API Route)"]
-    B --> C["Guardar archivo (filesystem / storage) Crear doc en MongoDB estado: 'pendiente'"]
+    B --> C["Guardar archivo en MongoDB GridFS Crear doc en uploaded_files estado: 'pendiente'"]
     C --> D{{"¿Tipo de archivo?"}}
 
     D -- "PDF" --> E{{"¿PDF nativo (tiene texto incrustado)?"}}
@@ -196,7 +230,7 @@ flowchart TD
 
     J --> K["generateObject — Vercel AI SDK + Gemini 2.0 Flash + esquema Zod + Extracción NER académico"]
     K --> L["Objeto TypeScript validado { titulo, autores, doi, indexacion, nombreEvento, fecha, ... }"]
-    L --> M["Guardar entidades en: MongoDB estado: 'completado'"]
+    L --> M["Guardar entidades en MongoDB estado: 'completado'"]
     M --> N(["✅ Usuario revisa y edita entidades en la UI"])
 
     style A fill:#4f86c6,color:#fff
@@ -251,21 +285,21 @@ export function createOCRProvider(): OCRProvider {
 
 ## 6. Seguridad
 
-| Aspecto                   | Implementación                                                                                           |
-| ------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Autenticación**         | JWT en header `Authorization: Bearer <token>`; tokens firmados con `jose` (compatible con Edge Runtime)  |
-| **Autorización**          | Middleware de servidor Nuxt por rol — `admin`, `coordinador`, `docente`, `estudiante`                    |
-| **Contraseñas**           | bcrypt con mínimo 10 salt rounds; nunca se almacena la contraseña en texto plano                         |
-| **Archivos cargados**     | Validación de MIME type + extensión antes de procesar; archivos almacenados fuera del directorio público |
-| **API keys (Gemini)**     | `GOOGLE_API_KEY` definida en `.env`; nunca expuesta al cliente; solo accesible en `server/` de Nuxt      |
-| **API keys (Mistral)**    | `MISTRAL_API_KEY` definida en `.env`; idem anterior; solo se lee si `OCR_PROVIDER=mistral`               |
-| **JWT secret**            | `JWT_SECRET` en `.env`; cadena de al menos 32 caracteres aleatorios; excluida de Git con `.gitignore`    |
-| **Secretos en cliente**   | Nuxt 4 garantiza que las variables sin prefijo `NUXT_PUBLIC_` no se incluyen en el bundle del cliente    |
-| **Cadena de conexión BD** | `MONGODB_URI` en `.env`; nunca hardcodeada; incluye usuario y contraseña de MongoDB en producción        |
+| Aspecto                   | Implementación                                                                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Autenticación**         | JWT firmado con `jose` (HS256), almacenado en cookie httpOnly `sipac_session` con `sameSite: 'strict'` y `secure: true` en producción; expiración de 8 horas |
+| **Autorización**          | Middleware de servidor Nuxt por rol — `admin` y `docente`; utilidades `requireAuth` y `requireRole` en `server/utils/authorize.ts`                           |
+| **Contraseñas**           | bcrypt con mínimo 10 salt rounds; nunca se almacena la contraseña en texto plano                                                                             |
+| **Archivos cargados**     | Validación de MIME type + extensión antes de procesar; archivos almacenados en MongoDB GridFS, accesibles solo mediante autenticación                        |
+| **API keys (Gemini)**     | `GOOGLE_API_KEY` definida en `.env`; nunca expuesta al cliente; solo accesible en `server/` de Nuxt                                                          |
+| **API keys (Mistral)**    | `MISTRAL_API_KEY` definida en `.env`; idem anterior; solo se lee si `OCR_PROVIDER=mistral`                                                                   |
+| **JWT secret**            | `JWT_SECRET` en `.env`; cadena de al menos 32 caracteres aleatorios; excluida de Git con `.gitignore`                                                        |
+| **Secretos en cliente**   | Nuxt 4 garantiza que las variables sin prefijo `NUXT_PUBLIC_` no se incluyen en el bundle del cliente                                                        |
+| **Cadena de conexión BD** | `MONGODB_URI` en `.env`; nunca hardcodeada; incluye usuario y contraseña de MongoDB en producción                                                            |
 
 ---
 
-## 7. Estructura de Directorios del Proyecto (Prevista)
+## 7. Estructura de Directorios del Proyecto
 
 ```
 sipac/
@@ -273,45 +307,108 @@ sipac/
 │   ├── api/                        ← API Routes REST
 │   │   ├── auth/
 │   │   │   ├── login.post.ts
+│   │   │   ├── logout.post.ts
+│   │   │   ├── me.get.ts
 │   │   │   └── register.post.ts
-│   │   ├── documents/
-│   │   │   ├── upload.post.ts
+│   │   ├── profile/
+│   │   │   ├── index.get.ts
+│   │   │   ├── index.patch.ts
+│   │   │   └── change-password.post.ts
+│   │   ├── users/
+│   │   │   ├── index.get.ts
+│   │   │   ├── index.post.ts
 │   │   │   ├── [id].get.ts
 │   │   │   └── [id].patch.ts
-│   │   └── users/
-│   │       └── [id].get.ts
-│   ├── middleware/                  ← Middleware de autenticación y autorización
-│   │   └── auth.ts
-│   ├── models/                     ← Modelos Mongoose con discriminator pattern
-│   │   ├── User.ts
-│   │   ├── ProductoAcademico.ts    ← Modelo base
-│   │   ├── Articulo.ts             ← Discriminador: artículo científico
-│   │   ├── Ponencia.ts             ← Discriminador: ponencia / conferencia
-│   │   └── Certificado.ts          ← Discriminador: certificado de curso
+│   │   ├── dashboard/
+│   │   ├── notifications/
+│   │   ├── products/
+│   │   └── upload/
+│   ├── middleware/
+│   │   └── auth.ts                 ← Lectura de cookie JWT y carga de contexto
+│   ├── models/
+│   │   ├── User.ts                 ← Modelo ODM con métodos de seguridad
+│   │   └── AuditLog.ts             ← Log de auditoría inmutable
 │   ├── services/
-│   │   ├── ocr/                    ← Módulo OCR interno (TypeScript)
-│   │   │   ├── types.ts            ← Interfaz OCRProvider
-│   │   │   ├── factory.ts          ← Fábrica según OCR_PROVIDER
-│   │   │   ├── gemini.ts           ← Implementación Gemini 2.0 Flash Vision
-│   │   │   ├── mistral.ts          ← Implementación Mistral OCR 3 (opcional)
-│   │   │   └── pdf-native.ts       ← Extracción de texto con pdfjs-dist
-│   │   └── ner/                    ← Módulo NER interno (TypeScript)
-│   │       ├── schemas.ts          ← Esquemas Zod por tipo de producto
-│   │       └── extractor.ts        ← generateObject con Vercel AI SDK
+│   │   ├── ocr/                    Futuro: extracción de texto
+│   │   ├── ner/                    Futuro: extracción de entidades
+│   │   └── storage/                Futuro: almacenamiento de archivos
+│   ├── plugins/
+│   │   ├── 01.mongodb.ts           ← Conexión MongoDB Atlas
+│   │   └── 02.admin-seed.ts        ← Creación opcional del admin inicial
 │   └── utils/
-│       ├── db.ts                   ← Conexión Mongoose
-│       └── jwt.ts                  ← Helpers JWT (jose)
-├── components/                     ← Componentes Vue reutilizables
-├── pages/                          ← Páginas Nuxt (SSR / SPA)
-├── stores/                         ← Pinia stores (sesión, documentos, NER)
-├── composables/                    ← Composables Vue 3
-├── assets/                         ← Estilos globales TailwindCSS
-├── public/                         ← Archivos estáticos públicos
+│       ├── jwt.ts                  ← Firma y verificación de tokens
+│       ├── authorize.ts            ← requireAuth, requireRole
+│       ├── env.ts                  ← Validación de variables de entorno
+│       ├── errors.ts               ← Fábricas de errores HTTP tipados
+│       ├── response.ts             ← ok() response helper
+│       ├── audit.ts                ← logAudit (no bloqueante)
+│       └── schemas/
+│           ├── index.ts
+│           ├── auth.ts             ← login, register, password schemas
+│           ├── user.ts             ← createUser, updateUser schemas
+│           ├── product.ts          ← metadata, verificación schemas (preparados)
+│           └── upload.ts           ← file validation schemas (preparados)
+├── app/                            ← Código del cliente (Nuxt app directory)
+│   ├── app.vue                     ← Componente raíz
+│   ├── app.config.ts               ← Configuración de @nuxt/ui y design tokens
+│   ├── assets/css/main.css          ← Estilos globales TailwindCSS + paleta SIPAc
+│   ├── layouts/
+│   │   └── default.vue             ← Sidebar + header + contenido principal
+│   ├── pages/
+│   │   ├── index.vue               ← Dashboard / página de inicio
+│   │   ├── login.vue               ← Login con layout propio
+│   │   ├── register.vue            ← Registro con layout propio
+│   │   ├── profile.vue             ← Gestión de perfil y contraseña
+│   │   └── admin/
+│   │       └── users.vue           ← Panel de gestión de usuarios (admin)
+│   ├── stores/
+│   │   ├── auth.ts                 ← Estado de autenticación
+│   │   └── users.ts                ← Estado de gestión de usuarios
+│   ├── composables/
+│   │   └── useAuth.ts              ← Wrapper sobre auth store
+│   ├── middleware/
+│   │   ├── auth.global.ts          ← Protección global de rutas
+│   │   └── admin.ts                ← Restricción a rol admin
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── AppHeader.vue       ← Barra superior con menú de usuario
+│   │   │   └── AppSidebar.vue      ← Navegación lateral colapsable
+│   │   ├── sipac/
+│   │   │   ├── SipacBadge.vue
+│   │   │   ├── SipacButton.vue
+│   │   │   ├── SipacCard.vue
+│   │   │   ├── SipacQuickAction.vue
+│   │   │   └── SipacSectionHeader.vue
+│   │   ├── dashboard/
+│   │   ├── forms/
+│   │   └── ui/
+│   ├── types/
+│   │   ├── index.ts                ← Re-exports de todos los tipos
+│   │   ├── user.ts
+│   │   ├── api.ts
+│   │   ├── academic-product.ts
+│   │   ├── audit-log.ts
+│   │   ├── notification.ts
+│   │   └── uploaded-file.ts
+│   └── utils/
+├── tests/
+│   ├── unit/
+│   │   ├── components/
+│   │   └── server/
+│   └── integration/
+├── e2e/                            ← Tests Playwright
 ├── docs/                           ← Documentación del proyecto
-├── .env                            ← Variables de entorno (excluido de Git)
-├── .env.example                    ← Plantilla de variables de entorno
-├── nuxt.config.ts                  ← Configuración de Nuxt 4
-└── package.json                    ← Gestionado con pnpm
+│   ├── analisis-diseno/
+│   │   ├── documentacion/          ← 5 documentos de especificación
+│   │   └── diagramas/
+│   │       ├── puml/               ← 11 diagramas PlantUML fuente
+│   │       └── renders/            ← Renders PNG
+│   └── evidencias/                 ← Evidencias de pasantía
+├── public/                         ← Archivos estáticos
+├── .env                            ← Variables de entorno
+├── nuxt.config.ts
+├── package.json                    ← Gestionado con pnpm
+└── vitest.config.ts / playwright.config.ts
 ```
 
 ---
@@ -335,9 +432,9 @@ sipac/
 
 ## 9. Decisiones Resueltas (Temporales)
 
-| Decisión                                         | Resolución                                                                                                                                                                                   |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Almacenamiento de archivos cargados**          | Filesystem local (`./uploads/`) para desarrollo. Abstraído tras interfaz `StorageService` para intercambiar por cloud (S3, Cloudinary) en producción sin cambiar código de negocio           |
-| **Estrategia de despliegue en producción**       | Vercel como plataforma principal (capa gratuita, CI/CD integrado con GitHub). Alternativa: Railway o VPS si se requiere filesystem persistente                                               |
-| **Umbral de score para retry NER**               | Configurable vía `runtimeConfig.nerConfidenceThreshold` (default 0.70). Se ajustará durante pruebas con documentos reales sin necesidad de redespliegue                                      |
-| **Gestión de rate limit en free tier de Gemini** | Rate limit por usuario: 15 documentos/hora (configurable vía `runtimeConfig`). Con ~30 usuarios activos × 15 docs/hora = 450 calls/hora máx, dentro del free tier de 1.500 req/día de Gemini |
+| Decisión                                         | Resolución                                                                                                                                                                                     |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Almacenamiento de archivos cargados**          | MongoDB GridFS para todos los archivos (ver ADR-07). Los archivos se almacenan en las colecciones `uploads.files` y `uploads.chunks`, accesibles mediante streaming a través de `GridFSBucket` |
+| **Estrategia de despliegue en producción**       | Vercel como plataforma principal (capa gratuita, CI/CD integrado con GitHub). Al usar GridFS en vez de filesystem local, no se requiere persistencia de disco en el servidor                   |
+| **Umbral de score para retry NER**               | Configurable vía `runtimeConfig.nerConfidenceThreshold` (default 0.70). Se ajustará durante pruebas con documentos reales sin necesidad de redespliegue                                        |
+| **Gestión de rate limit en free tier de Gemini** | Rate limit por usuario: 15 documentos/hora (configurable vía `runtimeConfig`). Con ~30 usuarios activos × 15 docs/hora = 450 calls/hora máx, dentro del free tier de 1.500 req/día de Gemini   |

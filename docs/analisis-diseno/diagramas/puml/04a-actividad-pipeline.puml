@@ -47,7 +47,7 @@ else (no)
 endif
 
 :Guardar archivo en
-filesystem (/storage/uploads);
+MongoDB GridFS;
 
 |MongoDB|
 :Crear documento uploaded_files\n{ status: 'pending',\nuploadedBy, mimeType,\nfileSizeBytes };
@@ -133,7 +133,7 @@ else (no — RF-048)
 endif
 
 |MongoDB|
-:Crear documento\nacademic_products\n{ productType, owner,\nsourceFile, extractedEntities,\nverificationStatus:\n'pending_review' };
+:Crear documento\nacademic_products\n{ productType, owner,\nsourceFile, extractedEntities };
 
 :Actualizar uploaded_files\nprocessingStatus: 'completed';
 

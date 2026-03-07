@@ -23,7 +23,7 @@ SIPAc automatiza un proceso que hoy es completamente manual: capturar, clasifica
 | Capa          | Tecnología                                         |
 | ------------- | -------------------------------------------------- |
 | Framework     | Nuxt 4 · Vue 3 · TypeScript 5                      |
-| Estilos       | Tailwind CSS 4                                     |
+| UI            | @nuxt/ui 4 · Tailwind CSS 4                        |
 | Estado        | Pinia                                              |
 | Base de datos | MongoDB (Atlas) · Mongoose ODM                     |
 | Auth          | JWT (jose) · bcrypt                                |
@@ -48,38 +48,81 @@ El servidor arranca en `http://localhost:3000`.
 | -------------------- | ---------------------------------------- |
 | `pnpm dev`           | Servidor de desarrollo con HMR           |
 | `pnpm build`         | Build de producción                      |
+| `pnpm preview`       | Preview del build de producción          |
+| `pnpm generate`      | Generación estática (SSG)                |
 | `pnpm lint`          | Ejecutar ESLint                          |
 | `pnpm lint:fix`      | Corregir errores de lint automáticamente |
 | `pnpm format`        | Formatear código con Prettier            |
+| `pnpm format:check`  | Verificar formato sin modificar          |
 | `pnpm typecheck`     | Verificación de tipos TypeScript         |
 | `pnpm test`          | Tests unitarios/integración con Vitest   |
+| `pnpm test:watch`    | Tests en modo watch                      |
 | `pnpm test:e2e`      | Tests end-to-end con Playwright          |
+| `pnpm test:e2e:ui`   | Tests E2E con interfaz de Playwright     |
 | `pnpm test:coverage` | Tests con reporte de cobertura           |
 
 ---
 
 ## Estructura del proyecto
 
+### Árbol de directorios
+
 ```
-server/
-  api/           → API Routes REST (auth, upload, products, dashboard, users, notifications)
-  middleware/    → Auth middleware (JWT)
-  models/        → Modelos Mongoose (discriminator pattern)
-  services/      → OCR, NER, Storage
-  utils/         → JWT, errores, auditoría, validación, schemas Zod
-  plugins/       → Conexión MongoDB
-app/
-  components/    → Componentes Vue (ui, layout, forms, dashboard)
-  composables/   → Composables Vue 3
-  layouts/       → Layouts de la app
-  pages/         → Páginas Nuxt
-  stores/        → Pinia stores
-  types/         → Tipos TypeScript del dominio
-  utils/         → Utilidades cliente
-tests/           → Tests unitarios e integración
-e2e/             → Tests end-to-end (Playwright)
-docs/            → Documentación de análisis y diseño
+├── server/                          # Código exclusivo del servidor (Nuxt / Node.js)
+│   ├── api/                         # API Routes REST
+│   │   ├── auth/                    # login, logout, me, register
+│   │   ├── profile/                 # perfil, cambio de contraseña
+│   │   ├── users/                   # CRUD usuarios
+│   │   ├── dashboard/
+│   │   ├── notifications/
+│   │   ├── products/
+│   │   └── upload/
+│   ├── middleware/                  # Auth: JWT en cookie httpOnly
+│   ├── models/                      # Mongoose: User, AuditLog
+│   ├── services/                    # OCR, NER, Storage (preparados)
+│   ├── plugins/                     # MongoDB, seed de admin
+│   └── utils/                       # JWT, authorize, schemas Zod, audit, errors
+│
+├── app/                             # Aplicación cliente (Nuxt app directory)
+│   ├── app.vue
+│   ├── app.config.ts                # @nuxt/ui, design tokens SIPAc
+│   ├── assets/css/main.css          # Estilos globales, paleta, utilidades
+│   ├── components/
+│   │   ├── layout/                  # AppHeader, AppSidebar
+│   │   ├── sipac/                   # SipacBadge, SipacButton, SipacCard, etc.
+│   │   ├── dashboard/
+│   │   ├── forms/
+│   │   └── ui/
+│   ├── composables/                # useAuth, etc.
+│   ├── layouts/                    # default (sidebar + header)
+│   ├── middleware/                 # auth.global, admin
+│   ├── pages/                      # index, login, register, profile, admin/users
+│   ├── stores/                     # Pinia: auth, users
+│   ├── types/                      # Tipos TS del dominio (user, api, product, …)
+│   └── utils/                     # Utilidades cliente
+│
+├── tests/                          # Tests unitarios e integración (Vitest)
+├── e2e/                            # Tests end-to-end (Playwright)
+├── docs/                           # Documentación
+│   ├── analisis-diseno/            # Especificación, diagramas UML, evidencias
+│   └── evidencias/
+│
+├── public/                         # Archivos estáticos
+├── nuxt.config.ts
+├── package.json
+├── vitest.config.ts
+└── playwright.config.ts
 ```
+
+### Resumen de carpetas
+
+| Carpeta   | Descripción                                                                                                    |
+| --------- | -------------------------------------------------------------------------------------------------------------- |
+| `server/` | API REST, middleware de auth, modelos Mongoose, servicios (OCR/NER/storage), plugins y utilidades de servidor. |
+| `app/`    | UI Vue 3: componentes SIPAc y layout, páginas, stores Pinia, composables, tipos y estilos.                     |
+| `tests/`  | Tests unitarios e integración con Vitest.                                                                      |
+| `e2e/`    | Tests end-to-end con Playwright.                                                                               |
+| `docs/`   | Documentación de análisis y diseño, diagramas y evidencias de pasantía.                                        |
 
 ---
 

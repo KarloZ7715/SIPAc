@@ -1,5 +1,4 @@
 @startuml 01-clases
-!theme plain
 skinparam classAttributeIconSize 0
 skinparam classFontSize 12
 skinparam classAttributeFontSize 10
@@ -24,7 +23,7 @@ package "Gestión de Usuarios (M1)" as pkg_users #E8F5E9 {
     - fullName : String
     - email : String {unique}
     - passwordHash : String {select:false}
-    - role : «admin | coordinador | docente | estudiante»
+    - role : «admin | docente»
     - isActive : Boolean
     - program? : String
     --
@@ -52,7 +51,7 @@ package "Carga de Documentos (M2/M3)" as pkg_files #E3F2FD {
     --
     - uploadedBy : ObjectId → User
     - originalFilename : String
-    - storagePath : String
+    - gridfsFileId : ObjectId → GridFS
     - mimeType : «PDF | JPEG | PNG»
     - fileSizeBytes : Number {max: 20MB}
     - processingStatus : «pending | processing | completed | error»
@@ -79,10 +78,6 @@ package "Producción Académica (M4/M5A)" as pkg_products #FFF3E0 {
     - productType : «article | conference_paper | thesis | certificate | research_project»
     - owner : ObjectId → User
     - sourceFile : ObjectId → UploadedFile
-    - verificationStatus : «pending_review | verified | rejected»
-    - verifiedBy? : ObjectId → User
-    - verificationDate? : Date
-    - rejectionReason? : String
     - isDeleted : Boolean
     - deletedAt? : Date
     --
@@ -174,7 +169,7 @@ package "Auditoría y Notificaciones (M7/M8)" as pkg_audit #F3E5F5 {
     --
     - userId : ObjectId → User
     - userName : String {desnormalizado}
-    - action : «create | update | delete | verify | reject | login | login_failed»
+    - action : «create | update | delete | login | login_failed»
     - resource : «academic_product | uploaded_file | user | session»
     - resourceId? : ObjectId
     - details? : String
@@ -190,7 +185,7 @@ package "Auditoría y Notificaciones (M7/M8)" as pkg_audit #F3E5F5 {
     - _id : ObjectId
     --
     - recipientId : ObjectId → User
-    - type : «processing_complete | processing_error | verification_update | system»
+    - type : «processing_complete | processing_error | system»
     - title : String
     - message : String
     - relatedResource? : RelatedResource
@@ -205,6 +200,20 @@ package "Auditoría y Notificaciones (M7/M8)" as pkg_audit #F3E5F5 {
   class RelatedResource <<embebida>> {
     - kind : «uploaded_file | academic_product»
     - id : ObjectId
+  }
+
+  class ChatConversation <<collection: chat_conversations>> {
+    - _id : ObjectId
+    --
+    - userId : ObjectId → User
+    - title : String
+    - messages : ChatMessage[]
+    - isActive : Boolean
+    --
+    - createdAt : Date
+    - updatedAt : Date
+    __
+    {TTL: 180 días}
   }
 
 }
@@ -229,15 +238,7 @@ User "1" -- "0..*" AcademicProduct : Un usuario es\ndueño de muchos productos >
 User "1" -down- "0..*" AuditLog : Acciones\nregistradas >
 User "1" -down- "0..*" Notification : Notificaciones\nrecibidas >
 UploadedFile "1" -- "0..1" AcademicProduct : Archivo fuente\ndel producto >
-
-note as N_VERIFIED
-  **verifiedBy** en AcademicProduct
-  es una referencia opcional a User.
-  Solo se establece cuando un Coordinador
-  verifica o rechaza el producto.
-  (relación 0..1 User → 0..* AcademicProduct)
-end note
-N_VERIFIED .. AcademicProduct
+User "1" -down- "0..*" ChatConversation : Conversaciones\ndel chat >
 
 note as N_DISC
   **Patrón Discriminator** de Mongoose:

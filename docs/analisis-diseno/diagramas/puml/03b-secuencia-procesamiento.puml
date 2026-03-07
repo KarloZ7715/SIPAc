@@ -6,10 +6,10 @@ skinparam maxMessageSize 220
 
 title SIPAc — Diagrama de Secuencia 3.2\nFlujo Completo de Procesamiento de Documento\n(Carga → OCR → NER → Almacenamiento)
 
-actor "Usuario\n(Docente/Estudiante)" as User
+actor "Docente" as User
 participant "Browser\n(Nuxt Client)" as Browser #LightBlue
 participant "API Route\n/api/documents/upload" as APIUpload #LightGreen
-participant "Filesystem\n/storage/uploads" as FS #LightYellow
+participant "MongoDB\nGridFS" as GridFS #LightYellow
 database "MongoDB\nUploadedFile" as DBFile #Khaki
 participant "OCR Service\n(factory.ts)" as OCRFactory #LightCoral
 participant "pdfjs-dist" as PDFJS #Pink
@@ -36,10 +36,10 @@ alt Validación fallida (MIME o tamaño)
   Browser --> User : Mostrar error de validación
 else Validación exitosa
 
-  APIUpload -> FS : Guardar archivo en\n/storage/uploads/{id}.ext
-  activate FS
-  FS --> APIUpload : storagePath confirmado
-  deactivate FS
+  APIUpload -> GridFS : Guardar archivo en\nMongoDB GridFS
+  activate GridFS
+  GridFS --> APIUpload : gridfsFileId confirmado
+  deactivate GridFS
 
   APIUpload -> DBFile : Crear doc uploaded_files\n{ status: 'pending',\nuploadedBy, originalFilename,\nmimeType, fileSizeBytes }
   activate DBFile
@@ -120,7 +120,7 @@ else Validación exitosa
 
   == Almacenamiento del Producto ==
 
-  APIUpload -> DBProduct : Crear academic_products\n{ productType, owner,\nsourceFile: fileId,\nextractedEntities,\nverificationStatus:\n'pending_review' }
+  APIUpload -> DBProduct : Crear academic_products\n{ productType, owner,\nsourceFile: fileId,\nextractedEntities }
   activate DBProduct
   DBProduct --> APIUpload : producto creado
   deactivate DBProduct

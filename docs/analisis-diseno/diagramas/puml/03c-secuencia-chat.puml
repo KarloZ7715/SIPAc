@@ -1,0 +1,96 @@
+@startuml 03c-secuencia-chat
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 220
+
+title SIPAc — Diagrama de Secuencia 3.3\nFlujo del Chat Inteligente con IA (M9)
+
+actor "Docente" as User
+participant "Browser\n(Nuxt Client)\nuseChat hook" as Browser #LightBlue
+participant "API Route\n/api/chat" as APIChat #LightGreen
+participant "Gemini 2.0 Flash\n(streamText +\ntool calling)" as Gemini #MediumPurple
+participant "Search Tools\n(Zod schemas)" as Tools #Orange
+database "MongoDB\nacademic_products" as DB #Khaki
+database "MongoDB\nchat_conversations" as DBChat #LightYellow
+
+== Inicio de Conversación ==
+
+User -> Browser : Escribe pregunta en\nel chat (lenguaje natural)\nEj: "Búscame artículos\nde 2020 a 2025"
+activate Browser
+
+Browser -> APIChat : POST /api/chat\n{ message, conversationId? }
+activate APIChat
+
+APIChat -> APIChat : Cargar historial de\nmensajes (si conversationId\nexiste) para contexto
+
+APIChat -> Gemini : streamText({\n  model: gemini-2.0-flash,\n  messages: [...history, userMsg],\n  tools: searchTools\n})
+activate Gemini
+
+Gemini -> Gemini : Analizar intención\ndel usuario
+
+Gemini -> Tools : Tool call:\nsearchByDateRange({\n  startDate: "2020-01-01",\n  endDate: "2025-12-31"\n})
+activate Tools
+
+Tools -> DB : AcademicProduct.find({\n  "manualMetadata.date": {\n    $gte: 2020, $lte: 2025\n  },\n  productType: "article"\n})
+activate DB
+DB --> Tools : documentos encontrados []
+deactivate DB
+
+Tools --> Gemini : Resultados de búsqueda\n(metadatos de documentos)
+deactivate Tools
+
+Gemini -> Gemini : Generar respuesta\norganizada con\nexplicaciones breves
+
+Gemini --> APIChat : Stream de texto\n(SSE chunks)
+deactivate Gemini
+
+APIChat -> DBChat : Guardar mensajes\nen chat_conversations\n(user + assistant)
+activate DBChat
+DBChat --> APIChat : conversación actualizada
+deactivate DBChat
+
+APIChat --> Browser : ReadableStream (SSE)\ncon respuesta formateada\ny enlaces a documentos
+deactivate APIChat
+
+Browser -> Browser : useChat renderiza\nrespuesta en tiempo real
+
+Browser --> User : Mostrar resultados:\n"Encontré 12 artículos...\n1. [Título] - Autores - 2024\n   [Ver documento] [Descargar]"
+
+== Pregunta de Seguimiento (Contexto) ==
+
+User -> Browser : "¿Cuáles de esos son\nde la Universidad\nde Córdoba?"
+
+Browser -> APIChat : POST /api/chat\n{ message, conversationId }
+activate APIChat
+
+APIChat -> Gemini : streamText con historial\nprevio como contexto
+activate Gemini
+
+Gemini -> Tools : Tool call:\nsearchCombined({\n  dateRange: {start, end},\n  institution: "Universidad\n  de Córdoba"\n})
+activate Tools
+
+Tools -> DB : Query combinada\ncon filtros múltiples
+activate DB
+DB --> Tools : resultados filtrados
+deactivate DB
+
+Tools --> Gemini : Resultados refinados
+deactivate Tools
+
+Gemini --> APIChat : Stream de respuesta
+deactivate Gemini
+
+APIChat -> DBChat : Actualizar conversación
+activate DBChat
+DBChat --> APIChat
+deactivate DBChat
+
+APIChat --> Browser : Stream SSE
+deactivate APIChat
+
+Browser --> User : "De los artículos encontrados,\n5 son de la Universidad\nde Córdoba..."
+
+deactivate Browser
+
+@enduml
