@@ -1,5 +1,6 @@
-import { SignJWT, jwtVerify, type JWTPayload } from 'jose'
-import { type UserRole } from '~~/app/types'
+import { SignJWT, jwtVerify } from 'jose'
+import type { JWTPayload } from 'jose'
+import type { UserRole } from '~~/app/types'
 
 export interface TokenPayload extends JWTPayload {
   sub: string

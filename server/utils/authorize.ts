@@ -1,5 +1,5 @@
-import { type H3Event } from 'h3'
-import { type UserRole } from '~~/app/types'
+import type { H3Event } from 'h3'
+import type { UserRole } from '~~/app/types'
 import { createAuthenticationError, createAuthorizationError } from './errors'
 
 export function requireAuth(event: H3Event) {

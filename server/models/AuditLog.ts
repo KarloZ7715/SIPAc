@@ -1,5 +1,7 @@
-import { Schema, model, models } from 'mongoose'
+import mongoose from 'mongoose'
 import { type IAuditLog, AUDIT_ACTIONS, AUDIT_RESOURCES } from '~~/app/types'
+
+const { Schema, model, models } = mongoose
 
 const auditLogSchema = new Schema<IAuditLog>(
   {

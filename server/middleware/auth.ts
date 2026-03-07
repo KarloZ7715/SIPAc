@@ -1,5 +1,6 @@
-import { type H3Event } from 'h3'
-import { verifyToken, type TokenPayload } from '~~/server/utils/jwt'
+import type { H3Event } from 'h3'
+import { verifyToken } from '~~/server/utils/jwt'
+import type { TokenPayload } from '~~/server/utils/jwt'
 import { createAuthenticationError } from '~~/server/utils/errors'
 
 declare module 'h3' {
@@ -22,12 +23,11 @@ export default defineEventHandler(async (event: H3Event) => {
     return
   }
 
-  const authorization = getHeader(event, 'authorization')
-  if (!authorization?.startsWith('Bearer ')) {
+  // Read token from httpOnly cookie
+  const token = getCookie(event, 'sipac_session')
+  if (!token) {
     throw createAuthenticationError('Token de autenticación requerido')
   }
-
-  const token = authorization.slice(7)
 
   try {
     const payload = await verifyToken(token)

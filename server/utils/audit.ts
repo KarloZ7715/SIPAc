@@ -1,6 +1,7 @@
-import { type H3Event, getRequestIP, getHeader } from 'h3'
-import { type AuditAction, type AuditResource } from '~~/app/types'
-import { type Types } from 'mongoose'
+import { getHeader, getRequestIP } from 'h3'
+import type { H3Event } from 'h3'
+import type { AuditAction, AuditResource } from '~~/app/types'
+import type { Types } from 'mongoose'
 
 interface AuditEntry {
   userId: Types.ObjectId | string
