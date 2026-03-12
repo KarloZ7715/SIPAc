@@ -20,17 +20,17 @@ SIPAc automatiza un proceso que hoy es completamente manual: capturar, clasifica
 
 ## Stack
 
-| Capa          | Tecnología                                         |
-| ------------- | -------------------------------------------------- |
-| Framework     | Nuxt 4 · Vue 3 · TypeScript 5                      |
-| UI            | @nuxt/ui 4 · Tailwind CSS 4                        |
-| Estado        | Pinia                                              |
-| Base de datos | MongoDB (Atlas) · Mongoose ODM                     |
-| Auth          | JWT (jose) · bcrypt                                |
-| OCR           | pdfjs-dist · Gemini 2.0 Flash Vision · Mistral OCR |
-| NER           | Vercel AI SDK · generateObject + Zod               |
-| Testing       | Vitest · @nuxt/test-utils · Playwright             |
-| Calidad       | ESLint · Prettier · Husky · commitlint             |
+| Capa          | Tecnología                                  |
+| ------------- | ------------------------------------------- |
+| Framework     | Nuxt 4 · Vue 3 · TypeScript 5               |
+| UI            | @nuxt/ui 4 · Tailwind CSS 4                 |
+| Estado        | Pinia                                       |
+| Base de datos | MongoDB (Atlas) · Mongoose ODM              |
+| Auth          | JWT (jose) · bcrypt                         |
+| OCR           | pdfjs-dist · Gemini 2.5 Flash · Mistral OCR |
+| NER           | Vercel AI SDK · generateObject + Zod        |
+| Testing       | Vitest · @nuxt/test-utils · Playwright      |
+| Calidad       | ESLint · Prettier · Husky · commitlint      |
 
 ---
 

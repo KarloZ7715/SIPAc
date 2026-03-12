@@ -9,7 +9,7 @@ title SIPAc — Diagrama de Secuencia 3.3\nFlujo del Chat Inteligente con IA (M9
 actor "Docente" as User
 participant "Browser\n(Nuxt Client)\nuseChat hook" as Browser #LightBlue
 participant "API Route\n/api/chat" as APIChat #LightGreen
-participant "Gemini 2.0 Flash\n(streamText +\ntool calling)" as Gemini #MediumPurple
+participant "Gemini 2.5 Flash\n(streamText +\ntool calling)" as Gemini #MediumPurple
 participant "Search Tools\n(Zod schemas)" as Tools #Orange
 database "MongoDB\nacademic_products" as DB #Khaki
 database "MongoDB\nchat_conversations" as DBChat #LightYellow
@@ -24,7 +24,7 @@ activate APIChat
 
 APIChat -> APIChat : Cargar historial de\nmensajes (si conversationId\nexiste) para contexto
 
-APIChat -> Gemini : streamText({\n  model: gemini-2.0-flash,\n  messages: [...history, userMsg],\n  tools: searchTools\n})
+APIChat -> Gemini : streamText({\n  model: gemini-2.5-flash,\n  messages: [...history, userMsg],\n  tools: searchTools\n})
 activate Gemini
 
 Gemini -> Gemini : Analizar intención\ndel usuario

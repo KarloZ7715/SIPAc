@@ -108,7 +108,7 @@ endif
 |NER Service|
 :Obtener esquema Zod\nsegún productType;
 
-:Invocar generateObject\n(Vercel AI SDK)\ncon Gemini 2.0 Flash;
+:Invocar generateObject\n(Vercel AI SDK)\ncon Gemini 2.5 Flash;
 
 :Calcular\nextractionConfidence;
 

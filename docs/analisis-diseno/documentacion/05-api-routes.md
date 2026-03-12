@@ -11,6 +11,7 @@
 | 1.0     | 2026-03-02 | Carlos A. Canabal Cordero | Versión inicial — mapa completo de endpoints REST                                                                                                                                                                                                                        |
 | 1.1     | 2026-03-04 | Carlos A. Canabal Cordero | Simplificación a 2 roles (`admin`, `docente`), eliminación del endpoint de verificación, nuevos endpoints de Chat Inteligente (M9) y archivos GridFS, actualización de permisos en dashboard                                                                             |
 | 1.2     | 2026-03-06 | Carlos A. Canabal Cordero | Alineación a los cambios de la arquitectura: corrección de mecanismo de autenticación (cookie httpOnly en lugar de header Authorization), marcado de endpoints no implementados, adición de `GET /api/auth/me` y `GET /api/users/:id`, corrección de respuesta de perfil |
+| 1.3     | 2026-03-11 | Carlos A. Canabal Cordero | Actualización de estado de endpoints implementados para M2 y M8; ajuste de contratos de estado de carga y notificaciones                                                                                                                                                 |
 
 ---
 
@@ -44,11 +45,11 @@
 
 ## 3. M2 — Carga de Documentos (`/api/upload/`)
 
-| Método | Ruta                     | Rol requerido        | Request Body                                | Respuesta                   | Errores posibles | RF asociados    | Estado    |
-| ------ | ------------------------ | -------------------- | ------------------------------------------- | --------------------------- | ---------------- | --------------- | --------- |
-| POST   | `/api/upload`            | docente              | `multipart/form-data { file, productType }` | `{ uploadedFile }` (202)    | 400, 413         | RF-020 a RF-026 | Pendiente |
-| GET    | `/api/upload/:id/status` | Autenticado (propio) | —                                           | `{ processingStatus, ... }` | 401, 404         | RF-028          | Pendiente |
-| DELETE | `/api/upload/:id`        | Autenticado (propio) | —                                           | `{ message }`               | 401, 403, 404    | RF-029          | Pendiente |
+| Método | Ruta                     | Rol requerido        | Request Body                                | Respuesta                                                                                                     | Errores posibles | RF asociados    | Estado       |
+| ------ | ------------------------ | -------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------- | --------------- | ------------ |
+| POST   | `/api/upload`            | docente              | `multipart/form-data { file, productType }` | `{ uploadedFile }` (202)                                                                                      | 400, 413         | RF-020 a RF-026 | Implementado |
+| GET    | `/api/upload/:id/status` | Autenticado (propio) | —                                           | `{ processingStatus, processingError?, rawExtractedText?, ocrProvider?, ocrConfidence?, academicProductId? }` | 401, 403, 404    | RF-028          | Implementado |
+| DELETE | `/api/upload/:id`        | Autenticado (propio) | —                                           | `{ message }`                                                                                                 | 401, 403, 404    | RF-029          | Implementado |
 
 ---
 
@@ -98,10 +99,10 @@
 
 ## 8. M8 — Notificaciones (`/api/notifications/`)
 
-| Método | Ruta                          | Rol requerido | Request Body         | Respuesta             | Errores posibles | RF asociados | Estado    |
-| ------ | ----------------------------- | ------------- | -------------------- | --------------------- | ---------------- | ------------ | --------- |
-| GET    | `/api/notifications`          | Autenticado   | Query: `unreadOnly?` | `{ notifications[] }` | 401              | RF-086       | Pendiente |
-| PATCH  | `/api/notifications/:id/read` | Autenticado   | —                    | `{ notification }`    | 401, 404         | RF-086       | Pendiente |
+| Método | Ruta                          | Rol requerido | Request Body         | Respuesta             | Errores posibles | RF asociados | Estado       |
+| ------ | ----------------------------- | ------------- | -------------------- | --------------------- | ---------------- | ------------ | ------------ |
+| GET    | `/api/notifications`          | Autenticado   | Query: `unreadOnly?` | `{ notifications[] }` | 401              | RF-086       | Implementado |
+| PATCH  | `/api/notifications/:id/read` | Autenticado   | —                    | `{ notification }`    | 401, 404         | RF-086       | Implementado |
 
 ---
 
@@ -114,7 +115,7 @@
 | GET    | `/api/chat/conversations/:id` | Autenticado   | —                              | `{ conversation }`          | 401, 404         | RF-100          | Pendiente |
 | DELETE | `/api/chat/conversations/:id` | Autenticado   | —                              | `{ message }`               | 401, 404         | RF-100          | Pendiente |
 
-> **Nota técnica (diseño previsto):** El endpoint `POST /api/chat` utilizará `streamText` del Vercel AI SDK con tool calling. La respuesta será un stream SSE que el frontend consumirá mediante el hook `useChat` de `@ai-sdk/vue`. El LLM (Gemini 2.0 Flash) invocará herramientas de búsqueda tipadas con Zod.
+> **Nota técnica (diseño previsto):** El endpoint `POST /api/chat` utilizará `streamText` del Vercel AI SDK con tool calling. La respuesta será un stream SSE que el frontend consumirá mediante el hook `useChat` de `@ai-sdk/vue`. La estrategia prevista mantiene **Cerebras** como proveedor primario y **Gemini** como fallback para invocar herramientas de búsqueda tipadas con Zod.
 
 ---
 

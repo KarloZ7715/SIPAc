@@ -17,6 +17,7 @@
 | 1.3     | 2026-03-04 | Carlos A. Canabal Cordero | Simplificación a 2 roles (`admin`, `docente`), eliminación de roles `coordinador` y `estudiante`, nuevo módulo M9 — Chat Inteligente con IA (Prioridad Alta), almacenamiento en MongoDB GridFS, eliminación del flujo de verificación/aprobación, actualización de 8 RFs existentes y adición de 12 nuevos RFs |
 | 1.4     | 2026-03-05 | Carlos A. Canabal Cordero | Reorganización del cronograma de implementación: M5A adelantado a semana 6 junto con M4 NER Avanzado, M5B separado a semana 7, M9 Chat aislado en semana 8, M7 continuación completa en semana 9 junto con integración y testing, despliegue separado a semana 10                                              |
 | 1.5     | 2026-03-06 | Carlos A. Canabal Cordero | Alineación a los cambios de la arquitectura: RF-082 ajustado a estado Parcial (rate limiting global `nuxt-security` 150 tokens/5 min, no per-endpoint 10/min)                                                                                                                                                  |
+| 1.6     | 2026-03-11 | Carlos A. Canabal Cordero | Actualización de estados RF tras la implementación base del pipeline documental y notificaciones: carga, almacenamiento en GridFS, OCR, NER estructurado, creación automática de productos académicos y notificaciones M8                                                                                      |
 
 ---
 
@@ -42,11 +43,11 @@ El sistema está orientado a la **Maestría en Innovación Educativa con Tecnolo
 | **Pipeline**             | Secuencia automatizada de pasos de procesamiento: carga → OCR → NER → almacenamiento                                                                                                                  |
 | **JWT**                  | JSON Web Token — mecanismo de autenticación sin estado                                                                                                                                                |
 | **Rol**                  | Nivel de acceso y permisos asignado a un usuario del sistema                                                                                                                                          |
-| **Vercel AI SDK**        | Librería TypeScript oficial de Vercel para integrar LLMs; provee `generateObject` para retornar objetos tipados desde un LLM                                                                          |
-| **generateObject**       | Función del Vercel AI SDK que invoca un LLM y garantiza que la respuesta cumpla un esquema Zod, retornando un objeto TypeScript estructurado                                                          |
-| **Zod**                  | Librería TypeScript de validación de esquemas; define la forma exacta de los datos que `generateObject` debe retornar                                                                                 |
+| **Vercel AI SDK**        | Librería TypeScript oficial de Vercel para integrar LLMs y modelos multimodales; en el estado actual usa `generateText` con `Output.object` para structured outputs                                   |
+| **Structured outputs**   | Estrategia del Vercel AI SDK para obtener salidas validadas contra un esquema Zod mediante `generateText` + `Output.object`                                                                           |
+| **Zod**                  | Librería TypeScript de validación de esquemas; define la forma exacta de los datos estructurados que el pipeline debe retornar                                                                        |
 | **pdfjs-dist**           | Librería npm oficial de Mozilla para extraer texto de PDFs nativos (con texto seleccionable) sin necesidad de OCR ni LLM                                                                              |
-| **Gemini 2.0 Flash**     | Modelo multimodal de Google (DeepMind); proveedor LLM principal del sistema — procesa texto e imágenes; plan gratuito: 1.500 solicitudes/día                                                          |
+| **Gemini 2.5 Flash**     | Modelo de Google usado actualmente como proveedor multimodal OCR y como fallback del pipeline estructurado cuando Cerebras no responde                                                                |
 | **Mistral OCR 3**        | Motor OCR de alta precisión de Mistral AI (99,54 % en español); proveedor opcional activable vía variable de entorno; plan de pago ($0,002/página)                                                    |
 | **MVP**                  | Minimum Viable Product (Producto Mínimo Viable) — versión más básica pero funcional del sistema que ya cumple su propósito principal y puede ser entregada; agrupa los requisitos de prioridad `Alta` |
 
@@ -60,8 +61,8 @@ El sistema está orientado a la **Maestría en Innovación Educativa con Tecnolo
 - La base de datos es **MongoDB con Mongoose ODM**.
 - El gestor de paquetes del proyecto es **pnpm**.
 - Los PDFs nativos (con texto seleccionable) se procesan con **`pdfjs-dist`** para extracción directa de texto, sin necesidad de LLM.
-- Los PDFs escaneados e imágenes se procesan enviándolos como entrada multimodal a **Gemini 2.0 Flash Vision** a través del **Vercel AI SDK**.
-- La extracción de entidades (NER) se realiza mediante **`generateObject`** del Vercel AI SDK con esquemas **Zod**, invocando **Gemini 2.0 Flash** como proveedor LLM principal (plan gratuito de Google AI Studio: 1.500 solicitudes/día).
+- Los PDFs escaneados e imágenes se procesan enviándolos como entrada multimodal al modelo **Gemini** configurado en el pipeline OCR a través del **Vercel AI SDK**.
+- La extracción de entidades (NER) se realiza mediante **structured outputs** del Vercel AI SDK con esquemas **Zod**, usando **Cerebras** como proveedor primario y **Gemini 2.5 Flash** como fallback en el estado actual implementado.
 - El proveedor **Mistral OCR 3** puede activarse mediante la variable de entorno `OCR_PROVIDER=mistral` para casos que requieran mayor precisión.
 
 ---
@@ -95,12 +96,12 @@ mindmap
       Estado de procesamiento
     M3 OCR
       PDF nativo pdfjs-dist
-      PDF escaneado Gemini Vision
+      PDF escaneado Gemini multimodal
       Mistral OCR 3 opcional
       Normalización de texto
     M4 NLP / NER
-      generateObject + Zod
-      Gemini 2.0 Flash
+      generateText + Output.object
+      Cerebras + Gemini fallback
       Extracción de entidades
       Revisión manual
       Retry por score bajo
@@ -171,19 +172,21 @@ mindmap
 
 > Semana 3 del cronograma · 23 Feb 2026
 
-| ID     | Descripción                                                                                                                                                                  | Prioridad | Estado    |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
-| RF-020 | El sistema debe permitir a usuarios con rol `docente` cargar archivos en formato PDF                                                                                         | Alta      | Pendiente |
-| RF-021 | El sistema debe permitir a usuarios con rol `docente` cargar archivos en formato JPG, JPEG y PNG                                                                             | Alta      | Pendiente |
-| RF-022 | El sistema debe validar el tipo MIME real del archivo cargado (no solo la extensión) antes de aceptarlo                                                                      | Alta      | Pendiente |
-| RF-023 | El sistema debe rechazar archivos cuyo tamaño supere los 20 MB, mostrando un mensaje de error descriptivo                                                                    | Alta      | Pendiente |
-| RF-024 | El sistema debe asociar cada documento cargado al usuario que lo subió                                                                                                       | Alta      | Pendiente |
-| RF-025 | El sistema debe registrar la fecha y hora exacta en que el documento fue cargado                                                                                             | Alta      | Pendiente |
-| RF-026 | El sistema debe requerir que el usuario indique el tipo de producto académico al cargar un documento                                                                         | Alta      | Pendiente |
-| RF-027 | El sistema debe permitir cargar múltiples documentos de forma simultánea en una misma sesión                                                                                 | Media     | Pendiente |
-| RF-028 | El sistema debe mostrar en tiempo real el estado de procesamiento de cada documento cargado (`pendiente`, `procesando`, `completado`, `error`)                               | Alta      | Pendiente |
-| RF-029 | El sistema debe permitir al usuario eliminar sus documentos propios, solicitando confirmación explícita antes de ejecutar la acción                                          | Media     | Pendiente |
-| RF-030 | El sistema debe almacenar los archivos cargados directamente en la base de datos mediante MongoDB GridFS, garantizando que no sean accesibles públicamente sin autenticación | Alta      | Pendiente |
+| ID     | Descripción                                                                                                                                                                  | Prioridad | Estado     |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
+| RF-020 | El sistema debe permitir a usuarios con rol `docente` cargar archivos en formato PDF                                                                                         | Alta      | Completado |
+| RF-021 | El sistema debe permitir a usuarios con rol `docente` cargar archivos en formato JPG, JPEG y PNG                                                                             | Alta      | Completado |
+| RF-022 | El sistema debe validar el tipo MIME real del archivo cargado (no solo la extensión) antes de aceptarlo                                                                      | Alta      | Completado |
+| RF-023 | El sistema debe rechazar archivos cuyo tamaño supere los 20 MB, mostrando un mensaje de error descriptivo                                                                    | Alta      | Completado |
+| RF-024 | El sistema debe asociar cada documento cargado al usuario que lo subió                                                                                                       | Alta      | Completado |
+| RF-025 | El sistema debe registrar la fecha y hora exacta en que el documento fue cargado                                                                                             | Alta      | Completado |
+| RF-026 | El sistema debe requerir que el usuario indique el tipo de producto académico al cargar un documento                                                                         | Alta      | Completado |
+| RF-027 | El sistema debe permitir cargar múltiples documentos de forma simultánea en una misma sesión                                                                                 | Media     | Pendiente  |
+| RF-028 | El sistema debe mostrar en tiempo real el estado de procesamiento de cada documento cargado (`pendiente`, `procesando`, `completado`, `error`)                               | Alta      | Parcial    |
+| RF-029 | El sistema debe permitir al usuario eliminar sus documentos propios, solicitando confirmación explícita antes de ejecutar la acción                                          | Media     | Parcial    |
+| RF-030 | El sistema debe almacenar los archivos cargados directamente en la base de datos mediante MongoDB GridFS, garantizando que no sean accesibles públicamente sin autenticación | Alta      | Completado |
+
+> **Nota M2:** El pipeline de carga ya opera de extremo a extremo para un documento por envío. El seguimiento del estado se expone en la interfaz mediante polling periódico y la eliminación backend ya existe, pero la confirmación explícita previa en UI y la carga múltiple en una sola operación siguen pendientes.
 
 ---
 
@@ -191,16 +194,18 @@ mindmap
 
 > Semanas 4–5 del cronograma · 2–9 Mar 2026
 
-| ID     | Descripción                                                                                                                                                                                                                                                                                                   | Prioridad | Estado    |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
-| RF-031 | El sistema debe extraer el texto de documentos PDF nativos (con texto seleccionable) usando la librería `pdfjs-dist`, sin aplicar OCR ni invocar ningún LLM                                                                                                                                                   | Alta      | Pendiente |
-| RF-032 | El sistema debe detectar automáticamente si un PDF es escaneado o nativo antes de decidir el método de extracción                                                                                                                                                                                             | Alta      | Pendiente |
-| RF-033 | El sistema debe extraer el texto de documentos PDF escaneados e imágenes enviando el archivo como entrada multimodal a **Gemini 2.0 Flash Vision** a través del Vercel AI SDK; como alternativa opcional, si la variable de entorno `OCR_PROVIDER=mistral` está activa, debe usar la API de **Mistral OCR 3** | Alta      | Pendiente |
-| RF-034 | El sistema debe procesar documentos en idioma español como idioma principal del OCR                                                                                                                                                                                                                           | Alta      | Pendiente |
-| RF-035 | El sistema debe limpiar el texto extraído: eliminar saltos de línea irregulares, caracteres basura y espacios múltiples                                                                                                                                                                                       | Media     | Pendiente |
-| RF-036 | El sistema debe almacenar el texto crudo extraído, asociado al documento original, en la base de datos                                                                                                                                                                                                        | Alta      | Pendiente |
-| RF-037 | El sistema debe registrar el nivel de confianza del OCR por documento cuando el motor lo provea                                                                                                                                                                                                               | Baja      | Pendiente |
-| RF-038 | El sistema debe exponer el resultado del OCR al usuario en la interfaz de revisión antes de continuar con NER                                                                                                                                                                                                 | Media     | Pendiente |
+| ID     | Descripción                                                                                                                                                                                                                                                                                                      | Prioridad | Estado     |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
+| RF-031 | El sistema debe extraer el texto de documentos PDF nativos (con texto seleccionable) usando la librería `pdfjs-dist`, sin aplicar OCR ni invocar ningún LLM                                                                                                                                                      | Alta      | Completado |
+| RF-032 | El sistema debe detectar automáticamente si un PDF es escaneado o nativo antes de decidir el método de extracción                                                                                                                                                                                                | Alta      | Completado |
+| RF-033 | El sistema debe extraer el texto de documentos PDF escaneados e imágenes enviando el archivo como entrada multimodal al modelo **Gemini** configurado a través del Vercel AI SDK; como alternativa opcional, si la variable de entorno `OCR_PROVIDER=mistral` está activa, debe usar la API de **Mistral OCR 3** | Alta      | Parcial    |
+| RF-034 | El sistema debe procesar documentos en idioma español como idioma principal del OCR                                                                                                                                                                                                                              | Alta      | Completado |
+| RF-035 | El sistema debe limpiar el texto extraído: eliminar saltos de línea irregulares, caracteres basura y espacios múltiples                                                                                                                                                                                          | Media     | Completado |
+| RF-036 | El sistema debe almacenar el texto crudo extraído, asociado al documento original, en la base de datos                                                                                                                                                                                                           | Alta      | Completado |
+| RF-037 | El sistema debe registrar el nivel de confianza del OCR por documento cuando el motor lo provea                                                                                                                                                                                                                  | Baja      | Pendiente  |
+| RF-038 | El sistema debe exponer el resultado del OCR al usuario en la interfaz de revisión antes de continuar con NER                                                                                                                                                                                                    | Media     | Pendiente  |
+
+> **Nota M3:** La extracción actual usa `pdfjs-dist` para PDF nativo y Gemini Vision para escaneados/imágenes. El selector `OCR_PROVIDER` ya está previsto en configuración, pero la rama efectiva con Mistral OCR aún no está conectada en la implementación.
 
 ---
 
@@ -208,19 +213,21 @@ mindmap
 
 > Semanas 5–6 del cronograma · 9–16 Mar 2026
 
-| ID     | Descripción                                                                                                                                                                                                                                                                                                                                                                    | Prioridad | Estado    |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | --------- |
-| RF-040 | El sistema debe identificar automáticamente los nombres de autores del documento                                                                                                                                                                                                                                                                                               | Alta      | Pendiente |
-| RF-041 | El sistema debe identificar automáticamente el título del trabajo o publicación                                                                                                                                                                                                                                                                                                | Alta      | Pendiente |
-| RF-042 | El sistema debe identificar automáticamente el nombre de la institución o universidad                                                                                                                                                                                                                                                                                          | Alta      | Pendiente |
-| RF-043 | El sistema debe identificar automáticamente las fechas relevantes del documento (publicación, presentación, expedición)                                                                                                                                                                                                                                                        | Alta      | Pendiente |
-| RF-044 | El sistema debe identificar automáticamente el código DOI cuando esté presente en el texto                                                                                                                                                                                                                                                                                     | Alta      | Pendiente |
-| RF-045 | El sistema debe identificar automáticamente palabras clave temáticas del documento                                                                                                                                                                                                                                                                                             | Media     | Pendiente |
-| RF-046 | El sistema debe identificar automáticamente el nombre del evento o la revista (para ponencias y artículos)                                                                                                                                                                                                                                                                     | Media     | Pendiente |
-| RF-047 | El sistema debe calcular y almacenar un score de confianza por cada entidad extraída                                                                                                                                                                                                                                                                                           | Alta      | Pendiente |
-| RF-048 | Cuando el score de confianza promedio de las entidades extraídas sea inferior al umbral configurado (por defecto 0,70), el sistema debe reintentar la extracción NER invocando `generateObject` con un prompt enriquecido y mayor temperatura; si `OCR_PROVIDER=mistral` está activo y el origen fue escaneado, debe re-extraer el texto con Mistral OCR 3 antes de reintentar | Media     | Pendiente |
-| RF-049 | El sistema debe presentar al usuario una interfaz de revisión donde pueda confirmar, corregir o eliminar cada entidad extraída antes de guardar                                                                                                                                                                                                                                | Alta      | Pendiente |
-| RF-050 | El sistema debe almacenar las entidades extraídas (originales y corregidas) de forma estructurada en la base de datos, diferenciando la fuente de extracción: `pdfjs_native`, `gemini_vision` o `mistral_ocr_3`                                                                                                                                                                | Alta      | Pendiente |
+| ID     | Descripción                                                                                                                                                                                                                                                                                                                                                                   | Prioridad | Estado     |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
+| RF-040 | El sistema debe identificar automáticamente los nombres de autores del documento                                                                                                                                                                                                                                                                                              | Alta      | Completado |
+| RF-041 | El sistema debe identificar automáticamente el título del trabajo o publicación                                                                                                                                                                                                                                                                                               | Alta      | Completado |
+| RF-042 | El sistema debe identificar automáticamente el nombre de la institución o universidad                                                                                                                                                                                                                                                                                         | Alta      | Completado |
+| RF-043 | El sistema debe identificar automáticamente las fechas relevantes del documento (publicación, presentación, expedición)                                                                                                                                                                                                                                                       | Alta      | Completado |
+| RF-044 | El sistema debe identificar automáticamente el código DOI cuando esté presente en el texto                                                                                                                                                                                                                                                                                    | Alta      | Completado |
+| RF-045 | El sistema debe identificar automáticamente palabras clave temáticas del documento                                                                                                                                                                                                                                                                                            | Media     | Completado |
+| RF-046 | El sistema debe identificar automáticamente el nombre del evento o la revista (para ponencias y artículos)                                                                                                                                                                                                                                                                    | Media     | Completado |
+| RF-047 | El sistema debe calcular y almacenar un score de confianza por cada entidad extraída                                                                                                                                                                                                                                                                                          | Alta      | Completado |
+| RF-048 | Cuando el score de confianza promedio de las entidades extraídas sea inferior al umbral configurado (por defecto 0,70), el sistema debe reintentar la extracción NER usando structured outputs con un prompt enriquecido y mayor temperatura; si `OCR_PROVIDER=mistral` está activo y el origen fue escaneado, debe re-extraer el texto con Mistral OCR 3 antes de reintentar | Media     | Parcial    |
+| RF-049 | El sistema debe presentar al usuario una interfaz de revisión donde pueda confirmar, corregir o eliminar cada entidad extraída antes de guardar                                                                                                                                                                                                                               | Alta      | Pendiente  |
+| RF-050 | El sistema debe almacenar las entidades extraídas (originales y corregidas) de forma estructurada en la base de datos, diferenciando la fuente de extracción: `pdfjs_native`, `gemini_vision` o `mistral_ocr_3`                                                                                                                                                               | Alta      | Completado |
+
+> **Nota M4:** La extracción estructurada y el reintento por bajo score ya están implementados. La parte pendiente en RF-048 es la re-extracción específica con Mistral OCR y en RF-049 la revisión/corrección manual antes del guardado definitivo.
 
 ---
 
@@ -228,19 +235,19 @@ mindmap
 
 > Semana 6 del cronograma · 16 Mar 2026 (adelantado — implementado junto con M4 NER Avanzado)
 
-| ID     | Descripción                                                                                                                                                              | Prioridad | Estado    |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | --------- |
-| RF-051 | El sistema debe almacenar cada producto académico con sus metadatos completos en la colección `academic_products` de MongoDB                                             | Alta      | Pendiente |
-| RF-052 | El sistema debe permitir consultar productos académicos filtrando por tipo de producto                                                                                   | Alta      | Pendiente |
-| RF-053 | El sistema debe permitir consultar productos académicos filtrando por año de producción                                                                                  | Alta      | Pendiente |
-| RF-054 | El sistema debe permitir consultar productos académicos filtrando por usuario propietario                                                                                | Alta      | Pendiente |
-| RF-055 | El sistema debe permitir consultar productos académicos filtrando por institución                                                                                        | Media     | Pendiente |
-| RF-056 | El sistema debe permitir al usuario editar manualmente los metadatos de sus propios productos académicos                                                                 | Alta      | Pendiente |
-| RF-057 | El sistema debe permitir al usuario eliminar sus propios productos académicos, solicitando confirmación explícita antes de ejecutar la acción                            | Media     | Pendiente |
-| RF-058 | El sistema debe implementar búsqueda de texto completo sobre títulos, autores y palabras clave                                                                           | Media     | Pendiente |
-| RF-059 | El sistema debe paginar los resultados de consultas con un mínimo de 10 y máximo de 50 registros por página                                                              | Media     | Pendiente |
-| RF-060 | Cualquier usuario autenticado debe poder consultar y visualizar los productos académicos de todos los usuarios del sistema                                               | Alta      | Pendiente |
-| RF-061 | Los usuarios solo pueden editar y eliminar sus propios productos académicos; la visualización del repositorio completo es irrestricta para cualquier usuario autenticado | Alta      | Pendiente |
+| ID     | Descripción                                                                                                                                                              | Prioridad | Estado     |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ---------- |
+| RF-051 | El sistema debe almacenar cada producto académico con sus metadatos completos en la colección `academic_products` de MongoDB                                             | Alta      | Completado |
+| RF-052 | El sistema debe permitir consultar productos académicos filtrando por tipo de producto                                                                                   | Alta      | Pendiente  |
+| RF-053 | El sistema debe permitir consultar productos académicos filtrando por año de producción                                                                                  | Alta      | Pendiente  |
+| RF-054 | El sistema debe permitir consultar productos académicos filtrando por usuario propietario                                                                                | Alta      | Pendiente  |
+| RF-055 | El sistema debe permitir consultar productos académicos filtrando por institución                                                                                        | Media     | Pendiente  |
+| RF-056 | El sistema debe permitir al usuario editar manualmente los metadatos de sus propios productos académicos                                                                 | Alta      | Pendiente  |
+| RF-057 | El sistema debe permitir al usuario eliminar sus propios productos académicos, solicitando confirmación explícita antes de ejecutar la acción                            | Media     | Pendiente  |
+| RF-058 | El sistema debe implementar búsqueda de texto completo sobre títulos, autores y palabras clave                                                                           | Media     | Pendiente  |
+| RF-059 | El sistema debe paginar los resultados de consultas con un mínimo de 10 y máximo de 50 registros por página                                                              | Media     | Pendiente  |
+| RF-060 | Cualquier usuario autenticado debe poder consultar y visualizar los productos académicos de todos los usuarios del sistema                                               | Alta      | Pendiente  |
+| RF-061 | Los usuarios solo pueden editar y eliminar sus propios productos académicos; la visualización del repositorio completo es irrestricta para cualquier usuario autenticado | Alta      | Pendiente  |
 
 ---
 
@@ -289,7 +296,7 @@ mindmap
 | RF-080 | El log de auditoría debe registrar para cada evento: usuario que lo ejecutó, tipo de acción, timestamp y dirección IP            | Alta      | Completado |
 | RF-081 | El log de auditoría debe ser de solo lectura para todos los usuarios; solo el `admin` puede consultarlo                          | Alta      | Pendiente  |
 | RF-082 | El sistema debe implementar rate limiting en los endpoints de autenticación: máximo 10 peticiones por minuto por IP              | Alta      | Parcial    |
-| RF-083 | El sistema debe rechazar cualquier archivo cuya extensión real no corresponda a los formatos permitidos (PDF, JPG, JPEG, PNG)    | Alta      | Pendiente  |
+| RF-083 | El sistema debe rechazar cualquier archivo cuya extensión real no corresponda a los formatos permitidos (PDF, JPG, JPEG, PNG)    | Alta      | Completado |
 
 > **Nota RF-082:** La implementación actual utiliza `nuxt-security` con rate limiting **global** de 150 tokens por intervalo de 5 minutos (30 req/min), no específico para endpoints de autenticación a 10 req/min. Cubre el objetivo de protección base pero no la granularidad descrita.
 
@@ -299,11 +306,13 @@ mindmap
 
 > Implementado a partir del Módulo M2
 
-| ID     | Descripción                                                                                                                                            | Prioridad | Estado    |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | --------- |
-| RF-084 | El sistema debe enviar una notificación por correo electrónico al usuario cuando el procesamiento de un documento se complete exitosamente             | Media     | Pendiente |
-| RF-085 | El sistema debe enviar una notificación por correo electrónico al usuario cuando el procesamiento de un documento falle, indicando el motivo del error | Media     | Pendiente |
-| RF-086 | El sistema debe mostrar en la interfaz notificaciones en tiempo real sobre el cambio de estado de procesamiento de cada documento                      | Alta      | Pendiente |
+| ID     | Descripción                                                                                                                                            | Prioridad | Estado  |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ------- |
+| RF-084 | El sistema debe enviar una notificación por correo electrónico al usuario cuando el procesamiento de un documento se complete exitosamente             | Media     | Parcial |
+| RF-085 | El sistema debe enviar una notificación por correo electrónico al usuario cuando el procesamiento de un documento falle, indicando el motivo del error | Media     | Parcial |
+| RF-086 | El sistema debe mostrar en la interfaz notificaciones en tiempo real sobre el cambio de estado de procesamiento de cada documento                      | Alta      | Parcial |
+
+> **Nota M8:** La persistencia de notificaciones y la bandeja en interfaz ya están implementadas. El correo usa Resend en modo best-effort cuando `RESEND_API_KEY` y `RESEND_FROM_EMAIL` están configuradas, y la actualización visible en UI se resuelve actualmente con polling periódico en lugar de SSE/WebSocket.
 
 ---
 
@@ -362,7 +371,7 @@ timeline
                             : M6 Perfil de Usuario
                             : M7 Seguridad y Auditoría (base)
         Semana 3 · 23 Feb   : M2 Carga y Gestión de Documentos
-                            : M8 Notificaciones (base)
+                            : M8 Notificaciones
         Semana 4 · 2 Mar    : M3 OCR Parte 1
         Semana 5 · 9 Mar    : M3 OCR Parte 2
                             : M4 NLP/NER Básico

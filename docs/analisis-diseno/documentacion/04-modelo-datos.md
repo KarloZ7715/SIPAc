@@ -12,6 +12,7 @@
 | 1.1     | 2026-02-27 | Carlos A. Canabal Cordero | Reescritura completa — esquemas TypeScript con Mongoose ODM, validaciones, índices compuestos, middlewares, colecciones de auditoría y notificaciones, alineación con stack unificado (Vercel AI SDK, Gemini, Zod)                                                     |
 | 1.2     | 2026-03-04 | Carlos A. Canabal Cordero | Simplificación a 2 roles (`admin`, `docente`), almacenamiento en MongoDB GridFS (eliminar `storagePath`), eliminación de campos de verificación en `academic_products`, nueva colección `chat_conversations`, actualización de enums en `audit_logs` y `notifications` |
 | 1.3     | 2026-03-06 | Carlos A. Canabal Cordero | Alineación a los cambios de la arquitectura: `gridfsFileId` en `uploaded_files`, eliminación del flujo obsoleto de verificación/rechazo y su notificación asociada, implementación del hook pre-save de hash de contraseña                                             |
+| 1.4     | 2026-03-11 | Carlos A. Canabal Cordero | Alineación al pipeline implementado M2/M8: `productType` obligatorio en `uploaded_files`, índice único por `sourceFile` en `academic_products` y persistencia de notificaciones con referencia opcional al producto o archivo                                          |
 
 ---
 
@@ -197,6 +198,7 @@ export interface IUploadedFile extends Document {
   uploadedBy: Types.ObjectId // ref: User
   originalFilename: string
   gridfsFileId: Types.ObjectId
+  productType: 'article' | 'conference_paper' | 'thesis' | 'certificate' | 'research_project'
   mimeType: 'application/pdf' | 'image/jpeg' | 'image/png'
   fileSizeBytes: number
   processingStatus: 'pending' | 'processing' | 'completed' | 'error'
@@ -231,6 +233,14 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
     gridfsFileId: {
       type: Schema.Types.ObjectId,
       required: [true, 'El archivo debe tener una referencia GridFS'],
+    },
+    productType: {
+      type: String,
+      required: [true, 'El tipo de producto académico es obligatorio'],
+      enum: {
+        values: ['article', 'conference_paper', 'thesis', 'certificate', 'research_project'],
+        message: 'El tipo de producto {VALUE} no es válido',
+      },
     },
     mimeType: {
       type: String,
@@ -621,6 +631,9 @@ academicProductSchema.index(
     },
   },
 )
+
+// Un archivo cargado solo puede originar un producto académico activo
+academicProductSchema.index({ sourceFile: 1 }, { unique: true, name: 'ux_source_file' })
 ```
 
 | Índice                                         | Tipo                     | Soporta (RF)                                                          |
@@ -628,6 +641,7 @@ academicProductSchema.index(
 | `{ owner, productType, isDeleted, createdAt }` | Compuesto                | RF-052/054: listar productos por tipo y usuario                       |
 | `{ manualMetadata.date, productType }`         | Compuesto                | RF-065/066: distribución temporal y filtro por rango                  |
 | Text index con pesos                           | Texto completo (español) | RF-058: búsqueda full-text priorizada por título > autores > keywords |
+| `{ sourceFile: 1 }`                            | Único                    | RF-051: evita duplicar productos para un mismo archivo procesado      |
 
 ---
 

@@ -71,7 +71,7 @@ else Validación exitosa
       Determina proveedor
       según OCR_PROVIDER env
     end note
-    OCRFactory -> GeminiVision : generateObject(\n{ model: 'gemini-2.0-flash',\nimage: fileBuffer,\nprompt: 'Extraer texto...' })
+    OCRFactory -> GeminiVision : generateObject(\n{ model: 'gemini-2.5-flash',\nimage: fileBuffer,\nprompt: 'Extraer texto...' })
     activate GeminiVision
     GeminiVision --> OCRFactory : texto extraído
     deactivate GeminiVision
@@ -94,7 +94,7 @@ else Validación exitosa
   Zod --> NER : schema tipado
   deactivate Zod
 
-  NER -> GeminiFlash : generateObject(\n{ model: 'gemini-2.0-flash',\nschema: zodSchema,\nprompt: rawText })
+  NER -> GeminiFlash : generateObject(\n{ model: 'gemini-2.5-flash',\nschema: zodSchema,\nprompt: rawText })
   activate GeminiFlash
   GeminiFlash --> NER : objeto tipado con entidades
   deactivate GeminiFlash

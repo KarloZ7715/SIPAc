@@ -6,57 +6,101 @@
 
 ## Control de Versiones
 
-| Versión | Fecha      | Autor                     | Descripción del cambio                                                                                                                                                                                                                                             |
-| ------- | ---------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1.0     | 2026-02-09 | Carlos A. Canabal Cordero | Borrador inicial — arquitectura de dos servicios: Nuxt 4 + microservicio Python (FastAPI, spaCy, Tesseract)                                                                                                                                                        |
-| 1.1     | 2026-02-27 | Carlos A. Canabal Cordero | Reescritura completa — stack unificado TypeScript: Nuxt 4 monolito, Vercel AI SDK, Gemini 2.0 Flash, pdfjs-dist, Zod                                                                                                                                               |
-| 1.2     | 2026-03-04 | Carlos A. Canabal Cordero | Simplificación a 2 roles (`admin`, `docente`), nuevo módulo Chat Inteligente, almacenamiento en MongoDB GridFS, eliminación del flujo de verificación, nuevos ADR-07 y ADR-08                                                                                      |
-| 1.3     | 2026-03-06 | Carlos A. Canabal Cordero | Alineación a los cambios de la arquitectura: corrección de versión Mongoose (9.x), corrección de mecanismo de autenticación (cookie httpOnly), actualización de estructura de directorios a estado real, adición de @nuxt/ui, nuxt-security y @ai-sdk/vue en stack |
+| Versión | Fecha      | Autor                     | Descripción del cambio                                                                                                                                                                                                                                                                  |
+| ------- | ---------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-02-09 | Carlos A. Canabal Cordero | Borrador inicial — arquitectura de dos servicios: Nuxt 4 + microservicio Python (FastAPI, spaCy, Tesseract)                                                                                                                                                                             |
+| 1.1     | 2026-02-27 | Carlos A. Canabal Cordero | Reescritura completa — stack unificado TypeScript: Nuxt 4 monolito, Vercel AI SDK, Gemini 2.0 Flash, pdfjs-dist, Zod                                                                                                                                                                    |
+| 1.2     | 2026-03-04 | Carlos A. Canabal Cordero | Simplificación a 2 roles (`admin`, `docente`), nuevo módulo Chat Inteligente, almacenamiento en MongoDB GridFS, eliminación del flujo de verificación, nuevos ADR-07 y ADR-08                                                                                                           |
+| 1.3     | 2026-03-06 | Carlos A. Canabal Cordero | Alineación a los cambios de la arquitectura: corrección de versión Mongoose (9.x), corrección de mecanismo de autenticación (cookie httpOnly), actualización de estructura de directorios a estado real, adición de @nuxt/ui, nuxt-security y @ai-sdk/vue en stack                      |
+| 1.4     | 2026-03-07 | Carlos A. Canabal Cordero | Estrategia multi-proveedor LLM: Cerebras (`gpt-oss-120b`, `qwen-3-235b-a22b-instruct-2507`) como proveedores primarios para NER y Chat con Gemini 2.0 Flash como fallback automático; adición de `@ai-sdk/openai-compatible`; nuevo ADR-09; sección 5 expandida a proveedores OCR + LLM |
+| 1.5     | 2026-03-11 | Carlos A. Canabal Cordero | Mejora visual de la visión general de la arquitectura: reorganización del diagrama Mermaid por capas y adición de cuadro resumen sin cambios en el contenido técnico                                                                                                                    |
+| 1.6     | 2026-03-11 | Carlos A. Canabal Cordero | Refactorización de la visión general de la arquitectura: reducción del texto introductorio, simplificación del diagrama Mermaid y corrección de sintaxis, manteniendo el mismo significado técnico                                                                                      |
+| 1.7     | 2026-03-11 | Carlos A. Canabal Cordero | Alineación al estado implementado de M2/M8: NER estructurado con `generateText` + `Output.object`, selector real `LLM_PROVIDER`, y notificaciones por correo mediante Resend en modo best-effort                                                                                        |
 
 ---
 
 ## 1. Visión General de la Arquitectura
 
-SIPAc adopta una arquitectura de **servicio único** (monolito modular) implementada completamente en TypeScript sobre **Nuxt 4**. El procesamiento inteligente de documentos (OCR y NER) se ejecuta desde módulos internos del servidor Nuxt, eliminando la necesidad de un microservicio separado.
+SIPAc adopta una arquitectura de **servicio único** (monolito modular) construida sobre **Nuxt 4** y **TypeScript**. La UI, la API, la persistencia y el procesamiento inteligente de documentos se ejecutan dentro del mismo servicio Node.js, mientras OCR y LLM se consumen desde proveedores externos integrados en el servidor.
 
 ```mermaid
-graph TD
-    Browser["🌐 Cliente (Browser)"]
+flowchart TB
+  Browser["🌐 Cliente"]
 
-    subgraph Nuxt4["Nuxt 4 — Servicio Único (Node.js / TypeScript)"]
-        UI["Capa UI: Vue 3 + TailwindCSS + Pinia"]
-        API["API Routes: /server/api/**"]
-        OCR["Módulo OCR: /server/services/ocr/"]
-        NER["Módulo NER: /server/services/ner/"]
-        Chat["Módulo Chat: /server/services/chat/"]
-        Storage["Módulo Storage: /server/services/storage/"]
-        ODM["Mongoose ODM"]
+  subgraph SIPAc["SIPAc · Nuxt 4 · Servicio único"]
+    direction TB
+    UI["UI<br/>Vue 3 · TailwindCSS · Pinia"]
+    API["API Routes"]
+
+    subgraph Services["Servicios internos"]
+      direction LR
+      OCR["OCR"]
+      NER["NER"]
+      Chat["Chat IA"]
+      Storage["Storage"]
+      ODM["Mongoose ODM"]
     end
+  end
 
-    MongoDB[("MongoDB Atlas (Cloud)")]
-    GridFS[("MongoDB GridFS (Archivos)")]
-    GeminiVision["☁ Gemini 2.0 Flash Vision (Vercel AI SDK) OCR multimodal"]
-    GeminiText["☁ Gemini 2.0 Flash (Vercel AI SDK) generateObject + Zod"]
-    GeminiChat["☁ Gemini 2.0 Flash (Vercel AI SDK) streamText + Tool Calling"]
-    MistralOCR["☁ Mistral OCR 3 (Opcional — .env) $0,002/pág"]
-    PdfjsDist["pdfjs-dist (Node.js, sin red) PDF nativo → texto"]
+  subgraph OCRProviders["☁ OCR"]
+    direction TB
+    Pdfjs["pdfjs-dist<br/>PDF nativo"]
+    GeminiVision["Gemini Vision<br/>imágenes / escaneados"]
+    Mistral["Mistral OCR<br/>opcional"]
+  end
 
-    Browser -- "HTTPS (SSR / SPA)" --> UI
-    Browser -- "HTTPS (REST JSON)" --> API
-    API --> OCR
-    API --> NER
-    API --> Chat
-    API --> Storage
-    API --> ODM
-    ODM --> MongoDB
-    Storage --> GridFS
-    OCR --> PdfjsDist
-    OCR -- "PDF escaneado / imagen" --> GeminiVision
-    OCR -. "OCR_PROVIDER=mistral (.env, opcional)" .-> MistralOCR
-    NER --> GeminiText
-    Chat --> GeminiChat
-    Chat --> ODM
+  subgraph LLMProviders["☁ LLM"]
+    direction TB
+    Cerebras["Cerebras<br/>primario"]
+    Gemini["Gemini Flash<br/>fallback"]
+  end
+
+  subgraph Data["🗄 Datos"]
+    direction TB
+    MongoDB[(MongoDB Atlas)]
+    GridFS[(GridFS)]
+  end
+
+  Browser -->|HTTPS| UI
+  Browser -->|REST JSON| API
+  UI --> API
+
+  API --> OCR
+  API --> NER
+  API --> Chat
+  API --> Storage
+  API --> ODM
+
+  OCR --> Pdfjs
+  OCR --> GeminiVision
+  OCR -.->|OCR_PROVIDER=mistral| Mistral
+
+  NER -->|cerebras| Cerebras
+  NER -.->|fallback| Gemini
+  Chat -->|cerebras| Cerebras
+  Chat -.->|fallback| Gemini
+  Chat --> ODM
+
+  ODM --> MongoDB
+  Storage --> GridFS
+
+  classDef browserNode fill:#EAF7EE,stroke:#1E8449,color:#1B2631,stroke-width:2px
+  classDef appNode fill:#FDFEFE,stroke:#5D6D7E,color:#1B2631,stroke-width:1.5px
+  classDef providerNode fill:#EBF5FB,stroke:#2E86C1,color:#1B2631,stroke-width:1.5px
+  classDef dbNode fill:#F5EEF8,stroke:#7D3C98,color:#1B2631,stroke-width:1.5px
+
+  class Browser browserNode
+  class UI,API,OCR,NER,Chat,Storage,ODM appNode
+  class Pdfjs,GeminiVision,Mistral,Cerebras,Gemini providerNode
+  class MongoDB,GridFS dbNode
 ```
+
+| Bloque                   | Elementos principales                                            | Función                                                   |
+| ------------------------ | ---------------------------------------------------------------- | --------------------------------------------------------- |
+| **Cliente**              | Browser                                                          | Consumir la interfaz y las API del sistema                |
+| **Aplicación**           | UI, API Routes, OCR, NER, Chat IA, Storage, Mongoose             | Ejecutar la lógica del sistema en un único servicio Nuxt  |
+| **Proveedores externos** | `pdfjs-dist`, Gemini Vision, Mistral OCR, Cerebras, Gemini Flash | Resolver OCR y capacidades LLM sin microservicios propios |
+| **Persistencia**         | MongoDB Atlas, GridFS                                            | Guardar metadatos, documentos y archivos                  |
 
 > **Principio guía:** Un solo lenguaje (TypeScript), un solo proceso (Node.js), un solo despliegue. El procesamiento con IA se delega a APIs externas de bajo costo (free tier en desarrollo), manteniendo la base de código simple y sin dependencias de entorno Python.
 
@@ -66,15 +110,15 @@ graph TD
 
 ### 2.1 Capa de Interfaz de Usuario (UI)
 
-| Tecnología        | Versión | Rol                         | Justificación                                                                                      |
-| ----------------- | ------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
-| **Nuxt 4**        | 4.x     | Framework principal SSR/SPA | SSR mejora el tiempo de primera carga y habilita API Routes                                        |
-| **Vue 3**         | 3.x     | Framework UI reactivo       | Base oficial de Nuxt 4; Composition API facilita componentes complejos y reutilizables             |
-| **TypeScript**    | 5.x     | Tipado estático end-to-end  | Compartir tipos entre servidor y cliente; reducción de errores en tiempo de edición                |
-| **TailwindCSS**   | 4.x     | Estilos utilitarios         | Desarrollo rápido de UI responsive profesional sin CSS personalizado extenso                       |
-| **@nuxt/ui**      | 4.x     | Librería de componentes UI  | 125+ componentes accesibles con theming Tailwind CSS; base de la UI del sistema                    |
-| **Pinia**         | 3.x     | Gestión de estado global    | Store oficial de Vue 3; manejo reactivo de sesión de usuario, documentos cargados y estado del NER |
-| **`@ai-sdk/vue`** | 3.x     | Composables de IA para Vue  | Proporciona `useChat` y `useCompletion` para streaming de respuestas del chat IA en el cliente     |
+| Tecnología          | Versión | Rol                         | Justificación                                                                                      |
+| ------------------- | ------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Nuxt 4**          | 4.x     | Framework principal SSR/SPA | SSR mejora el tiempo de primera carga y habilita API Routes                                        |
+| **Vue 3**           | 3.x     | Framework UI reactivo       | Base oficial de Nuxt 4; Composition API facilita componentes complejos y reutilizables             |
+| **TypeScript**      | 5.x     | Tipado estático end-to-end  | Compartir tipos entre servidor y cliente; reducción de errores en tiempo de edición                |
+| **TailwindCSS**     | 4.x     | Estilos utilitarios         | Desarrollo rápido de UI responsive profesional sin CSS personalizado extenso                       |
+| **@nuxt/ui**        | 4.x     | Librería de componentes UI  | 125+ componentes accesibles con theming Tailwind CSS; base de la UI del sistema                    |
+| **Pinia**           | 3.x     | Gestión de estado global    | Store oficial de Vue 3; manejo reactivo de sesión de usuario, documentos cargados y estado del NER |
+| `**@ai-sdk/vue`\*\* | 3.x     | Composables de IA para Vue  | Proporciona `useChat` y `useCompletion` para streaming de respuestas del chat IA en el cliente     |
 
 ### 2.2 Capa de Backend / API
 
@@ -89,15 +133,19 @@ graph TD
 
 ### 2.3 Capa de Procesamiento Inteligente
 
-| Tecnología                     | Versión            | Rol                                               | Justificación                                                                                                  |
-| ------------------------------ | ------------------ | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| **pdfjs-dist**                 | latest             | Extracción de texto de PDFs nativos (digitales)   | Corre en Node.js sin API externa; extrae texto estructurado sin OCR cuando el PDF contiene texto incrustado    |
-| **Vercel AI SDK** (`ai`)       | 6.x                | Capa unificada de acceso a modelos LLM/multimodal | Abstrae proveedores (Google, Mistral, Anthropic); API uniforme `generateObject` / `streamObject`               |
-| **`@ai-sdk/google`**           | latest             | Proveedor Google Gemini para el AI SDK            | Acceso a Gemini 2.0 Flash (texto) y Gemini 2.0 Flash Vision (multimodal) desde el mismo SDK                    |
-| **Gemini 2.0 Flash Vision**    | `gemini-2.0-flash` | OCR multimodal para PDFs escaneados e imágenes    | Free tier: 1.500 req/día; precisión superior a Tesseract en español; sin instalación local                     |
-| **Gemini 2.0 Flash**           | `gemini-2.0-flash` | NER estructurado vía `generateObject`             | Extrae entidades académicas (DOI, indexación, ponencias, certificados) que no existen en modelos NER clásicos  |
-| **Zod**                        | 4.x                | Esquemas de validación y contrato NER             | Tipado en tiempo de compilación y en tiempo de ejecución; `generateObject` garantiza JSON válido según esquema |
-| **Mistral OCR 3** _(opcional)_ | `v25.12`           | OCR de alta precisión para documentos complejos   | 99,54% de precisión en español; activable vía `OCR_PROVIDER=mistral` en `.env`; costo: $0,002/pág              |
+| Tecnología                                   | Versión                          | Rol                                                             | Justificación                                                                                                                                                           |
+| -------------------------------------------- | -------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **pdfjs-dist**                               | latest                           | Extracción de texto de PDFs nativos (digitales)                 | Corre en Node.js sin API externa; extrae texto estructurado sin OCR cuando el PDF contiene texto incrustado                                                             |
+| **Vercel AI SDK** (`ai`)                     | 6.x                              | Capa unificada de acceso a modelos LLM/multimodal               | Abstrae proveedores (Google vía `@ai-sdk/google`, Cerebras vía `@ai-sdk/openai-compatible`, Mistral); API uniforme `generateText` / `streamText` con structured outputs |
+| `**@ai-sdk/google`\*\*                       | latest                           | Proveedor Google Gemini para el AI SDK                          | Acceso a Gemini 2.5 Flash para OCR multimodal y como fallback actual del pipeline estructurado                                                                          |
+| `**@ai-sdk/openai-compatible**`              | latest                           | Proveedor OpenAI-compatible genérico para el AI SDK             | Conecta el Vercel AI SDK a cualquier API con interfaz OpenAI, incluyendo Cerebras Inference (`https://api.cerebras.ai/v1`); sin paquete propietario extra               |
+| **Gemini 2.5 Flash**                         | `gemini-2.5-flash`               | OCR multimodal para PDFs escaneados e imágenes                  | Proveedor actual en la implementación; también se usa como fallback del pipeline estructurado                                                                           |
+| **Cerebras GPT-OSS 120B** _(primario)_       | `gpt-oss-120b`                   | NER estructurado y Chat IA — proveedor primario                 | Modelo de **producción** en Cerebras; ~3.000 tokens/s; API 100% compatible con OpenAI; soporta structured outputs con AI SDK                                            |
+| **Cerebras Qwen 3 235B** _(preview)_         | `qwen-3-235b-a22b-instruct-2507` | NER estructurado — candidato preferido para extracción          | 235B parámetros MoE; ~1.400 tokens/s; superior en extracción estructurada en español; reservado para evolución del proveedor                                            |
+| **Gemini 2.5 Flash** _(fallback automático)_ | `gemini-2.5-flash`               | NER estructurado — fallback cuando Cerebras retorna 429 o error | Garantiza disponibilidad del servicio cuando falla el primario; el pipeline actual lo usa como fallback documentado                                                     |
+| **Zod**                                      | 4.x                              | Esquemas de validación y contrato NER                           | Tipado en compilación y ejecución; combinado con `Output.object` permite structured outputs válidos independientemente del proveedor activo                             |
+| **Resend**                                   | latest                           | Envío de correo transaccional para M8                           | Proveedor simple para notificaciones por correo cuando el procesamiento completa o falla                                                                                |
+| **Mistral OCR 3** _(opcional)_               | `v25.12`                         | OCR de alta precisión para documentos complejos                 | 99,54% de precisión en español; activable vía `OCR_PROVIDER=mistral` en `.env`; costo: $0,002/pág                                                                       |
 
 ### 2.4 Capa de Base de Datos
 
@@ -153,11 +201,11 @@ graph TD
 
 ---
 
-### ADR-04 — Gemini 2.0 Flash Vision vs. Tesseract para OCR de escaneados
+### ADR-04 — Gemini 2.5 Flash vs. Tesseract para OCR de escaneados
 
-**Decisión:** Gemini 2.0 Flash Vision (vía Vercel AI SDK) como proveedor OCR primario para documentos escaneados e imágenes.
+**Decisión:** Gemini 2.5 Flash (vía Vercel AI SDK) como proveedor OCR primario para documentos escaneados e imágenes.
 
-**Justificación técnica:** Tesseract requiere instalación de binarios en el servidor, modelos de idioma de ~100 MB y configuración de páginas por idioma. Su precisión en documentos académicos en español con columnas, tablas o marcas de agua es notoriamente baja. Gemini 2.0 Flash Vision es un modelo multimodal de última generación con 1.500 solicitudes gratuitas diarias, que corre completamente en la nube sin instalación local.
+**Justificación técnica:** Tesseract requiere instalación de binarios en el servidor, modelos de idioma de ~100 MB y configuración de páginas por idioma. Su precisión en documentos académicos en español con columnas, tablas o marcas de agua es notoriamente baja. Gemini 2.5 Flash permite OCR multimodal desde el mismo stack AI SDK sin instalación local.
 
 **Alternativa descartada:** Tesseract (open source, local). Se descartó por la dificultad de instalación en entornos sin acceso a binarios nativos, baja precisión en documentos complejos y la necesidad de configuración adicional para español.
 
@@ -165,11 +213,11 @@ graph TD
 
 ---
 
-### ADR-05 — `generateObject` + Zod vs. spaCy NER para extracción de entidades
+### ADR-05 — Structured outputs + Zod vs. spaCy NER para extracción de entidades
 
-**Decisión:** Extracción de entidades académicas mediante `generateObject` del Vercel AI SDK con esquema Zod, usando Gemini 2.0 Flash como modelo de razonamiento.
+**Decisión:** Extracción de entidades académicas mediante structured outputs del Vercel AI SDK (`generateText` + `Output.object`) con esquema Zod, usando Cerebras o Gemini según la estrategia de proveedor activa.
 
-**Justificación técnica:** spaCy con el modelo `es_core_news_lg` reconoce entidades genéricas (PER, ORG, DATE, LOC) pero no conoce entidades académicas específicas como `doi`, `issn`, `indexacion` (Scopus, WoS, Publindex), `nombreEvento` de una ponencia ni `acreditacion` de un certificado. Entrenar un modelo spaCy personalizado para estas entidades requeriría un corpus anotado que no existe. `generateObject` con un esquema Zod le provee al LLM una definición explícita de las entidades a extraer, y Gemini las infiere contextualmente con alta precisión directamente del texto. El resultado es un objeto TypeScript tipado y validado en tiempo de ejecución, sin código de parseo adicional.
+**Justificación técnica:** spaCy con el modelo `es_core_news_lg` reconoce entidades genéricas (PER, ORG, DATE, LOC) pero no conoce entidades académicas específicas como `doi`, `issn`, `indexacion` (Scopus, WoS, Publindex), `nombreEvento` de una ponencia ni `acreditacion` de un certificado. Entrenar un modelo spaCy personalizado para estas entidades requeriría un corpus anotado que no existe. Los structured outputs del AI SDK, apoyados en Zod, le proveen al LLM una definición explícita de las entidades a extraer y retornan un objeto TypeScript validado en tiempo de ejecución, sin parseo manual adicional.
 
 **Alternativa descartada:** spaCy + `es_core_news_lg` con entrenamiento personalizado. Se descartó por la ausencia de corpus de entrenamiento, la fricción de mantener un modelo Python en un proyecto TypeScript y los 600+ MB de dependencias del modelo.
 
@@ -197,11 +245,28 @@ graph TD
 
 ### ADR-08 — Function Calling vs. RAG para el Chat Inteligente (M9)
 
-**Decisión:** El módulo de chat utiliza **function calling** (tool use) del Vercel AI SDK con Gemini 2.0 Flash para traducir preguntas en lenguaje natural a queries MongoDB sobre metadatos estructurados.
+**Decisión:** El módulo de chat utiliza **function calling** (tool use) del Vercel AI SDK y queda previsto para operar con Cerebras como primario y Gemini 2.5 Flash como fallback al traducir preguntas en lenguaje natural a queries MongoDB sobre metadatos estructurados.
 
 **Justificación técnica:** Los documentos académicos de SIPAc tienen metadatos estructurados bien definidos (autores, título, fecha, tipo, institución, DOI, palabras clave) almacenados en campos tipados de MongoDB. Este escenario favorece el enfoque de function calling sobre RAG (Retrieval Augmented Generation) porque: (a) no se requiere búsqueda semántica sobre texto libre — las consultas operan sobre campos discretos y filtros combinables; (b) function calling permite al LLM invocar herramientas de búsqueda tipadas con esquemas Zod, garantizando queries válidas; (c) no se necesitan embeddings vectoriales ni infraestructura adicional de vector search; (d) el LLM puede encadenar múltiples herramientas en una sola respuesta para queries complejas. La arquitectura define un conjunto de herramientas (`searchByDateRange`, `searchByAuthor`, `searchByKeywords`, `searchByTitle`, `searchByProductType`, `searchByInstitution`, `searchCombined`) que el LLM invoca según la intención del usuario.
 
 **Alternativa descartada:** RAG con MongoDB Atlas Vector Search. Se descartó porque requiere generar y almacenar embeddings para cada documento, un modelo de embeddings adicional, y un índice vectorial en Atlas (no disponible en M0 free tier). La complejidad y el costo no se justifican cuando la búsqueda es sobre metadatos estructurados y no sobre contenido semántico del texto completo.
+
+---
+
+### ADR-09 — Estrategia multi-proveedor LLM: Cerebras + Gemini fallback (M4 y M9)
+
+**Decisión:** El NER implementado utiliza structured outputs del AI SDK (`generateText` + `Output.object`) con **Cerebras Inference** como primario y **Gemini 2.5 Flash** como fallback. La implementación actual usa un selector único `LLM_PROVIDER` y una lista ordenada de candidatos con fallback al siguiente proveedor cuando el primario falla. Esta misma estrategia queda prevista para el módulo de Chat IA (M9).
+
+**Justificación técnica:** Un único proveedor LLM para NER y Chat representa un punto de falla en un sistema multiusuario académico. Cerebras resuelve esta limitación con un modelo de producción apto para el primer intento y Gemini 2.5 Flash actúa como respaldo operativo cuando el primario falla:
+
+- `gpt-oss-120b` (producción): ~3.000 tokens/s; API 100% compatible con OpenAI; sin restricciones severas de rate limit en free tier; soporta structured outputs y `streamText` con tool calling. Queda disponible para NER y para la evolución del Chat.
+- `qwen-3-235b-a22b-instruct-2507` (Preview): 235B parámetros MoE; rendimiento superior en extracción estructurada en español; actualmente en Preview con free tier.
+
+La integración se realiza mediante `@ai-sdk/openai-compatible` (paquete oficial del Vercel AI SDK para APIs con interfaz OpenAI, base URL: `https://api.cerebras.ai/v1`), sin SDK propietario de Cerebras. El fallback automático a Gemini 2.5 Flash garantiza disponibilidad continua del sistema.
+
+**Variable de entorno actual:** `LLM_PROVIDER` (valores: `gemini` | `cerebras`). En el estado implementado controla la selección del proveedor para NER estructurado. La separación por tarea (`NER`/`Chat`) queda reservada para una evolución posterior del módulo M9.
+
+**Alternativa descartada:** Mantener Gemini como único proveedor LLM. Se descartó por ausencia de resiliencia ante fallos del proveedor y por la oportunidad de distribuir carga entre proveedores de alta calidad.
 
 ---
 
@@ -221,30 +286,41 @@ flowchart TD
     E -- "Sí" --> F["pdfjs-dist-Node.js — sin API externa Extrae texto plano"]
     E -- "No (escaneado)" --> G{{"OCR_PROVIDER en .env"}}
 
-    G -- "gemini (default)" --> H["Gemini 2.0 Flash Vision Vercel AI SDK Multimodal → texto"]
+    G -- "gemini (default)" --> H["Gemini 2.5 Flash Vercel AI SDK Multimodal → texto"]
     G -- "mistral" --> I["Mistral OCR 3 API $0,002/pág Texto estructurado"]
 
     F --> J["Texto plano disponible"]
     H --> J
     I --> J
 
-    J --> K["generateObject — Vercel AI SDK + Gemini 2.0 Flash + esquema Zod + Extracción NER académico"]
-    K --> L["Objeto TypeScript validado { titulo, autores, doi, indexacion, nombreEvento, fecha, ... }"]
+    J --> K{{"LLM_PROVIDER en .env"}}
+
+    K -- "cerebras" --> K1["Cerebras Inference — @ai-sdk/openai-compatible structured outputs + Zod"]
+    K -- "gemini" --> K2["Gemini 2.5 Flash — AI SDK structured outputs + Zod"]
+    K1 -. "fallback automático (429 / error)" .-> K2
+
+    K1 --> L["Objeto TypeScript validado { titulo, autores, doi, indexacion, nombreEvento, fecha, ... }"]
+    K2 --> L
     L --> M["Guardar entidades en MongoDB estado: 'completado'"]
     M --> N(["✅ Usuario revisa y edita entidades en la UI"])
 
     style A fill:#4f86c6,color:#fff
     style N fill:#4caf50,color:#fff
-    style K fill:#ff9800,color:#fff
+    style K1 fill:#ff9800,color:#fff
+    style K2 fill:#e65100,color:#fff
     style H fill:#9c27b0,color:#fff
     style I fill:#795548,color:#fff
 ```
 
 ---
 
-## 5. Estrategia de Proveedores OCR/LLM
+## 5. Estrategia de Proveedores OCR / LLM
 
-### Abstracción `OCRProvider`
+El sistema gestiona dos categorías de proveedores de IA, desacoplados mediante interfaces internas y el patrón fábrica: **OCR** (extracción de texto de documentos) y **LLM** (extracción de entidades NER y chat inteligente). Ambas categorías permiten selección y fallback controlados por variables de entorno, sin cambios en la lógica de negocio.
+
+---
+
+### 5.1 Abstracción `OCRProvider` (M3 — OCR)
 
 El módulo `server/services/ocr/` implementa una interfaz interna `OCRProvider` que desacopla el código de procesamiento del proveedor concreto. La selección del proveedor se realiza en tiempo de arranque leyendo la variable de entorno `OCR_PROVIDER`.
 
@@ -269,17 +345,108 @@ export function createOCRProvider(): OCRProvider {
 }
 ```
 
-### Tabla de proveedores
+#### Tabla de proveedores OCR
 
-| Variable `OCR_PROVIDER` | Proveedor     | Modelo             | Costo              | Cuándo usar                                              |
-| ----------------------- | ------------- | ------------------ | ------------------ | -------------------------------------------------------- |
-| `gemini` _(default)_    | Google Gemini | `gemini-2.0-flash` | Gratis (1.500/día) | Desarrollo, producción inicial, uso académico            |
-| `mistral`               | Mistral AI    | `v25.12`           | $0,002/pág         | Documentos complejos, tablas, fórmulas, máxima precisión |
+| Variable `OCR_PROVIDER` | Proveedor     | Modelo             | Costo                     | Cuándo usar                                                |
+| ----------------------- | ------------- | ------------------ | ------------------------- | ---------------------------------------------------------- |
+| `gemini` _(default)_    | Google Gemini | `gemini-2.5-flash` | Según cuota del proveedor | Desarrollo, producción inicial, PDFs escaneados e imágenes |
+| `mistral`               | Mistral AI    | `v25.12`           | $0,002/pág                | Documentos complejos, tablas, fórmulas, máxima precisión   |
 
-### Plan de costos
+> **Nota importante:** Cerebras no ofrece capacidad multimodal/visión. Por tanto, el OCR de imágenes y PDFs escaneados siempre usa el modelo Gemini configurado para OCR, independientemente de `LLM_PROVIDER`.
 
-- **Fase de desarrollo (pasantía):** `OCR_PROVIDER=gemini` siempre. El free tier de 1.500 req/día cubre con margen la carga esperada de una institución educativa durante la pasantía.
-- **Producción institucional (futuro):** Si el volumen supera el free tier de Gemini, se puede activar `OCR_PROVIDER=mistral` para documentos específicos o implementar un proveedor con lógica de selección automática por tipo de documento.
+---
+
+### 5.2 Abstracción `LLMProvider` (M4 — NER y evolución hacia M9)
+
+El módulo `server/services/llm/` implementa una abstracción ligera para seleccionar modelos de texto. Los modelos Cerebras se consumen vía `@ai-sdk/openai-compatible` apuntando a `https://api.cerebras.ai/v1`; Google Gemini se consume vía `@ai-sdk/google`. Ambos comparten la misma API del Vercel AI SDK y en el estado actual se usan para NER estructurado mediante `generateText` + `Output.object`.
+
+```typescript
+// server/services/llm/types.ts
+import type { LanguageModel } from 'ai'
+
+export interface LLMProvider {
+  readonly name: string
+  getModel(modelId?: string): LanguageModel // Para structured outputs (NER)
+  getStreamingModel(modelId?: string): LanguageModel // Para streamText + tool calling (Chat)
+}
+```
+
+La implementación actual expone una selección ordenada de candidatos para structured outputs y deja preparada la reutilización del patrón en Chat:
+
+```typescript
+// server/services/llm/provider.ts
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { createGoogleGenerativeAI } from '@ai-sdk/google'
+
+const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_API_KEY })
+
+export function getStructuredModelCandidates() {
+  const candidates = []
+
+  if (process.env.LLM_PROVIDER === 'cerebras' && process.env.CEREBRAS_API_KEY) {
+    const cerebras = createOpenAICompatible({
+      name: 'cerebras',
+      apiKey: process.env.CEREBRAS_API_KEY,
+      baseURL: 'https://api.cerebras.ai/v1',
+    })
+
+    candidates.push(cerebras('gpt-oss-120b'))
+  }
+
+  candidates.push(google('gemini-2.5-flash'))
+  return candidates
+}
+
+// El servicio consumidor intenta los candidatos en orden hasta obtener respuesta válida.
+```
+
+#### Tabla de proveedores LLM
+
+| Variable de entorno | Valor              | Proveedor     | Model ID activo                  | Params   | Velocidad    | Costo                            | Rol en SIPAc                                                                 |
+| ------------------- | ------------------ | ------------- | -------------------------------- | -------- | ------------ | -------------------------------- | ---------------------------------------------------------------------------- |
+| `LLM_PROVIDER`      | `cerebras` _(def)_ | Cerebras      | `gpt-oss-120b`                   | 120B     | ~3.000 tok/s | Gratis (prod, sin restricciones) | Primario actual para NER estructurado; estrategia prevista también para Chat |
+| `LLM_PROVIDER`      | `gemini`           | Google Gemini | `gemini-2.5-flash`               | —        | —            | Según cuota del proveedor        | Fallback automático actual y selección forzada para NER                      |
+| `LLM_PROVIDER`      | `cerebras`         | Cerebras      | `qwen-3-235b-a22b-instruct-2507` | 235B MoE | ~1.400 tok/s | Gratis (Preview)                 | Candidato documentado para evolución; no activo en la implementación actual  |
+
+#### Estado actual de modelos Cerebras (2026-03)
+
+| Nombre comercial         | Model ID                         | Tier       | Estado                                       | Uso recomendado en SIPAc                                    |
+| ------------------------ | -------------------------------- | ---------- | -------------------------------------------- | ----------------------------------------------------------- |
+| **OpenAI GPT OSS**       | `gpt-oss-120b`                   | Producción | ✅ Disponible — sin restricciones de demanda | NER activo — modelo por defecto; previsto también para Chat |
+| **Qwen 3 235B Instruct** | `qwen-3-235b-a22b-instruct-2507` | Preview    | ⚠️ Rate limit reducido                       | Candidato futuro para extracción estructurada               |
+| **Z.ai GLM 4.7**         | `zai-glm-4.7`                    | Preview    | ⚠️ Rate limit reducido                       | No previsto en SIPAc actualmente                            |
+| **Llama 3.1 8B**         | `llama3.1-8b`                    | Producción | ✅ Disponible                                | Reserva ligera (menor capacidad de reasoning estructurado)  |
+
+---
+
+### 5.3 Plan de costos y variables de entorno
+
+| Fase                      | OCR (`OCR_PROVIDER`)   | NER estructurado (`LLM_PROVIDER`)            | Chat (`M9`, futuro)                      |
+| ------------------------- | ---------------------- | -------------------------------------------- | ---------------------------------------- |
+| **Desarrollo / Pasantía** | `gemini` (default)     | `cerebras` (default) con fallback a `gemini` | Estrategia prevista, no implementada aún |
+| **Producción inicial**    | `gemini` (default)     | `cerebras` (default) con fallback a `gemini` | Cerebras o Gemini según cuota            |
+| **Documentos complejos**  | `mistral` ($0,002/pág) | Sin cambio                                   | Sin cambio                               |
+
+**Lógica de fallback:** Ante un error HTTP 429 (rate limit) o error de disponibilidad del proveedor primario Cerebras, el servicio reintenta automáticamente con `gemini-2.5-flash`. El fallo es transparente para el usuario y se registra en el log de auditoría (`AuditLog`).
+
+**Variables de entorno requeridas (`.env`):**
+
+```
+# Proveedores IA — obligatorias
+GOOGLE_API_KEY=...           # Google AI Studio — OCR siempre + LLM fallback
+CEREBRAS_API_KEY=...         # Cerebras Cloud — NER y Chat IA (primario)
+
+# Selección de proveedores — valores por defecto indicados
+OCR_PROVIDER=gemini          # gemini | mistral
+LLM_PROVIDER=cerebras        # gemini | cerebras (selector actual implementado para NER)
+
+# Solo si OCR_PROVIDER=mistral
+MISTRAL_API_KEY=...
+
+# Notificaciones por correo (M8)
+RESEND_API_KEY=...
+RESEND_FROM_EMAIL=notificaciones@sipac.example
+```
 
 ---
 
@@ -329,8 +496,9 @@ sipac/
 │   │   ├── User.ts                 ← Modelo ODM con métodos de seguridad
 │   │   └── AuditLog.ts             ← Log de auditoría inmutable
 │   ├── services/
-│   │   ├── ocr/                    Futuro: extracción de texto
-│   │   ├── ner/                    Futuro: extracción de entidades
+│   │   ├── ocr/                    Futuro: extracción de texto (GeminiOCRProvider, MistralOCRProvider)
+│   │   ├── ner/                    Futuro: extracción de entidades (usa LLMProvider)
+│   │   ├── llm/                    Futuro: fábrica multi-proveedor LLM (CerebrasLLMProvider, GeminiLLMProvider)
 │   │   └── storage/                Futuro: almacenamiento de archivos
 │   ├── plugins/
 │   │   ├── 01.mongodb.ts           ← Conexión MongoDB Atlas
@@ -415,26 +583,28 @@ sipac/
 
 ## 8. Herramientas de Desarrollo
 
-| Herramienta              | Propósito                                                             |
-| ------------------------ | --------------------------------------------------------------------- |
-| **pnpm**                 | Gestor de paquetes — más eficiente que npm; usado en todo el proyecto |
-| **VS Code**              | IDE principal con extensiones Vue, TypeScript, Mermaid y PlantUML     |
-| **Git + GitHub**         | Control de versiones y repositorio del proyecto de pasantía           |
-| **MongoDB Atlas**        | Cluster cloud gratuito (M0); sin instalación local de MongoDB         |
-| **Vercel AI SDK**        | Integración con Gemini y Mistral; `generateObject` con Zod            |
-| **Zod**                  | Validación de esquemas en tiempo de ejecución y tipado TypeScript     |
-| **PlantUML**             | Diagramas UML formales en archivos `.puml` de la carpeta `docs/`      |
-| **Mermaid**              | Diagramas inline en Markdown (extensión VS Code instalada)            |
-| **Postman / Hoppscotch** | Pruebas manuales de Nuxt API Routes                                   |
-| **MongoDB Compass**      | Exploración visual de documentos con discriminators en desarrollo     |
+| Herramienta                   | Propósito                                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ |
+| **pnpm**                      | Gestor de paquetes — más eficiente que npm; usado en todo el proyecto                            |
+| **VS Code**                   | IDE principal con extensiones Vue, TypeScript, Mermaid y PlantUML                                |
+| **Git + GitHub**              | Control de versiones y repositorio del proyecto de pasantía                                      |
+| **MongoDB Atlas**             | Cluster cloud gratuito (M0); sin instalación local de MongoDB                                    |
+| **Vercel AI SDK**             | Integración con Gemini, Cerebras y Mistral; structured outputs y `streamText` con Zod            |
+| **@ai-sdk/openai-compatible** | Conecta el Vercel AI SDK a Cerebras Inference (`https://api.cerebras.ai/v1`) sin SDK propietario |
+| **Cerebras Inference API**    | Proveedor LLM primario: `gpt-oss-120b` (NER + Chat) y `qwen-3-235b` (NER — futuro)               |
+| **Zod**                       | Validación de esquemas en tiempo de ejecución y tipado TypeScript                                |
+| **PlantUML**                  | Diagramas UML formales en archivos `.puml` de la carpeta `docs/`                                 |
+| **Mermaid**                   | Diagramas inline en Markdown (extensión VS Code instalada)                                       |
+| **Postman / Hoppscotch**      | Pruebas manuales de Nuxt API Routes                                                              |
+| **MongoDB Compass**           | Exploración visual de documentos con discriminators en desarrollo                                |
 
 ---
 
 ## 9. Decisiones Resueltas (Temporales)
 
-| Decisión                                         | Resolución                                                                                                                                                                                     |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Almacenamiento de archivos cargados**          | MongoDB GridFS para todos los archivos (ver ADR-07). Los archivos se almacenan en las colecciones `uploads.files` y `uploads.chunks`, accesibles mediante streaming a través de `GridFSBucket` |
-| **Estrategia de despliegue en producción**       | Vercel como plataforma principal (capa gratuita, CI/CD integrado con GitHub). Al usar GridFS en vez de filesystem local, no se requiere persistencia de disco en el servidor                   |
-| **Umbral de score para retry NER**               | Configurable vía `runtimeConfig.nerConfidenceThreshold` (default 0.70). Se ajustará durante pruebas con documentos reales sin necesidad de redespliegue                                        |
-| **Gestión de rate limit en free tier de Gemini** | Rate limit por usuario: 15 documentos/hora (configurable vía `runtimeConfig`). Con ~30 usuarios activos × 15 docs/hora = 450 calls/hora máx, dentro del free tier de 1.500 req/día de Gemini   |
+| Decisión                                               | Resolución                                                                                                                                                                                                                                            |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Almacenamiento de archivos cargados**                | MongoDB GridFS para todos los archivos (ver ADR-07). Los archivos se almacenan en las colecciones `uploads.files` y `uploads.chunks`, accesibles mediante streaming a través de `GridFSBucket`                                                        |
+| **Estrategia de despliegue en producción**             | Vercel como plataforma principal (capa gratuita, CI/CD integrado con GitHub). Al usar GridFS en vez de filesystem local, no se requiere persistencia de disco en el servidor                                                                          |
+| **Umbral de score para retry NER**                     | Configurable vía `runtimeConfig.nerConfidenceThreshold` (default 0.70). Se ajustará durante pruebas con documentos reales sin necesidad de redespliegue                                                                                               |
+| **Gestión de rate limit — estrategia multi-proveedor** | NER usa Cerebras (`gpt-oss-120b`) como primario con fallback automático a Gemini (`gemini-2.5-flash`). El mismo patrón queda previsto para Chat. Rate limit por usuario: 15 docs/hora. OCR de imágenes sigue usando Gemini como proveedor multimodal. |
