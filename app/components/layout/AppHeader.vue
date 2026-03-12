@@ -3,6 +3,9 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
 const { user, isAdmin, logout } = useAuth()
+const notificationsStore = useNotificationsStore()
+
+const showNotifications = ref(false)
 
 const initials = computed(() => {
   if (!user.value?.fullName) return '?'
@@ -80,6 +83,30 @@ const items = computed<DropdownMenuItem[][]>(() => [
     },
   ],
 ])
+
+const unreadCount = computed(() => notificationsStore.unreadCount)
+
+function openNotifications() {
+  showNotifications.value = true
+  void notificationsStore.fetchNotifications()
+}
+
+watch(
+  () => user.value?._id,
+  (nextUserId) => {
+    if (nextUserId) {
+      notificationsStore.startPolling()
+      return
+    }
+
+    notificationsStore.stopPolling()
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  notificationsStore.stopPolling()
+})
 </script>
 
 <template>
@@ -109,6 +136,24 @@ const items = computed<DropdownMenuItem[][]>(() => [
           {{ isAdmin ? 'Administrador' : 'Docente' }}
         </SipacBadge>
 
+        <div class="relative">
+          <SipacButton
+            color="neutral"
+            variant="ghost"
+            class="rounded-full p-2"
+            aria-label="Abrir notificaciones"
+            @click="openNotifications"
+          >
+            <UIcon name="i-lucide-bell" class="size-4.5" />
+          </SipacButton>
+          <span
+            v-if="unreadCount"
+            class="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-sipac-700 px-1.5 py-0.5 text-[0.65rem] font-semibold text-white"
+          >
+            {{ unreadCount > 9 ? '9+' : unreadCount }}
+          </span>
+        </div>
+
         <UDropdownMenu :items="items">
           <SipacButton
             color="neutral"
@@ -121,5 +166,11 @@ const items = computed<DropdownMenuItem[][]>(() => [
         </UDropdownMenu>
       </div>
     </div>
+
+    <UModal v-model:open="showNotifications" title="Notificaciones">
+      <template #body>
+        <DashboardNotificationsInbox />
+      </template>
+    </UModal>
   </header>
 </template>

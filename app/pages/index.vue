@@ -1,16 +1,14 @@
 <script setup lang="ts">
 const { user, isAdmin } = useAuth()
 const usersStore = useUsersStore()
-const toast = useToast()
-
-const prototypePrompt = ref('')
-const prototypeFiles = ref<File[] | undefined>(undefined)
 
 const quickPrompts = [
   'Resume los artículos publicados entre 2022 y 2025.',
   'Muéstrame documentos relacionados con innovación educativa.',
   'Identifica evidencias útiles para acreditación institucional.',
 ]
+
+const selectedPrompt = ref(quickPrompts[0] || '')
 
 const adminHighlights = computed(() => [
   {
@@ -32,48 +30,8 @@ const adminHighlights = computed(() => [
 
 const adminPreviewUsers = computed(() => usersStore.users.slice(0, 5))
 
-async function onPrototypeChatSubmit() {
-  if (!prototypePrompt.value.trim()) {
-    toast.add({
-      title: 'Escribe una consulta',
-      description: 'Usa una pregunta corta o selecciona uno de los prompts sugeridos.',
-      icon: 'i-lucide-message-circle-warning',
-      color: 'warning',
-    })
-    return
-  }
-
-  toast.add({
-    title: 'Consulta preparada',
-    description:
-      'La experiencia está pensada para ayudarte a formular preguntas claras y explorar tus evidencias con naturalidad.',
-    icon: 'i-lucide-sparkles',
-    color: 'info',
-  })
-}
-
 function fillPrompt(prompt: string) {
-  prototypePrompt.value = prompt
-}
-
-function onPrototypeUpload() {
-  if (!prototypeFiles.value?.length) {
-    toast.add({
-      title: 'Agrega un archivo',
-      description: 'Selecciona un PDF o una imagen válida para revisar el flujo de carga.',
-      icon: 'i-lucide-file-warning',
-      color: 'warning',
-    })
-    return
-  }
-
-  toast.add({
-    title: 'Carga documental preparada',
-    description:
-      'La interfaz ya prioriza formatos permitidos, claridad visual y una experiencia de carga más guiada.',
-    icon: 'i-lucide-check-circle',
-    color: 'success',
-  })
+  selectedPrompt.value = prompt
 }
 
 onMounted(async () => {
@@ -232,8 +190,8 @@ onMounted(async () => {
                 Workspace IA para explorar producción académica
               </h2>
               <p class="mt-2 max-w-2xl text-sm leading-6 text-text-muted">
-                Diseñado para futuras consultas sobre artículos, certificados, tesis y evidencias de
-                acreditación sin sobrecargar la interfaz.
+                La interfaz deja lista la conversación futura: prompts orientados a repositorio,
+                filtros naturales y continuidad con el procesamiento documental real.
               </p>
             </div>
 
@@ -241,21 +199,10 @@ onMounted(async () => {
           </div>
 
           <div class="panel-muted space-y-4 p-4 sm:p-5">
-            <label for="prototype-prompt" class="text-sm font-semibold text-text">
-              Formula una consulta de ejemplo
-            </label>
-            <UTextarea
-              id="prototype-prompt"
-              v-model="prototypePrompt"
-              :rows="4"
-              autoresize
-              :maxrows="8"
-              name="prototypePrompt"
-              color="neutral"
-              variant="outline"
-              placeholder="Ej.: Resume la productividad académica entre 2022 y 2025…"
-              class="w-full"
-            />
+            <div class="rounded-[1.4rem] border border-border/70 bg-white/80 p-4">
+              <p class="text-sm font-semibold text-text">Prompt recomendado</p>
+              <p class="mt-2 text-sm leading-6 text-text-muted">{{ selectedPrompt }}</p>
+            </div>
 
             <div class="flex flex-wrap gap-2">
               <SipacButton
@@ -270,15 +217,13 @@ onMounted(async () => {
               </SipacButton>
             </div>
 
-            <div class="flex flex-wrap items-center gap-3">
-              <SipacButton icon="i-lucide-sparkles" @click="onPrototypeChatSubmit">
-                Probar experiencia
-              </SipacButton>
-              <p class="text-sm text-text-muted">
-                Ensaya preguntas frecuentes y organiza mejor cómo quieres consultar tu producción
-                académica.
-              </p>
-            </div>
+            <UAlert
+              color="primary"
+              variant="outline"
+              icon="i-lucide-messages-square"
+              title="Próximo módulo conversacional"
+              description="El workspace IA ya quedó encuadrado para consultas sobre autores, fechas, temas e institución usando lenguaje natural."
+            />
           </div>
 
           <div class="grid gap-4 md:grid-cols-3">
@@ -309,56 +254,8 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div id="workspace-documentos" class="panel-surface fade-up stagger-2 space-y-5 p-6 sm:p-7">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <p class="section-chip">Carga documental</p>
-              <h2 class="mt-3 font-display text-3xl font-semibold text-text">
-                Segunda acción natural del docente
-              </h2>
-              <p class="mt-2 text-sm leading-6 text-text-muted">
-                El flujo se diseñó para sentirse claro, ordenado y confiable desde el primer
-                archivo.
-              </p>
-            </div>
-
-            <SipacBadge color="warning" variant="outline"> Carga guiada </SipacBadge>
-          </div>
-
-          <UFileUpload
-            v-model="prototypeFiles"
-            accept="application/pdf,image/png,image/jpeg"
-            color="neutral"
-            multiple
-            size="xl"
-            variant="area"
-            layout="list"
-            label="Arrastra PDFs o imágenes probatorias"
-            description="Carga académica con validación visual y jerarquía clara."
-            class="w-full"
-          />
-
-          <UAlert
-            color="neutral"
-            variant="outline"
-            icon="i-lucide-lock"
-            title="Carga con pasos claros"
-            description="Los formatos permitidos, el estado del proceso y las acciones siguientes deben entenderse sin esfuerzo."
-          />
-
-          <div class="flex flex-wrap items-center gap-3">
-            <SipacButton
-              icon="i-lucide-file-up"
-              color="neutral"
-              variant="soft"
-              @click="onPrototypeUpload"
-            >
-              Revisar flujo de carga
-            </SipacButton>
-            <span class="text-sm text-text-muted">
-              PDF, JPG, JPEG y PNG con una experiencia de carga más visible y mejor guiada.
-            </span>
-          </div>
+        <div id="workspace-documentos">
+          <DashboardDocumentsWorkspace />
         </div>
       </section>
 
@@ -419,14 +316,14 @@ onMounted(async () => {
               </span>
               <div>
                 <h3 class="font-semibold text-text">Seguridad visible</h3>
-                <p class="text-sm text-text-muted">Control que orienta, no que interrumpe</p>
+                <p class="text-sm text-text-muted">Estados, cola y avisos sin perder claridad</p>
               </div>
             </div>
           </template>
 
           <p class="text-sm leading-6 text-text-muted">
-            La navegación, los estados y las acciones visibles ayudan a trabajar con más serenidad y
-            menos fricción.
+            La carga documental ahora expone validación real, seguimiento de OCR y notificaciones
+            visibles sin sacar al usuario del flujo principal.
           </p>
         </SipacCard>
       </section>
