@@ -31,6 +31,21 @@ export function createValidationError(error: ZodError) {
   })
 }
 
+export function createBadRequestError(message: string, details?: unknown) {
+  return createError({
+    statusCode: 400,
+    message,
+    data: {
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message,
+        ...(details !== undefined ? { details } : {}),
+      },
+    },
+  })
+}
+
 export function createAuthenticationError(message = 'Credenciales inválidas') {
   return createError({
     statusCode: 401,
@@ -88,6 +103,17 @@ export function createRateLimitError(retryAfterSeconds?: number) {
         message,
         ...(retryAfterSeconds && { retryAfter: retryAfterSeconds }),
       },
+    },
+  })
+}
+
+export function createPayloadTooLargeError(message = 'El archivo supera el tamaño máximo permitido') {
+  return createError({
+    statusCode: 413,
+    message,
+    data: {
+      success: false,
+      error: { code: 'PAYLOAD_TOO_LARGE', message },
     },
   })
 }

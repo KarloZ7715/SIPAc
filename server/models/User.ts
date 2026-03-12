@@ -12,6 +12,7 @@ export interface IUserMethods {
 }
 
 export type IUserDocument = Document<unknown, object, IUser> & IUser & IUserMethods
+type UserModel = mongoose.Model<IUser, Record<string, never>, IUserMethods>
 
 const userSchema = new Schema<IUser, Record<string, never>, IUserMethods>(
   {
@@ -122,4 +123,6 @@ userSchema.methods.resetLoginAttempts = async function (this: IUserDocument) {
   await this.save()
 }
 
-export default models.User || model<IUser>('User', userSchema)
+const User = (models.User as UserModel | undefined) || model<IUser, UserModel>('User', userSchema)
+
+export default User

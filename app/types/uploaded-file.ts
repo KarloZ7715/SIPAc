@@ -1,4 +1,5 @@
 import type { DatabaseId } from './database'
+import type { ProductType } from './academic-product'
 
 export const PROCESSING_STATUSES = ['pending', 'processing', 'completed', 'error'] as const
 export type ProcessingStatus = (typeof PROCESSING_STATUSES)[number]
@@ -16,6 +17,7 @@ export interface IUploadedFile {
   uploadedBy: DatabaseId
   originalFilename: string
   gridfsFileId: DatabaseId
+  productType: ProductType
   mimeType: AllowedMimeType
   fileSizeBytes: number
   processingStatus: ProcessingStatus
@@ -32,6 +34,7 @@ export interface IUploadedFile {
 export interface UploadedFilePublic {
   _id: string
   originalFilename: string
+  productType: ProductType
   mimeType: AllowedMimeType
   fileSizeBytes: number
   processingStatus: ProcessingStatus
@@ -39,4 +42,17 @@ export interface UploadedFilePublic {
   ocrProvider?: OcrProvider
   ocrConfidence?: number
   createdAt: string
+}
+
+export interface UploadMetadataDTO {
+  productType: ProductType
+}
+
+export interface UploadedFileStatusDTO {
+  processingStatus: ProcessingStatus
+  processingError?: string
+  rawExtractedText?: string
+  ocrProvider?: OcrProvider
+  ocrConfidence?: number
+  academicProductId?: string
 }

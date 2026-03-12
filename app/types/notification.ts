@@ -22,3 +22,23 @@ export interface INotification {
   emailSent: boolean
   createdAt: Date
 }
+
+export interface RelatedResourcePublic {
+  kind: RelatedResourceKind
+  id: string
+}
+
+export interface NotificationPublic {
+  _id: string
+  type: NotificationType
+  title: string
+  message: string
+  relatedResource?: RelatedResourcePublic
+  isRead: boolean
+  emailSent: boolean
+  createdAt: string
+}
+
+export interface NotificationListQuery {
+  unreadOnly?: boolean
+}

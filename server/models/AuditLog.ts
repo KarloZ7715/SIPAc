@@ -49,4 +49,8 @@ const auditLogSchema = new Schema<IAuditLog>(
 auditLogSchema.index({ resource: 1, action: 1, createdAt: -1 }, { name: 'idx_resource_action' })
 auditLogSchema.index({ userId: 1, createdAt: -1 }, { name: 'idx_user_timeline' })
 
-export default models.AuditLog || model<IAuditLog>('AuditLog', auditLogSchema)
+const AuditLog =
+  (models.AuditLog as mongoose.Model<IAuditLog> | undefined) ||
+  model<IAuditLog>('AuditLog', auditLogSchema)
+
+export default AuditLog
