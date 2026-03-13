@@ -102,13 +102,13 @@ onMounted(async () => {
             </SipacButton>
             <SipacButton
               v-if="!isAdmin"
-              to="/#workspace-documentos"
+              to="/workspace-documents"
               icon="i-lucide-folder-up"
               color="neutral"
               variant="soft"
               size="lg"
             >
-              Explorar carga documental
+              Abrir workspace documental
             </SipacButton>
             <SipacButton v-if="isAdmin" to="/admin/users" icon="i-lucide-users-round" size="lg">
               Gestionar usuarios
@@ -195,7 +195,7 @@ onMounted(async () => {
               </p>
             </div>
 
-            <SipacBadge color="primary" variant="subtle" size="lg"> Consulta guiada </SipacBadge>
+            <!-- <SipacBadge color="primary" variant="subtle" size="lg"> Consulta guiada </SipacBadge> -->
           </div>
 
           <div class="panel-muted space-y-4 p-4 sm:p-5">
@@ -322,8 +322,8 @@ onMounted(async () => {
           </template>
 
           <p class="text-sm leading-6 text-text-muted">
-            La carga documental ahora expone validación real, seguimiento de OCR y notificaciones
-            visibles sin sacar al usuario del flujo principal.
+            La carga documental ahora vive en un espacio propio, con estados claros y corrección
+            guiada antes de guardar.
           </p>
         </SipacCard>
       </section>

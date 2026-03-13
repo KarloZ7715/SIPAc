@@ -44,10 +44,11 @@ const docenteItems: SidebarItem[] = [
   },
   {
     label: 'Documentos',
-    to: '/#workspace-documentos',
+    to: '/workspace-documents',
     icon: 'i-lucide-folder-up',
-    caption: 'Carga académica e institucional',
-    kind: 'anchor',
+    caption: 'Subir, revisar y guardar documentos',
+    match: '/workspace-documents',
+    kind: 'route',
   },
   {
     label: 'Mi perfil',

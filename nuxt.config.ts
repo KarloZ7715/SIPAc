@@ -40,6 +40,7 @@ export default defineNuxtConfig({
     public: {
       appName: 'SIPAc',
       appDescription: 'Sistema Inteligente de Productividad Académica',
+      enableTestingMetrics: process.env.NUXT_PUBLIC_ENABLE_TESTING_METRICS === 'true',
     },
   },
 
@@ -50,6 +51,9 @@ export default defineNuxtConfig({
   },
 
   security: {
+    // Desactivamos nuxt-security completo en desarrollo para evitar conflictos
+    // con CSP (por ejemplo, bloqueos de pdfjs-dist por 'unsafe-eval').
+    enabled: process.env.NODE_ENV === 'production',
     headers: {
       crossOriginEmbedderPolicy: false,
       contentSecurityPolicy: {

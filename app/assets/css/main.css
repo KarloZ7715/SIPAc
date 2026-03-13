@@ -68,6 +68,8 @@
   --animate-fade-up: fade-up 0.55s var(--ease-sipac);
   --animate-fade-in: fade-in 0.35s ease-out;
   --animate-glow-pulse: glow-pulse 3.2s ease-in-out infinite;
+  --animate-progress-sheen: progress-sheen 2.6s ease-in-out infinite;
+  --animate-analysis-bar: analysis-bar 1.8s ease-in-out infinite;
 
   @keyframes fade-up {
     from {
@@ -101,6 +103,29 @@
     50% {
       opacity: 0.9;
       transform: scale(1.04);
+    }
+  }
+
+  @keyframes progress-sheen {
+    from {
+      transform: translateX(-160%);
+    }
+
+    to {
+      transform: translateX(180%);
+    }
+  }
+
+  @keyframes analysis-bar {
+    0%,
+    100% {
+      opacity: 0.82;
+      transform: scaleX(0.985);
+    }
+
+    50% {
+      opacity: 1;
+      transform: scaleX(1);
     }
   }
 }
@@ -230,6 +255,197 @@
       linear-gradient(90deg, rgb(18 63 40 / 0.05) 1px, transparent 1px),
       linear-gradient(rgb(18 63 40 / 0.05) 1px, transparent 1px);
     background-size: 18px 18px;
+  }
+
+  .progress-glow {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .progress-glow::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.45), transparent);
+    animation: var(--animate-progress-sheen);
+    pointer-events: none;
+  }
+
+  .state-shell {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stage-progress-rail {
+    position: relative;
+    height: 0.375rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgb(217 229 220 / 0.75);
+  }
+
+  .stage-progress-bar {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--color-sipac-700), var(--color-sipac-300));
+    transition:
+      width 280ms var(--ease-sipac),
+      opacity 180ms ease;
+  }
+
+  .stage-pill {
+    @apply flex items-center gap-3 rounded-[1rem] border border-border/70 bg-white/82 px-3 py-2;
+    transition:
+      transform 180ms var(--ease-sipac),
+      border-color 180ms ease,
+      background-color 180ms ease,
+      box-shadow 180ms var(--ease-sipac);
+  }
+
+  .stage-pill-active {
+    @apply border-sipac-200 bg-sipac-50/78;
+    box-shadow: 0 14px 26px -24px rgb(17 46 29 / 0.25);
+  }
+
+  .stage-pill-complete {
+    @apply border-sipac-200/85 bg-white;
+  }
+
+  .signal-dot {
+    @apply flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-muted text-xs font-semibold text-text-soft;
+    transition:
+      transform 180ms var(--ease-sipac),
+      background-color 180ms ease,
+      color 180ms ease,
+      box-shadow 180ms var(--ease-sipac);
+  }
+
+  .signal-dot-active {
+    @apply bg-sipac-100 text-sipac-800;
+    box-shadow: 0 0 0 5px rgb(157 213 175 / 0.18);
+  }
+
+  .signal-dot-complete {
+    @apply bg-sipac-700 text-white;
+  }
+
+  .loader-orbit {
+    position: relative;
+    display: inline-flex;
+    height: 2.25rem;
+    width: 2.25rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid rgb(29 99 60 / 0.16);
+    background: radial-gradient(circle at center, rgb(255 255 255 / 0.95), rgb(227 245 232 / 0.82));
+  }
+
+  .loader-orbit::before {
+    content: '';
+    position: absolute;
+    inset: 0.3rem;
+    border-radius: 999px;
+    border: 2px solid rgb(157 213 175 / 0.35);
+    border-top-color: var(--color-sipac-700);
+    animation: spin 1.15s linear infinite;
+  }
+
+  .loader-orbit-dot {
+    height: 0.45rem;
+    width: 0.45rem;
+    border-radius: 999px;
+    background: var(--color-sipac-700);
+    box-shadow: 0 0 0 6px rgb(157 213 175 / 0.16);
+  }
+
+  .analysis-meter {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .analysis-pulse-track {
+    position: relative;
+    height: 0.4rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.9);
+  }
+
+  .analysis-pulse-bar {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgb(29 99 60 / 0.95), rgb(111 188 135 / 0.9));
+    transition: width 420ms var(--ease-sipac);
+    animation: var(--animate-analysis-bar);
+    transform-origin: left center;
+  }
+
+  .analysis-step-dot {
+    margin-top: 0.55rem;
+    display: inline-flex;
+    height: 0.5rem;
+    width: 0.5rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: var(--color-sipac-500);
+    box-shadow: 0 0 0 7px rgb(157 213 175 / 0.15);
+  }
+
+  .analysis-highlights-shell {
+    --analysis-highlight-row-height: 5.5rem;
+    --analysis-highlight-gap: 0.75rem;
+    position: relative;
+    overflow: hidden;
+    min-height: calc(
+      (var(--analysis-highlight-row-height) * var(--analysis-highlights-capacity, 4)) +
+        (var(--analysis-highlight-gap) * (var(--analysis-highlights-capacity, 4) - 1))
+    );
+  }
+
+  .analysis-highlights-list {
+    display: grid;
+    gap: var(--analysis-highlight-gap);
+    align-content: start;
+  }
+
+  .analysis-highlight-card {
+    min-height: var(--analysis-highlight-row-height);
+    will-change: transform, opacity;
+  }
+
+  .analysis-highlight-card-leaving {
+    pointer-events: none;
+    position: absolute;
+    inset-inline: 0;
+    z-index: 0;
+  }
+
+  .analysis-highlight-move,
+  .analysis-highlight-enter-active,
+  .analysis-highlight-leave-active {
+    transition:
+      opacity 260ms var(--ease-sipac),
+      transform 260ms var(--ease-sipac);
+  }
+
+  .analysis-highlight-enter-from,
+  .analysis-highlight-leave-to {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  .soft-rise-enter-active,
+  .soft-rise-leave-active {
+    transition:
+      opacity 260ms var(--ease-sipac),
+      transform 260ms var(--ease-sipac);
+  }
+
+  .soft-rise-enter-from,
+  .soft-rise-leave-to {
+    opacity: 0;
+    transform: translateY(12px);
   }
 }
 

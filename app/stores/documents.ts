@@ -1,21 +1,65 @@
 import type {
+  AcademicProductPublic,
   ApiSuccessResponse,
+  ProductWorkspaceDraftDTO,
   ProductType,
+  UpdateAcademicProductDTO,
   UploadedFilePublic,
   UploadedFileStatusDTO,
 } from '~~/app/types'
+import { PRODUCT_TYPES } from '~~/app/types'
 
 type UploadResponse = ApiSuccessResponse<{ uploadedFile: UploadedFilePublic }>
 type UploadStatusResponse = ApiSuccessResponse<UploadedFileStatusDTO>
 type DeleteUploadResponse = ApiSuccessResponse<{ message: string }>
+type ProductDraftResponse = ApiSuccessResponse<{ draft: ProductWorkspaceDraftDTO | null }>
+
+export type WorkspaceStage = 'empty' | 'draft' | 'analyzing' | 'review' | 'ready' | 'confirmed'
+
+export interface WorkspaceMetadataDraft {
+  title: string
+  authors: string[]
+  institution: string
+  year: string
+  doi: string
+  keywords: string[]
+  notes: string
+}
 
 export interface TrackedDocument extends UploadedFilePublic, UploadedFileStatusDTO {
   academicProductId?: string
 }
 
+function createEmptyWorkspaceMetadata(): WorkspaceMetadataDraft {
+  return {
+    title: '',
+    authors: [],
+    institution: '',
+    year: '',
+    doi: '',
+    keywords: [],
+    notes: '',
+  }
+}
+
+function buildUploadedFilePreviewUrl(uploadId: string) {
+  return `/api/upload/${uploadId}/file`
+}
+
 export const useDocumentsStore = defineStore('documents', () => {
   const documents = ref<TrackedDocument[]>([])
   const uploading = ref(false)
+  const loadingDraft = ref(false)
+  const savingDraft = ref(false)
+  const cancelingDraft = ref(false)
+  const activeUploadId = ref<string | null>(null)
+  const activeAcademicProductId = ref<string | null>(null)
+  const draftProduct = ref<ProductWorkspaceDraftDTO | null>(null)
+  const workspaceDraftFile = shallowRef<File | null>(null)
+  const workspaceDraftPreviewUrl = ref<string | null>(null)
+  const workspaceDraftProductType = ref<ProductType>('article')
+  const workspaceStage = ref<WorkspaceStage>('empty')
+  const workspaceDetectedMetadata = reactive<WorkspaceMetadataDraft>(createEmptyWorkspaceMetadata())
   let pollTimer: ReturnType<typeof setInterval> | null = null
 
   const activeDocuments = computed(() =>
@@ -23,6 +67,155 @@ export const useDocumentsStore = defineStore('documents', () => {
       ['pending', 'processing'].includes(document.processingStatus),
     ),
   )
+
+  const hasWorkspaceDraft = computed(
+    () => !!workspaceDraftFile.value || !!draftProduct.value || !!activeTrackedDocument.value,
+  )
+  const hasPersistedDraft = computed(() => !!draftProduct.value)
+  const activeTrackedDocument = computed(() => {
+    if (!activeUploadId.value) {
+      return null
+    }
+
+    return documents.value.find((document) => document._id === activeUploadId.value) ?? null
+  })
+
+  const canConfirmDraft = computed(
+    () =>
+      PRODUCT_TYPES.includes(workspaceDraftProductType.value) &&
+      workspaceDetectedMetadata.title.trim().length > 0 &&
+      workspaceDetectedMetadata.authors.some((author) => author.trim().length > 0),
+  )
+
+  function resetWorkspaceMetadata() {
+    Object.assign(workspaceDetectedMetadata, createEmptyWorkspaceMetadata())
+  }
+
+  function replaceWorkspacePreviewUrl(url: string | null) {
+    if (import.meta.client && workspaceDraftPreviewUrl.value) {
+      try {
+        URL.revokeObjectURL(workspaceDraftPreviewUrl.value)
+      } catch {
+        // Ignore non-blob URLs.
+      }
+    }
+
+    workspaceDraftPreviewUrl.value = url
+  }
+
+  function setWorkspacePreviewFromFile(file: File | null) {
+    replaceWorkspacePreviewUrl(import.meta.client && file ? URL.createObjectURL(file) : null)
+  }
+
+  function setWorkspacePreviewFromUpload(uploadId: string | null) {
+    replaceWorkspacePreviewUrl(uploadId ? buildUploadedFilePreviewUrl(uploadId) : null)
+  }
+
+  function setWorkspaceProductType(productType: ProductType) {
+    workspaceDraftProductType.value = productType
+    syncReviewStage()
+  }
+
+  function prepareWorkspaceDraft(file: File, productType: ProductType = 'article') {
+    workspaceDraftFile.value = file
+    workspaceDraftProductType.value = productType
+    workspaceStage.value = 'draft'
+    activeUploadId.value = null
+    draftProduct.value = null
+    activeAcademicProductId.value = null
+    resetWorkspaceMetadata()
+    setWorkspacePreviewFromFile(file)
+  }
+
+  function setWorkspaceStage(stage: WorkspaceStage) {
+    workspaceStage.value = stage
+  }
+
+  function updateDetectedMetadata(payload: Partial<WorkspaceMetadataDraft>) {
+    Object.assign(workspaceDetectedMetadata, payload)
+    syncReviewStage()
+  }
+
+  function clearWorkspaceDraft() {
+    workspaceDraftFile.value = null
+    workspaceDraftProductType.value = 'article'
+    workspaceStage.value = 'empty'
+    activeUploadId.value = null
+    activeAcademicProductId.value = null
+    draftProduct.value = null
+    resetWorkspaceMetadata()
+    setWorkspacePreviewFromUpload(null)
+  }
+
+  function syncReviewStage() {
+    if (workspaceStage.value === 'review' || workspaceStage.value === 'ready') {
+      workspaceStage.value = canConfirmDraft.value ? 'ready' : 'review'
+    }
+  }
+
+  function toWorkspaceMetadata(product: AcademicProductPublic): WorkspaceMetadataDraft {
+    const sourceDate = product.manualMetadata.date ?? product.extractedEntities.date?.value
+
+    return {
+      title: product.manualMetadata.title ?? product.extractedEntities.title?.value ?? '',
+      authors:
+        product.manualMetadata.authors.length > 0
+          ? product.manualMetadata.authors
+          : product.extractedEntities.authors.map((a) => a.value),
+      institution:
+        product.manualMetadata.institution ?? product.extractedEntities.institution?.value ?? '',
+      year: sourceDate ? String(new Date(sourceDate).getUTCFullYear()) : '',
+      doi: product.manualMetadata.doi ?? product.extractedEntities.doi?.value ?? '',
+      keywords:
+        product.manualMetadata.keywords.length > 0
+          ? product.manualMetadata.keywords
+          : product.extractedEntities.keywords.map((k) => k.value),
+      notes: product.manualMetadata.notes ?? '',
+    }
+  }
+
+  function applyDraftSnapshot(snapshot: ProductWorkspaceDraftDTO) {
+    draftProduct.value = snapshot
+    activeAcademicProductId.value = snapshot.product._id
+    activeUploadId.value = snapshot.uploadedFile._id
+    workspaceDraftProductType.value = snapshot.product.productType
+    Object.assign(workspaceDetectedMetadata, toWorkspaceMetadata(snapshot.product))
+    upsertDocument(snapshot.uploadedFile)
+    setWorkspacePreviewFromUpload(snapshot.uploadedFile._id)
+
+    if (snapshot.product.reviewStatus === 'confirmed') {
+      workspaceStage.value = 'confirmed'
+      return
+    }
+
+    workspaceStage.value = canConfirmDraft.value ? 'ready' : 'review'
+  }
+
+  function createManualMetadataPayload(currentProduct?: AcademicProductPublic) {
+    const selectedYear = workspaceDetectedMetadata.year.trim()
+    const fallbackDate =
+      currentProduct?.manualMetadata.date ?? currentProduct?.extractedEntities.date?.value
+    const fallbackYear = fallbackDate ? String(new Date(fallbackDate).getUTCFullYear()) : ''
+
+    let date: string | undefined
+
+    if (selectedYear) {
+      date =
+        fallbackDate && fallbackYear === selectedYear
+          ? fallbackDate
+          : new Date(`${selectedYear}-01-01T00:00:00.000Z`).toISOString()
+    }
+
+    return {
+      title: workspaceDetectedMetadata.title.trim() || undefined,
+      authors: workspaceDetectedMetadata.authors,
+      institution: workspaceDetectedMetadata.institution.trim() || undefined,
+      date,
+      doi: workspaceDetectedMetadata.doi.trim() || undefined,
+      keywords: workspaceDetectedMetadata.keywords,
+      notes: workspaceDetectedMetadata.notes.trim() || undefined,
+    }
+  }
 
   function upsertDocument(payload: TrackedDocument) {
     const nextDocuments = [...documents.value]
@@ -42,20 +235,24 @@ export const useDocumentsStore = defineStore('documents', () => {
     )
   }
 
-  async function uploadDocument(file: File, productType: ProductType) {
+  async function uploadDocument(file: File) {
     uploading.value = true
+    workspaceStage.value = 'analyzing'
+    draftProduct.value = null
+    activeAcademicProductId.value = null
 
     try {
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('productType', productType)
 
       const response = await $fetch<UploadResponse>('/api/upload', {
         method: 'POST',
         body: formData,
       })
 
+      activeUploadId.value = response.data.uploadedFile._id
       upsertDocument(response.data.uploadedFile)
+      setWorkspacePreviewFromUpload(response.data.uploadedFile._id)
       await refreshDocumentStatus(response.data.uploadedFile._id)
       startPolling()
 
@@ -77,6 +274,17 @@ export const useDocumentsStore = defineStore('documents', () => {
       ...existing,
       ...response.data,
     })
+
+    if (response.data.academicProductId) {
+      activeUploadId.value = documentId
+      activeAcademicProductId.value = response.data.academicProductId
+
+      if (response.data.reviewStatus === 'confirmed') {
+        workspaceStage.value = 'confirmed'
+      } else if (response.data.processingStatus === 'completed') {
+        await loadDraftProduct(response.data.academicProductId)
+      }
+    }
   }
 
   async function pollActiveStatuses() {
@@ -104,6 +312,134 @@ export const useDocumentsStore = defineStore('documents', () => {
     }
   }
 
+  async function loadCurrentDraft() {
+    loadingDraft.value = true
+
+    try {
+      const response = await $fetch<ProductDraftResponse>('/api/products/drafts/current')
+
+      if (!response.data.draft) {
+        if (!workspaceDraftFile.value) {
+          clearWorkspaceDraft()
+        }
+
+        return null
+      }
+
+      applyDraftSnapshot(response.data.draft)
+      return response.data.draft
+    } finally {
+      loadingDraft.value = false
+    }
+  }
+
+  async function loadDraftProduct(productId: string) {
+    loadingDraft.value = true
+
+    try {
+      const response = await $fetch<ProductDraftResponse>(`/api/products/${productId}`)
+
+      if (!response.data.draft) {
+        return null
+      }
+
+      applyDraftSnapshot(response.data.draft)
+      return response.data.draft
+    } finally {
+      loadingDraft.value = false
+    }
+  }
+
+  async function saveDraftChanges(extra?: Partial<UpdateAcademicProductDTO>) {
+    if (!activeAcademicProductId.value || !draftProduct.value) {
+      return null
+    }
+
+    savingDraft.value = true
+
+    try {
+      const basePayload: UpdateAcademicProductDTO = {
+        action: 'save-draft',
+        productType: workspaceDraftProductType.value,
+        manualMetadata: createManualMetadataPayload(draftProduct.value.product),
+      }
+
+      const payload: UpdateAcademicProductDTO = {
+        ...extra,
+        ...basePayload,
+      }
+
+      const response = await $fetch<ProductDraftResponse>(
+        `/api/products/${activeAcademicProductId.value}`,
+        {
+          method: 'PATCH',
+          body: payload,
+        },
+      )
+
+      if (response.data.draft) {
+        applyDraftSnapshot(response.data.draft)
+      }
+
+      return response.data.draft
+    } finally {
+      savingDraft.value = false
+    }
+  }
+
+  async function confirmDraft(extra?: Partial<UpdateAcademicProductDTO>) {
+    if (!activeAcademicProductId.value || !draftProduct.value) {
+      return null
+    }
+
+    savingDraft.value = true
+
+    try {
+      const basePayload: UpdateAcademicProductDTO = {
+        action: 'confirm',
+        productType: workspaceDraftProductType.value,
+        manualMetadata: createManualMetadataPayload(draftProduct.value.product),
+      }
+
+      const payload: UpdateAcademicProductDTO = {
+        ...extra,
+        ...basePayload,
+      }
+
+      const response = await $fetch<ProductDraftResponse>(
+        `/api/products/${activeAcademicProductId.value}`,
+        {
+          method: 'PATCH',
+          body: payload,
+        },
+      )
+
+      if (response.data.draft) {
+        applyDraftSnapshot(response.data.draft)
+      }
+
+      return response.data.draft
+    } finally {
+      savingDraft.value = false
+    }
+  }
+
+  async function cancelDraft() {
+    if (!activeUploadId.value) {
+      clearWorkspaceDraft()
+      return
+    }
+
+    cancelingDraft.value = true
+
+    try {
+      await deleteDocument(activeUploadId.value)
+      clearWorkspaceDraft()
+    } finally {
+      cancelingDraft.value = false
+    }
+  }
+
   function startPolling(intervalMs = 5000) {
     if (!import.meta.client || pollTimer) {
       return
@@ -124,12 +460,38 @@ export const useDocumentsStore = defineStore('documents', () => {
   return {
     documents,
     uploading,
+    loadingDraft,
+    savingDraft,
+    cancelingDraft,
+    activeUploadId,
+    activeAcademicProductId,
+    draftProduct,
     activeDocuments,
+    activeTrackedDocument,
+    hasPersistedDraft,
+    canConfirmDraft,
+    hasWorkspaceDraft,
+    workspaceDraftFile,
+    workspaceDraftPreviewUrl,
+    workspaceDraftProductType,
+    workspaceStage,
+    workspaceDetectedMetadata,
     uploadDocument,
     refreshDocumentStatus,
     pollActiveStatuses,
     deleteDocument,
+    loadCurrentDraft,
+    loadDraftProduct,
+    saveDraftChanges,
+    confirmDraft,
+    cancelDraft,
     startPolling,
     stopPolling,
+    setWorkspaceProductType,
+    prepareWorkspaceDraft,
+    setWorkspaceStage,
+    updateDetectedMetadata,
+    clearWorkspaceDraft,
+    resetWorkspaceMetadata,
   }
 })
