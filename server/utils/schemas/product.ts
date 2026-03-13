@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { PRODUCT_TYPES } from '~~/app/types'
 
+export const productReviewActionSchema = z.enum(['save-draft', 'confirm'])
+
 export const manualMetadataSchema = z.object({
   title: z.string().trim().optional(),
   authors: z.array(z.string().trim()).default([]),
@@ -11,8 +13,115 @@ export const manualMetadataSchema = z.object({
   notes: z.string().max(2000, 'Las notas no pueden superar los 2000 caracteres').optional(),
 })
 
+const articleUpdateSchema = z
+  .object({
+    journalName: z.string().trim().optional(),
+    volume: z.string().trim().optional(),
+    issue: z.string().trim().optional(),
+    pages: z
+      .string()
+      .trim()
+      .regex(/^\d+(-\d+)?$/, 'Formato de páginas inválido')
+      .optional(),
+    issn: z.string().trim().optional(),
+    indexing: z.array(z.string().trim()).max(10).optional(),
+    openAccess: z.boolean().optional(),
+    articleType: z.enum(['original', 'revision', 'corto', 'carta', 'otro']).optional(),
+    journalCountry: z.string().trim().optional(),
+    journalAbbreviation: z.string().trim().optional(),
+    publisher: z.string().trim().optional(),
+    areaOfKnowledge: z.string().trim().optional(),
+    language: z.string().trim().optional(),
+    license: z.string().trim().optional(),
+  })
+  .partial()
+
+const thesisUpdateSchema = z
+  .object({
+    thesisLevel: z.enum(['pregrado', 'maestria', 'especializacion', 'doctorado']).optional(),
+    director: z.string().trim().optional(),
+    university: z.string().trim().optional(),
+    faculty: z.string().trim().optional(),
+    approvalDate: z.coerce.date().optional(),
+    repositoryUrl: z.string().trim().url('La URL del repositorio debe ser válida').optional(),
+    program: z.string().trim().optional(),
+    jurors: z.array(z.string().trim()).optional(),
+    degreeGrantor: z.string().trim().optional(),
+    degreeName: z.string().trim().optional(),
+    areaOfKnowledge: z.string().trim().optional(),
+    modality: z.enum(['investigacion', 'monografia', 'proyecto_aplicado', 'otro']).optional(),
+    language: z.string().trim().optional(),
+    pages: z.coerce.number().int().positive().optional(),
+    projectCode: z.string().trim().optional(),
+  })
+  .partial()
+
+const conferencePaperUpdateSchema = z
+  .object({
+    eventName: z.string().trim().optional(),
+    eventCity: z.string().trim().optional(),
+    eventCountry: z.string().trim().optional(),
+    eventDate: z.coerce.date().optional(),
+    presentationType: z.enum(['oral', 'poster', 'workshop', 'keynote']).optional(),
+    isbn: z.string().trim().optional(),
+    conferenceAcronym: z.string().trim().optional(),
+    conferenceNumber: z.string().trim().optional(),
+    proceedingsTitle: z.string().trim().optional(),
+    publisher: z.string().trim().optional(),
+    pages: z
+      .string()
+      .trim()
+      .regex(/^\d+(-\d+)?$/, 'Formato de páginas inválido')
+      .optional(),
+    eventSponsor: z.string().trim().optional(),
+    areaOfKnowledge: z.string().trim().optional(),
+    language: z.string().trim().optional(),
+  })
+  .partial()
+
+const certificateUpdateSchema = z
+  .object({
+    issuingEntity: z.string().trim().optional(),
+    certificateType: z
+      .enum(['participacion', 'ponente', 'asistencia', 'instructor', 'otro'])
+      .optional(),
+    relatedEvent: z.string().trim().optional(),
+    issueDate: z.coerce.date().optional(),
+    expirationDate: z.coerce.date().optional(),
+    hours: z.coerce.number().nonnegative().optional(),
+    location: z.string().trim().optional(),
+    modality: z.enum(['presencial', 'virtual', 'hibrida']).optional(),
+    areaOfKnowledge: z.string().trim().optional(),
+    projectCode: z.string().trim().optional(),
+  })
+  .partial()
+
+const researchProjectUpdateSchema = z
+  .object({
+    projectCode: z.string().trim().optional(),
+    fundingSource: z.string().trim().optional(),
+    startDate: z.coerce.date().optional(),
+    endDate: z.coerce.date().optional(),
+    projectStatus: z.enum(['active', 'completed', 'suspended']).optional(),
+    coResearchers: z.array(z.string().trim()).optional(),
+    principalInvestigatorName: z.string().trim().optional(),
+    institution: z.string().trim().optional(),
+    programOrCall: z.string().trim().optional(),
+    areaOfKnowledge: z.string().trim().optional(),
+    keywords: z.array(z.string().trim()).optional(),
+    budget: z.coerce.number().nonnegative().optional(),
+  })
+  .partial()
+
 export const updateProductSchema = z.object({
   manualMetadata: manualMetadataSchema.optional(),
+  action: productReviewActionSchema.optional(),
+  productType: z.enum(PRODUCT_TYPES).optional(),
+  article: articleUpdateSchema.optional(),
+  thesis: thesisUpdateSchema.optional(),
+  conferencePaper: conferencePaperUpdateSchema.optional(),
+  certificate: certificateUpdateSchema.optional(),
+  researchProject: researchProjectUpdateSchema.optional(),
 })
 
 export const productQuerySchema = z.object({

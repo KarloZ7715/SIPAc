@@ -107,7 +107,9 @@ export function createRateLimitError(retryAfterSeconds?: number) {
   })
 }
 
-export function createPayloadTooLargeError(message = 'El archivo supera el tamaño máximo permitido') {
+export function createPayloadTooLargeError(
+  message = 'El archivo supera el tamaño máximo permitido',
+) {
   return createError({
     statusCode: 413,
     message,

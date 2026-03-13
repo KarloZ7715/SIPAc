@@ -1,21 +1,53 @@
 import mongoose from 'mongoose'
-import { PRODUCT_TYPES, type IAcademicProduct } from '~~/app/types'
+import { PRODUCT_REVIEW_STATUSES, PRODUCT_TYPES, type IAcademicProduct } from '~~/app/types'
 
 const { Schema, model, models } = mongoose
 
+const documentAnchorSchema = new Schema(
+  {
+    page: { type: Number, required: true },
+    x: { type: Number, required: true },
+    y: { type: Number, required: true },
+    width: { type: Number, required: true },
+    height: { type: Number, required: true },
+    confidence: { type: Number, required: true },
+    sourceText: { type: String },
+    provider: {
+      type: String,
+      enum: ['pdfjs_native', 'gemini_vision', 'mistral_ocr_3'],
+      required: true,
+    },
+  },
+  { _id: false },
+)
+
+const stringEvidenceSchema = new Schema(
+  {
+    value: { type: String, trim: true },
+    confidence: { type: Number, default: 0 },
+    anchors: { type: [documentAnchorSchema], default: [] },
+  },
+  { _id: false },
+)
+
+const dateEvidenceSchema = new Schema(
+  {
+    value: { type: Date },
+    confidence: { type: Number, default: 0 },
+    anchors: { type: [documentAnchorSchema], default: [] },
+  },
+  { _id: false },
+)
+
 const extractedEntitiesSchema = new Schema(
   {
-    authors: { type: [String], default: [] },
-    title: { type: String, trim: true },
-    institution: { type: String, trim: true },
-    date: { type: Date, default: null },
-    keywords: { type: [String], default: [] },
-    doi: {
-      type: String,
-      trim: true,
-      match: [/^10\.\d{4,}\/\S+$/, 'Formato DOI inválido'],
-    },
-    eventOrJournal: { type: String, trim: true },
+    authors: { type: [stringEvidenceSchema], default: [] },
+    title: { type: stringEvidenceSchema },
+    institution: { type: stringEvidenceSchema },
+    date: { type: dateEvidenceSchema },
+    keywords: { type: [stringEvidenceSchema], default: [] },
+    doi: { type: stringEvidenceSchema },
+    eventOrJournal: { type: stringEvidenceSchema },
     extractionSource: {
       type: String,
       required: true,
@@ -65,6 +97,16 @@ const academicProductSchema = new Schema<IAcademicProduct>(
       ref: 'UploadedFile',
       required: [true, 'El producto debe tener un archivo fuente'],
     },
+    reviewStatus: {
+      type: String,
+      enum: [...PRODUCT_REVIEW_STATUSES],
+      default: 'draft',
+      required: true,
+    },
+    reviewConfirmedAt: {
+      type: Date,
+      default: null,
+    },
     extractedEntities: {
       type: extractedEntitiesSchema,
       required: true,
@@ -97,6 +139,10 @@ const academicProductSchema = new Schema<IAcademicProduct>(
 academicProductSchema.index(
   { owner: 1, productType: 1, isDeleted: 1, createdAt: -1 },
   { name: 'idx_owner_type' },
+)
+academicProductSchema.index(
+  { owner: 1, reviewStatus: 1, isDeleted: 1, createdAt: -1 },
+  { name: 'idx_owner_review_status' },
 )
 academicProductSchema.index(
   { 'manualMetadata.date': -1, productType: 1 },
@@ -139,6 +185,16 @@ const articleSchema = new Schema({
     },
   },
   openAccess: { type: Boolean, default: false },
+  articleType: {
+    type: String,
+    enum: ['original', 'revision', 'corto', 'carta', 'otro'],
+  },
+  journalCountry: { type: String, trim: true },
+  journalAbbreviation: { type: String, trim: true },
+  publisher: { type: String, trim: true },
+  areaOfKnowledge: { type: String, trim: true },
+  language: { type: String, trim: true },
+  license: { type: String, trim: true },
 })
 
 const conferencePaperSchema = new Schema({
@@ -151,12 +207,24 @@ const conferencePaperSchema = new Schema({
     enum: ['oral', 'poster', 'workshop', 'keynote'],
   },
   isbn: { type: String, trim: true },
+  conferenceAcronym: { type: String, trim: true },
+  conferenceNumber: { type: String, trim: true },
+  proceedingsTitle: { type: String, trim: true },
+  publisher: { type: String, trim: true },
+  pages: {
+    type: String,
+    trim: true,
+    match: [/^\d+(-\d+)?$/, 'Formato de páginas inválido'],
+  },
+  eventSponsor: { type: String, trim: true },
+  areaOfKnowledge: { type: String, trim: true },
+  language: { type: String, trim: true },
 })
 
 const thesisSchema = new Schema({
   thesisLevel: {
     type: String,
-    enum: ['maestria', 'especializacion', 'doctorado'],
+    enum: ['pregrado', 'maestria', 'especializacion', 'doctorado'],
   },
   director: { type: String, trim: true },
   university: { type: String, trim: true },
@@ -167,6 +235,18 @@ const thesisSchema = new Schema({
     trim: true,
     match: [/^https?:\/\//, 'La URL del repositorio debe iniciar con http(s)://'],
   },
+  program: { type: String, trim: true },
+  jurors: { type: [String], default: [] },
+  degreeGrantor: { type: String, trim: true },
+  degreeName: { type: String, trim: true },
+  areaOfKnowledge: { type: String, trim: true },
+  modality: {
+    type: String,
+    enum: ['investigacion', 'monografia', 'proyecto_aplicado', 'otro'],
+  },
+  language: { type: String, trim: true },
+  pages: { type: Number, min: 1 },
+  projectCode: { type: String, trim: true },
 })
 
 const certificateSchema = new Schema({
@@ -179,6 +259,13 @@ const certificateSchema = new Schema({
   issueDate: { type: Date, default: null },
   expirationDate: { type: Date, default: null },
   hours: { type: Number, min: 0 },
+  location: { type: String, trim: true },
+  modality: {
+    type: String,
+    enum: ['presencial', 'virtual', 'hibrida'],
+  },
+  areaOfKnowledge: { type: String, trim: true },
+  projectCode: { type: String, trim: true },
 })
 
 const researchProjectSchema = new Schema({
@@ -191,6 +278,12 @@ const researchProjectSchema = new Schema({
     enum: ['active', 'completed', 'suspended'],
   },
   coResearchers: { type: [String], default: [] },
+  principalInvestigatorName: { type: String, trim: true },
+  institution: { type: String, trim: true },
+  programOrCall: { type: String, trim: true },
+  areaOfKnowledge: { type: String, trim: true },
+  keywords: { type: [String], default: [] },
+  budget: { type: Number, min: 0 },
 })
 
 const AcademicProduct =
