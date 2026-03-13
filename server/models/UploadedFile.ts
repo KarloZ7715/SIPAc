@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import {
   ALLOWED_MIME_TYPES,
+  DOCUMENT_CLASSIFICATIONS,
   MAX_FILE_SIZE_BYTES,
   OCR_PROVIDERS,
   PROCESSING_STATUSES,
@@ -30,7 +31,7 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
     },
     productType: {
       type: String,
-      required: [true, 'El tipo de producto académico es obligatorio'],
+      default: null,
       enum: {
         values: [...PRODUCT_TYPES],
         message: 'El tipo de producto {VALUE} no es válido',
@@ -67,10 +68,65 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
       enum: [...OCR_PROVIDERS],
       default: null,
     },
+    ocrModel: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: null,
+    },
     ocrConfidence: {
       type: Number,
       min: 0,
       max: 1,
+      default: null,
+    },
+    nerProvider: {
+      type: String,
+      enum: ['cerebras', 'gemini'],
+      default: null,
+    },
+    nerModel: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: null,
+    },
+    documentClassification: {
+      type: String,
+      enum: [...DOCUMENT_CLASSIFICATIONS],
+      default: 'uncertain',
+    },
+    classificationConfidence: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: null,
+    },
+    classificationRationale: {
+      type: String,
+      trim: true,
+      maxlength: 240,
+      default: null,
+    },
+    processingAttempt: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    processingStartedAt: {
+      type: Date,
+      default: null,
+    },
+    ocrCompletedAt: {
+      type: Date,
+      default: null,
+    },
+    nerStartedAt: {
+      type: Date,
+      default: null,
+    },
+    processingCompletedAt: {
+      type: Date,
       default: null,
     },
     isDeleted: {

@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
     contentType: mimeType,
     metadata: {
       uploadedBy: auth.sub,
-      productType: metadata.productType,
+      ...(metadata.productType ? { productType: metadata.productType } : {}),
       originalContentType: file.type ?? null,
     },
   })
@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
     uploadedBy: auth.sub,
     originalFilename: file.filename,
     gridfsFileId,
-    productType: metadata.productType,
+    ...(metadata.productType ? { productType: metadata.productType } : {}),
     mimeType,
     fileSizeBytes: file.data.byteLength,
     processingStatus: 'pending',
@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
     action: 'create',
     resource: 'uploaded_file',
     resourceId: uploadedFile._id,
-    details: `Carga de archivo ${file.filename} (${metadata.productType})`,
+    details: `Carga de archivo ${file.filename}`,
   })
 
   event.waitUntil(processUploadedFile(uploadedFile._id.toString()))

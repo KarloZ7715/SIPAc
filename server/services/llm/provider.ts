@@ -7,6 +7,7 @@ export type StructuredLlmProvider = 'gemini' | 'cerebras'
 
 export interface StructuredModelCandidate {
   name: StructuredLlmProvider
+  modelId: string
   model: LanguageModel
 }
 
@@ -25,12 +26,14 @@ export function getStructuredModelCandidates(): StructuredModelCandidate[] {
 
     candidates.push({
       name: 'cerebras',
+      modelId: 'gpt-oss-120b',
       model: cerebras('gpt-oss-120b'),
     })
   }
 
   candidates.push({
     name: 'gemini',
+    modelId: 'gemini-2.5-flash',
     model: google('gemini-2.5-flash'),
   })
 

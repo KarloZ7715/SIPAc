@@ -2,9 +2,11 @@ import { z } from 'zod'
 import { ALLOWED_MIME_TYPES, PRODUCT_TYPES, MAX_FILE_SIZE_BYTES } from '~~/app/types'
 
 export const uploadMetadataSchema = z.object({
-  productType: z.enum(PRODUCT_TYPES, {
-    error: 'El tipo de producto académico es requerido o inválido',
-  }),
+  productType: z
+    .enum(PRODUCT_TYPES, {
+      error: 'El tipo de producto académico no es válido',
+    })
+    .optional(),
 })
 
 export const fileValidationSchema = z.object({

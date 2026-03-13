@@ -1,5 +1,5 @@
 import type { DatabaseId } from './database'
-import type { ProductType } from './academic-product'
+import type { ProductReviewStatus, ProductType } from './academic-product'
 
 export const PROCESSING_STATUSES = ['pending', 'processing', 'completed', 'error'] as const
 export type ProcessingStatus = (typeof PROCESSING_STATUSES)[number]
@@ -10,6 +10,12 @@ export type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number]
 export const OCR_PROVIDERS = ['pdfjs_native', 'gemini_vision', 'mistral_ocr_3'] as const
 export type OcrProvider = (typeof OCR_PROVIDERS)[number]
 
+export const DOCUMENT_CLASSIFICATIONS = ['academic', 'non_academic', 'uncertain'] as const
+export type DocumentClassification = (typeof DOCUMENT_CLASSIFICATIONS)[number]
+
+export const NER_PROVIDERS = ['cerebras', 'gemini'] as const
+export type NerProvider = (typeof NER_PROVIDERS)[number]
+
 export const MAX_FILE_SIZE_BYTES = 20_971_520 // 20 MB
 
 export interface IUploadedFile {
@@ -17,14 +23,25 @@ export interface IUploadedFile {
   uploadedBy: DatabaseId
   originalFilename: string
   gridfsFileId: DatabaseId
-  productType: ProductType
+  productType?: ProductType
   mimeType: AllowedMimeType
   fileSizeBytes: number
   processingStatus: ProcessingStatus
   processingError?: string
   rawExtractedText?: string
   ocrProvider?: OcrProvider
+  ocrModel?: string
   ocrConfidence?: number
+  nerProvider?: NerProvider
+  nerModel?: string
+  documentClassification?: DocumentClassification
+  classificationConfidence?: number
+  classificationRationale?: string
+  processingAttempt?: number
+  processingStartedAt?: Date
+  ocrCompletedAt?: Date
+  nerStartedAt?: Date
+  processingCompletedAt?: Date
   isDeleted: boolean
   deletedAt?: Date
   createdAt: Date
@@ -34,7 +51,7 @@ export interface IUploadedFile {
 export interface UploadedFilePublic {
   _id: string
   originalFilename: string
-  productType: ProductType
+  productType?: ProductType
   mimeType: AllowedMimeType
   fileSizeBytes: number
   processingStatus: ProcessingStatus
@@ -45,7 +62,7 @@ export interface UploadedFilePublic {
 }
 
 export interface UploadMetadataDTO {
-  productType: ProductType
+  productType?: ProductType
 }
 
 export interface UploadedFileStatusDTO {
@@ -53,6 +70,20 @@ export interface UploadedFileStatusDTO {
   processingError?: string
   rawExtractedText?: string
   ocrProvider?: OcrProvider
+  ocrModel?: string
   ocrConfidence?: number
+  nerProvider?: NerProvider
+  nerModel?: string
+  documentClassification?: DocumentClassification
+  classificationConfidence?: number
+  classificationRationale?: string
+  processingAttempt?: number
+  processingStartedAt?: string
+  ocrCompletedAt?: string
+  nerStartedAt?: string
+  processingCompletedAt?: string
   academicProductId?: string
+  reviewStatus?: ProductReviewStatus
 }
+
+export interface UploadedFileWorkspacePublic extends UploadedFilePublic, UploadedFileStatusDTO {}

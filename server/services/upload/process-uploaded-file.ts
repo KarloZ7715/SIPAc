@@ -11,40 +11,40 @@ import { notifyDocumentProcessing } from '~~/server/services/notifications/notif
 function buildProductSpecificFields(
   productType: ProductType,
   extracted: {
-    institution?: string
-    eventOrJournal?: string
-    date?: Date
+    institution?: { value: string }
+    eventOrJournal?: { value: string }
+    date?: { value: Date }
   },
 ) {
   if (productType === 'article') {
-    return { journalName: extracted.eventOrJournal }
+    return { journalName: extracted.eventOrJournal?.value }
   }
 
   if (productType === 'conference_paper') {
     return {
-      eventName: extracted.eventOrJournal,
-      eventDate: extracted.date,
+      eventName: extracted.eventOrJournal?.value,
+      eventDate: extracted.date?.value,
     }
   }
 
   if (productType === 'thesis') {
     return {
-      university: extracted.institution,
-      approvalDate: extracted.date,
+      university: extracted.institution?.value,
+      approvalDate: extracted.date?.value,
     }
   }
 
   if (productType === 'certificate') {
     return {
-      issuingEntity: extracted.institution,
-      issueDate: extracted.date,
-      relatedEvent: extracted.eventOrJournal,
+      issuingEntity: extracted.institution?.value,
+      issueDate: extracted.date?.value,
+      relatedEvent: extracted.eventOrJournal?.value,
     }
   }
 
   if (productType === 'research_project') {
     return {
-      startDate: extracted.date,
+      startDate: extracted.date?.value,
     }
   }
 
@@ -54,6 +54,13 @@ function buildProductSpecificFields(
 function normalizeProcessingError(error: unknown): string {
   const message = error instanceof Error ? error.message : 'Error interno durante el procesamiento'
   return message.slice(0, 1000)
+}
+
+function isBlockedByDocumentPolicy(input: {
+  documentClassification: 'academic' | 'non_academic' | 'uncertain'
+  classificationConfidence: number
+}) {
+  return input.documentClassification === 'non_academic' && input.classificationConfidence >= 0.75
 }
 
 export async function processUploadedFile(uploadedFileId: string): Promise<void> {
@@ -71,6 +78,14 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
 
   uploadedFile.processingStatus = 'processing'
   uploadedFile.processingError = undefined
+  uploadedFile.processingAttempt = (uploadedFile.processingAttempt ?? 0) + 1
+  uploadedFile.processingStartedAt = new Date()
+  uploadedFile.ocrCompletedAt = undefined
+  uploadedFile.nerStartedAt = undefined
+  uploadedFile.processingCompletedAt = undefined
+  uploadedFile.ocrModel = undefined
+  uploadedFile.nerProvider = undefined
+  uploadedFile.nerModel = undefined
   await uploadedFile.save()
 
   try {
@@ -85,15 +100,50 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
       mimeType: uploadedFile.mimeType,
     })
 
+    uploadedFile.ocrCompletedAt = new Date()
+
     if (!ocrResult.text) {
       throw new Error('No fue posible extraer texto del documento')
     }
 
+    uploadedFile.nerStartedAt = new Date()
+
     const extractedEntities = await extractAcademicEntities({
       text: ocrResult.text,
-      productType: uploadedFile.productType,
       extractionSource: ocrResult.provider,
+      ocrBlocks: ocrResult.blocks,
     })
+
+    uploadedFile.rawExtractedText = ocrResult.text
+    uploadedFile.ocrProvider = ocrResult.provider
+    uploadedFile.ocrModel = ocrResult.modelId
+    uploadedFile.ocrConfidence = ocrResult.confidence
+    uploadedFile.nerProvider = extractedEntities.nerProvider
+    uploadedFile.nerModel = extractedEntities.nerModel
+    uploadedFile.documentClassification = extractedEntities.documentClassification
+    uploadedFile.classificationConfidence = extractedEntities.classificationConfidence
+    uploadedFile.classificationRationale = extractedEntities.classificationRationale
+
+    if (isBlockedByDocumentPolicy(extractedEntities)) {
+      const reason = 'El archivo no parece corresponder a un documento academico verificable.'
+
+      uploadedFile.processingStatus = 'error'
+      uploadedFile.processingError = reason
+      uploadedFile.processingCompletedAt = new Date()
+      await uploadedFile.save()
+
+      await notifyDocumentProcessing({
+        recipientId: uploadedFile.uploadedBy.toString(),
+        uploadedFileId: uploadedFile._id.toString(),
+        filename: uploadedFile.originalFilename,
+        status: 'error',
+        errorMessage: reason,
+      })
+
+      return
+    }
+
+    const detectedProductType = extractedEntities.productType
 
     const existingProduct = await AcademicProduct.findOne({
       sourceFile: uploadedFile._id,
@@ -101,21 +151,22 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
     })
 
     const manualMetadata = {
-      title: extractedEntities.title,
-      authors: extractedEntities.authors,
-      institution: extractedEntities.institution,
-      date: extractedEntities.date,
-      doi: extractedEntities.doi,
-      keywords: extractedEntities.keywords,
+      title: extractedEntities.title?.value,
+      authors: extractedEntities.authors.map((a) => a.value),
+      institution: extractedEntities.institution?.value,
+      date: extractedEntities.date?.value,
+      doi: extractedEntities.doi?.value,
+      keywords: extractedEntities.keywords.map((a) => a.value),
     }
 
     const productPayload = {
-      productType: uploadedFile.productType,
+      productType: detectedProductType,
       owner: uploadedFile.uploadedBy,
       sourceFile: uploadedFile._id,
+      reviewStatus: 'draft' as const,
       extractedEntities,
       manualMetadata,
-      ...buildProductSpecificFields(uploadedFile.productType, extractedEntities),
+      ...buildProductSpecificFields(detectedProductType, extractedEntities),
     }
 
     const academicProduct = existingProduct
@@ -130,10 +181,9 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
     }
 
     uploadedFile.processingStatus = 'completed'
+    uploadedFile.productType = detectedProductType
     uploadedFile.processingError = undefined
-    uploadedFile.rawExtractedText = ocrResult.text
-    uploadedFile.ocrProvider = ocrResult.provider
-    uploadedFile.ocrConfidence = ocrResult.confidence
+    uploadedFile.processingCompletedAt = new Date()
     await uploadedFile.save()
 
     await logSystemAudit({
@@ -162,6 +212,7 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
 
     currentUploadedFile.processingStatus = 'error'
     currentUploadedFile.processingError = processingError
+    currentUploadedFile.processingCompletedAt = new Date()
     await currentUploadedFile.save()
 
     await notifyDocumentProcessing({

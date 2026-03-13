@@ -18,6 +18,11 @@ function readTextPart(part: MultiPartData | undefined) {
   return part?.data.toString('utf8').trim() ?? ''
 }
 
+function readOptionalTextPart(part: MultiPartData | undefined) {
+  const value = readTextPart(part)
+  return value.length > 0 ? value : undefined
+}
+
 function getNamedPart(parts: MultiPartData[], name: string) {
   return parts.find((part) => part.name === name)
 }
@@ -37,7 +42,7 @@ export async function parseUploadMultipartRequest(
   }
 
   const metadataResult = uploadMetadataSchema.safeParse({
-    productType: readTextPart(getNamedPart(parts, 'productType')),
+    productType: readOptionalTextPart(getNamedPart(parts, 'productType')),
   })
 
   if (!metadataResult.success) {
