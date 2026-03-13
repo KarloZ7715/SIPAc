@@ -25,7 +25,8 @@
   "pnpm": {
     "overrides": {
       "serialize-javascript": "7.0.4",
-      "tar": "7.5.10",
+      "tar": "7.5.11",
+      "flatted": "3.4.0",
       "svgo": "4.0.1"
     }
   },
