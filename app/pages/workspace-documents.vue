@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import type { ProductType, DocumentAnchor, UpdateAcademicProductDTO } from '~~/app/types'
+import type {
+  ProductType,
+  DocumentAnchor,
+  NerAttemptTraceEntry,
+  UpdateAcademicProductDTO,
+} from '~~/app/types'
 import type { WorkspaceStage } from '~~/app/stores/documents'
 import type { MetadataFieldConfig } from '~~/app/utils/product-metadata-layout'
 import DocumentPreviewWithHighlights from '~~/app/components/dashboard/DocumentPreviewWithHighlights.vue'
@@ -253,6 +258,7 @@ const testingMetricsRows = computed(() => {
     tracked?.nerModel && tracked?.nerProvider
       ? `${tracked.nerModel} (${tracked.nerProvider})`
       : (tracked?.nerModel ?? 'No disponible')
+  const nerAttemptTraceLabel = formatNerAttemptTrace(tracked?.nerAttemptTrace)
 
   return [
     {
@@ -299,6 +305,11 @@ const testingMetricsRows = computed(() => {
       label: 'Modelo LLM para NER',
       value: nerModelLabel,
       hint: 'Modelo utilizado para extracción estructurada de entidades.',
+    },
+    {
+      label: 'Traza intentos NER',
+      value: nerAttemptTraceLabel,
+      hint: 'Candidatos intentados por pasada (pass1/pass2), estado y error cuando aplica.',
     },
     {
       label: 'Completitud de metadatos',
@@ -892,6 +903,25 @@ function formatDuration(durationMs: number | null) {
   return `${minutes} min ${remainingSeconds}s`
 }
 
+function formatNerAttemptTrace(trace: NerAttemptTraceEntry[] | undefined) {
+  if (!trace?.length) {
+    return 'No disponible'
+  }
+
+  return trace
+    .map((entry) => {
+      const passLabel = entry.scope === 'extraction_second_pass' ? 'pass2' : 'pass1'
+      const statusLabel =
+        entry.status === 'succeeded' ? 'ok' : `fallo${entry.errorType ? `:${entry.errorType}` : ''}`
+      const compactErrorMessage = entry.errorMessage
+        ? entry.errorMessage.replace(/\s+/g, ' ').slice(0, 90)
+        : ''
+
+      return `${passLabel}#${entry.attempt} ${entry.modelId} (${entry.provider}) ${statusLabel}${compactErrorMessage ? ` msg:${compactErrorMessage}` : ''}`
+    })
+    .join(' | ')
+}
+
 function toTimestamp(value?: string) {
   if (!value) {
     return null
@@ -1087,14 +1117,6 @@ function handleFileSelection(selection: File | File[] | null) {
     })
     pendingSelection.value = null
     return
-  }
-
-  if (import.meta.dev) {
-    console.log('[workspace] handleFileSelection using file', {
-      name: file.name,
-      type: file.type,
-      size: file.size,
-    })
   }
 
   documentsStore.prepareWorkspaceDraft(file)
