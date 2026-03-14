@@ -5,6 +5,7 @@ import type {
   OcrProvider,
   ExtractedEntityWithEvidence,
   DocumentAnchor,
+  NerAttemptTraceEntry,
 } from '~~/app/types'
 import { PRODUCT_TYPES } from '~~/app/types'
 import {
@@ -12,31 +13,36 @@ import {
   type StructuredLlmProvider,
 } from '~~/server/services/llm/provider'
 import { validateEnv } from '~~/server/utils/env'
+import {
+  classifyPipelineError,
+  logPipelineEvent,
+  withTimeout,
+} from '~~/server/utils/pipeline-observability'
 
 const productTypeClassificationSchema = z.object({
   documentClassification: z.enum(['academic', 'non_academic', 'uncertain']),
-  classificationConfidence: z.number().min(0).max(1).default(0),
-  classificationRationale: z.string().trim().min(1).max(240).default('Clasificacion automatica'),
-  productType: z.enum(PRODUCT_TYPES).optional(),
-  productTypeConfidence: z.number().min(0).max(1).default(0),
+  classificationConfidence: z.number().min(0).max(1),
+  classificationRationale: z.string().trim().min(1).max(240),
+  productType: z.enum(PRODUCT_TYPES).nullable(),
+  productTypeConfidence: z.number().min(0).max(1),
 })
 
 const academicEntitySchema = z.object({
-  authors: z.array(z.string().trim().min(1)).default([]),
-  title: z.string().trim().min(1).optional().nullable(),
-  institution: z.string().trim().min(1).optional().nullable(),
-  date: z.string().trim().min(1).optional().nullable(),
-  keywords: z.array(z.string().trim().min(1)).default([]),
-  doi: z.string().trim().min(1).optional().nullable(),
-  eventOrJournal: z.string().trim().min(1).optional().nullable(),
+  authors: z.array(z.string().trim().min(1)),
+  title: z.string().trim().min(1).nullable(),
+  institution: z.string().trim().min(1).nullable(),
+  date: z.string().trim().min(1).nullable(),
+  keywords: z.array(z.string().trim().min(1)),
+  doi: z.string().trim().min(1).nullable(),
+  eventOrJournal: z.string().trim().min(1).nullable(),
   confidence: z.object({
-    authors: z.number().min(0).max(1).default(0),
-    title: z.number().min(0).max(1).default(0),
-    institution: z.number().min(0).max(1).default(0),
-    date: z.number().min(0).max(1).default(0),
-    keywords: z.number().min(0).max(1).default(0),
-    doi: z.number().min(0).max(1).default(0),
-    eventOrJournal: z.number().min(0).max(1).default(0),
+    authors: z.number().min(0).max(1),
+    title: z.number().min(0).max(1),
+    institution: z.number().min(0).max(1),
+    date: z.number().min(0).max(1),
+    keywords: z.number().min(0).max(1),
+    doi: z.number().min(0).max(1),
+    eventOrJournal: z.number().min(0).max(1),
   }),
 })
 
@@ -63,13 +69,36 @@ export interface AcademicEntityExtractionResult {
   extractionConfidence: number
   nerProvider: StructuredLlmProvider
   nerModel: string
+  nerAttemptTrace?: NerAttemptTraceEntry[]
   extractedAt: Date
+}
+
+type RuntimeNerAttemptTrace = Omit<NerAttemptTraceEntry, 'scope'>
+
+const NER_ATTEMPT_ERROR_MESSAGE_MAX_LENGTH = 280
+
+function getRuntimeConfigSafe(): Record<string, unknown> {
+  try {
+    return useRuntimeConfig()
+  } catch {
+    return {}
+  }
 }
 
 function normalizeOptionalString(value?: string | null): string | undefined {
   if (!value) return undefined
   const normalized = value.trim()
   return normalized.length > 0 ? normalized : undefined
+}
+
+function truncateAttemptErrorMessage(message: string): string {
+  const normalized = message.replace(/\s+/g, ' ').trim()
+
+  if (normalized.length <= NER_ATTEMPT_ERROR_MESSAGE_MAX_LENGTH) {
+    return normalized
+  }
+
+  return `${normalized.slice(0, NER_ATTEMPT_ERROR_MESSAGE_MAX_LENGTH - 3)}...`
 }
 
 function normalizeDate(value?: string | null): Date | undefined {
@@ -364,44 +393,118 @@ function buildPrompt(text: string, productType: ProductType, enriched: boolean):
 async function executeStructuredExtraction(
   prompt: string,
   temperature: number,
+  traceContext?: { traceId?: string; documentId?: string },
 ): Promise<{
   output: AcademicEntityOutput
   provider: StructuredLlmProvider
   modelId: string
+  attempts: RuntimeNerAttemptTrace[]
 }> {
-  return executeStructuredObject(prompt, temperature, academicEntitySchema)
+  return executeStructuredObject(prompt, temperature, academicEntitySchema, traceContext)
 }
 
 async function executeStructuredObject<TSchema extends z.ZodTypeAny>(
   prompt: string,
   temperature: number,
   schema: TSchema,
+  traceContext?: { traceId?: string; documentId?: string },
 ): Promise<{
   output: z.infer<TSchema>
   provider: StructuredLlmProvider
   modelId: string
+  attempts: RuntimeNerAttemptTrace[]
 }> {
+  const env = validateEnv(getRuntimeConfigSafe())
   const candidates = getStructuredModelCandidates()
+  const maxCandidateAttempts = Math.max(1, Math.min(candidates.length, env.nerMaxCandidateAttempts))
   let lastError: unknown = null
+  let attempt = 0
+  const attempts: RuntimeNerAttemptTrace[] = []
 
-  for (const candidate of candidates) {
+  for (const candidate of candidates.slice(0, maxCandidateAttempts)) {
+    attempt += 1
+    const attemptStart = Date.now()
+
     try {
-      const result = await generateText({
-        model: candidate.model,
-        temperature,
-        output: Output.object({ schema }),
-        prompt,
+      const result = await withTimeout({
+        label: `ner_model_request_${candidate.modelId}`,
+        timeoutMs: env.nerRequestTimeoutMs,
+        run: () =>
+          generateText({
+            model: candidate.model,
+            temperature,
+            output: Output.object({ schema }),
+            prompt,
+          }),
+      })
+
+      logPipelineEvent({
+        traceId: traceContext?.traceId,
+        documentId: traceContext?.documentId,
+        stage: 'ner',
+        event: 'candidate_succeeded',
+        provider: candidate.name,
+        modelId: candidate.modelId,
+        attempt,
+        durationMs: Date.now() - attemptStart,
+        metadata: {
+          timeoutMs: env.nerRequestTimeoutMs,
+        },
+      })
+
+      attempts.push({
+        attempt,
+        provider: candidate.name,
+        modelId: candidate.modelId,
+        status: 'succeeded',
+        durationMs: Date.now() - attemptStart,
       })
 
       return {
         output: result.output as z.infer<TSchema>,
         provider: candidate.name,
         modelId: candidate.modelId,
+        attempts,
       }
     } catch (error) {
       lastError = error
+      const classified = classifyPipelineError(error)
+
+      attempts.push({
+        attempt,
+        provider: candidate.name,
+        modelId: candidate.modelId,
+        status: 'failed',
+        durationMs: Date.now() - attemptStart,
+        errorType: classified.errorType,
+        errorMessage: truncateAttemptErrorMessage(classified.errorMessage),
+      })
+
+      logPipelineEvent({
+        traceId: traceContext?.traceId,
+        documentId: traceContext?.documentId,
+        stage: 'ner',
+        event: 'candidate_failed',
+        provider: candidate.name,
+        modelId: candidate.modelId,
+        attempt,
+        durationMs: Date.now() - attemptStart,
+        errorType: classified.errorType,
+        errorMessage: classified.errorMessage,
+      })
     }
   }
+
+  logPipelineEvent({
+    traceId: traceContext?.traceId,
+    documentId: traceContext?.documentId,
+    stage: 'ner',
+    event: 'candidate_budget_exhausted',
+    metadata: {
+      maxCandidateAttempts,
+      availableCandidates: candidates.length,
+    },
+  })
 
   throw lastError instanceof Error ? lastError : new Error('No fue posible extraer entidades')
 }
@@ -456,23 +559,87 @@ export async function extractAcademicEntities(input: {
   text: string
   extractionSource: OcrProvider
   ocrBlocks?: OcrTextBlock[]
+  traceId?: string
+  documentId?: string
 }): Promise<AcademicEntityExtractionResult> {
-  const env = validateEnv(useRuntimeConfig())
+  const env = validateEnv(getRuntimeConfigSafe())
+  const nerStart = Date.now()
   const profile = await detectProductProfile(input.text)
   const detectedProductType = profile.productType
   const ocrBlocks = input.ocrBlocks ?? []
 
+  logPipelineEvent({
+    traceId: input.traceId,
+    documentId: input.documentId,
+    stage: 'ner',
+    event: 'start',
+    metadata: {
+      textLength: input.text.length,
+      extractionSource: input.extractionSource,
+      threshold: env.nerConfidenceThreshold,
+      maxCandidateAttempts: env.nerMaxCandidateAttempts,
+    },
+  })
+
   const firstPass = await executeStructuredExtraction(
     buildPrompt(input.text, detectedProductType, false),
     0.2,
+    { traceId: input.traceId, documentId: input.documentId },
   )
+  const nerAttemptTrace: NerAttemptTraceEntry[] = firstPass.attempts.map((attemptTrace) => ({
+    ...attemptTrace,
+    scope: 'extraction_first_pass',
+  }))
 
   let selected = firstPass
-  if (averageConfidence(firstPass.output) < env.nerConfidenceThreshold) {
-    selected = await executeStructuredExtraction(
-      buildPrompt(input.text, detectedProductType, true),
-      0.6,
-    )
+  const firstPassConfidence = averageConfidence(firstPass.output)
+
+  if (firstPassConfidence < env.nerConfidenceThreshold) {
+    logPipelineEvent({
+      traceId: input.traceId,
+      documentId: input.documentId,
+      stage: 'ner',
+      event: 'second_pass_triggered',
+      provider: firstPass.provider,
+      modelId: firstPass.modelId,
+      metadata: {
+        firstPassConfidence,
+        threshold: env.nerConfidenceThreshold,
+      },
+    })
+
+    try {
+      const secondPass = await executeStructuredExtraction(
+        buildPrompt(input.text, detectedProductType, true),
+        0.6,
+        { traceId: input.traceId, documentId: input.documentId },
+      )
+
+      selected = secondPass
+      nerAttemptTrace.push(
+        ...secondPass.attempts.map((attemptTrace) => ({
+          ...attemptTrace,
+          scope: 'extraction_second_pass' as const,
+        })),
+      )
+    } catch (error) {
+      const classified = classifyPipelineError(error)
+      logPipelineEvent({
+        traceId: input.traceId,
+        documentId: input.documentId,
+        stage: 'ner',
+        event: 'second_pass_failed',
+        provider: firstPass.provider,
+        modelId: firstPass.modelId,
+        errorType: classified.errorType,
+        errorMessage: classified.errorMessage,
+        metadata: {
+          firstPassConfidence,
+          threshold: env.nerConfidenceThreshold,
+          fallback: 'kept_first_pass',
+        },
+      })
+    }
   }
 
   const selectedOutput = selected.output
@@ -482,6 +649,23 @@ export async function extractAcademicEntities(input: {
   const normalizedDate = normalizeDate(selectedOutput.date)
   const normalizedDoi = normalizeOptionalString(selectedOutput.doi)
   const normalizedEventOrJournal = normalizeOptionalString(selectedOutput.eventOrJournal)
+
+  const extractionConfidence = averageConfidence(selectedOutput)
+
+  logPipelineEvent({
+    traceId: input.traceId,
+    documentId: input.documentId,
+    stage: 'ner',
+    event: 'completed',
+    provider: selected.provider,
+    modelId: selected.modelId,
+    durationMs: Date.now() - nerStart,
+    metadata: {
+      extractionConfidence,
+      productType: detectedProductType,
+      documentClassification: profile.documentClassification,
+    },
+  })
 
   return {
     productType: detectedProductType,
@@ -533,9 +717,10 @@ export async function extractAcademicEntities(input: {
       input.extractionSource,
     ),
     extractionSource: input.extractionSource,
-    extractionConfidence: averageConfidence(selectedOutput),
+    extractionConfidence,
     nerProvider: selected.provider,
     nerModel: selected.modelId,
+    nerAttemptTrace,
     extractedAt: new Date(),
   }
 }

@@ -7,6 +7,7 @@ import { readGridFsFileToBuffer } from '~~/server/services/storage/gridfs'
 import { extractDocumentText } from '~~/server/services/ocr/extract-document-text'
 import { extractAcademicEntities } from '~~/server/services/ner/extract-academic-entities'
 import { notifyDocumentProcessing } from '~~/server/services/notifications/notify-document-processing'
+import { classifyPipelineError, logPipelineEvent } from '~~/server/utils/pipeline-observability'
 
 function buildProductSpecificFields(
   productType: ProductType,
@@ -86,7 +87,23 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
   uploadedFile.ocrModel = undefined
   uploadedFile.nerProvider = undefined
   uploadedFile.nerModel = undefined
+  uploadedFile.nerAttemptTrace = []
   await uploadedFile.save()
+
+  const traceId = `upload:${uploadedFileId}:attempt:${uploadedFile.processingAttempt}`
+  const processStart = Date.now()
+
+  logPipelineEvent({
+    traceId,
+    documentId: uploadedFileId,
+    stage: 'processing',
+    event: 'start',
+    attempt: uploadedFile.processingAttempt,
+    metadata: {
+      mimeType: uploadedFile.mimeType,
+      filename: uploadedFile.originalFilename,
+    },
+  })
 
   try {
     const owner = await User.findById(uploadedFile.uploadedBy).select('fullName email').lean()
@@ -98,6 +115,8 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
     const ocrResult = await extractDocumentText({
       buffer: fileBuffer,
       mimeType: uploadedFile.mimeType,
+      traceId,
+      documentId: uploadedFileId,
     })
 
     uploadedFile.ocrCompletedAt = new Date()
@@ -112,6 +131,8 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
       text: ocrResult.text,
       extractionSource: ocrResult.provider,
       ocrBlocks: ocrResult.blocks,
+      traceId,
+      documentId: uploadedFileId,
     })
 
     uploadedFile.rawExtractedText = ocrResult.text
@@ -120,6 +141,7 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
     uploadedFile.ocrConfidence = ocrResult.confidence
     uploadedFile.nerProvider = extractedEntities.nerProvider
     uploadedFile.nerModel = extractedEntities.nerModel
+    uploadedFile.nerAttemptTrace = extractedEntities.nerAttemptTrace ?? []
     uploadedFile.documentClassification = extractedEntities.documentClassification
     uploadedFile.classificationConfidence = extractedEntities.classificationConfidence
     uploadedFile.classificationRationale = extractedEntities.classificationRationale
@@ -186,6 +208,20 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
     uploadedFile.processingCompletedAt = new Date()
     await uploadedFile.save()
 
+    logPipelineEvent({
+      traceId,
+      documentId: uploadedFileId,
+      stage: 'processing',
+      event: 'completed',
+      durationMs: Date.now() - processStart,
+      provider: extractedEntities.nerProvider,
+      modelId: extractedEntities.nerModel,
+      metadata: {
+        ocrProvider: ocrResult.provider,
+        classification: extractedEntities.documentClassification,
+      },
+    })
+
     await logSystemAudit({
       userId: uploadedFile.uploadedBy,
       userName: owner.fullName,
@@ -203,6 +239,18 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
       status: 'completed',
     })
   } catch (error) {
+    const classified = classifyPipelineError(error)
+
+    logPipelineEvent({
+      traceId,
+      documentId: uploadedFileId,
+      stage: 'processing',
+      event: 'failed',
+      durationMs: Date.now() - processStart,
+      errorType: classified.errorType,
+      errorMessage: classified.errorMessage,
+    })
+
     const currentUploadedFile = await UploadedFile.findById(uploadedFileId)
     if (!currentUploadedFile || currentUploadedFile.isDeleted) {
       return
