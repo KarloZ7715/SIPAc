@@ -36,6 +36,7 @@ export default defineEventHandler(async (event) => {
     ocrConfidence: uploadedFile.ocrConfidence ?? undefined,
     nerProvider: uploadedFile.nerProvider ?? undefined,
     nerModel: uploadedFile.nerModel ?? undefined,
+    nerAttemptTrace: uploadedFile.nerAttemptTrace ?? [],
     documentClassification: uploadedFile.documentClassification ?? undefined,
     classificationConfidence: uploadedFile.classificationConfidence ?? undefined,
     classificationRationale: uploadedFile.classificationRationale ?? undefined,

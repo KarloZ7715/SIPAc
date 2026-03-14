@@ -3,6 +3,7 @@ import {
   ALLOWED_MIME_TYPES,
   DOCUMENT_CLASSIFICATIONS,
   MAX_FILE_SIZE_BYTES,
+  NER_PROVIDERS,
   OCR_PROVIDERS,
   PROCESSING_STATUSES,
   PRODUCT_TYPES,
@@ -82,7 +83,7 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
     },
     nerProvider: {
       type: String,
-      enum: ['cerebras', 'gemini'],
+      enum: [...NER_PROVIDERS],
       default: null,
     },
     nerModel: {
@@ -90,6 +91,57 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
       trim: true,
       maxlength: 120,
       default: null,
+    },
+    nerAttemptTrace: {
+      type: [
+        {
+          _id: false,
+          scope: {
+            type: String,
+            enum: ['extraction_first_pass', 'extraction_second_pass'],
+            required: true,
+          },
+          attempt: {
+            type: Number,
+            min: 1,
+            required: true,
+          },
+          provider: {
+            type: String,
+            enum: [...NER_PROVIDERS],
+            required: true,
+          },
+          modelId: {
+            type: String,
+            trim: true,
+            maxlength: 120,
+            required: true,
+          },
+          status: {
+            type: String,
+            enum: ['succeeded', 'failed'],
+            required: true,
+          },
+          durationMs: {
+            type: Number,
+            min: 0,
+            required: true,
+          },
+          errorType: {
+            type: String,
+            trim: true,
+            maxlength: 80,
+            default: null,
+          },
+          errorMessage: {
+            type: String,
+            trim: true,
+            maxlength: 280,
+            default: null,
+          },
+        },
+      ],
+      default: [],
     },
     documentClassification: {
       type: String,

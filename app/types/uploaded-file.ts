@@ -13,8 +13,25 @@ export type OcrProvider = (typeof OCR_PROVIDERS)[number]
 export const DOCUMENT_CLASSIFICATIONS = ['academic', 'non_academic', 'uncertain'] as const
 export type DocumentClassification = (typeof DOCUMENT_CLASSIFICATIONS)[number]
 
-export const NER_PROVIDERS = ['cerebras', 'gemini'] as const
+export const NER_PROVIDERS = ['cerebras', 'gemini', 'groq'] as const
 export type NerProvider = (typeof NER_PROVIDERS)[number]
+
+export const NER_ATTEMPT_SCOPES = ['extraction_first_pass', 'extraction_second_pass'] as const
+export type NerAttemptScope = (typeof NER_ATTEMPT_SCOPES)[number]
+
+export const NER_ATTEMPT_STATUSES = ['succeeded', 'failed'] as const
+export type NerAttemptStatus = (typeof NER_ATTEMPT_STATUSES)[number]
+
+export interface NerAttemptTraceEntry {
+  scope: NerAttemptScope
+  attempt: number
+  provider: NerProvider
+  modelId: string
+  status: NerAttemptStatus
+  durationMs: number
+  errorType?: string
+  errorMessage?: string
+}
 
 export const MAX_FILE_SIZE_BYTES = 20_971_520 // 20 MB
 
@@ -34,6 +51,7 @@ export interface IUploadedFile {
   ocrConfidence?: number
   nerProvider?: NerProvider
   nerModel?: string
+  nerAttemptTrace?: NerAttemptTraceEntry[]
   documentClassification?: DocumentClassification
   classificationConfidence?: number
   classificationRationale?: string
@@ -74,6 +92,7 @@ export interface UploadedFileStatusDTO {
   ocrConfidence?: number
   nerProvider?: NerProvider
   nerModel?: string
+  nerAttemptTrace?: NerAttemptTraceEntry[]
   documentClassification?: DocumentClassification
   classificationConfidence?: number
   classificationRationale?: string
