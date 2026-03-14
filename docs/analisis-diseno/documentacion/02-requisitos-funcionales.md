@@ -18,6 +18,9 @@
 | 1.4     | 2026-03-05 | Carlos A. Canabal Cordero | Reorganización del cronograma de implementación: M5A adelantado a semana 6 junto con M4 NER Avanzado, M5B separado a semana 7, M9 Chat aislado en semana 8, M7 continuación completa en semana 9 junto con integración y testing, despliegue separado a semana 10                                              |
 | 1.5     | 2026-03-06 | Carlos A. Canabal Cordero | Alineación a los cambios de la arquitectura: RF-082 ajustado a estado Parcial (rate limiting global `nuxt-security` 150 tokens/5 min, no per-endpoint 10/min)                                                                                                                                                  |
 | 1.6     | 2026-03-11 | Carlos A. Canabal Cordero | Actualización de estados RF tras la implementación base del pipeline documental y notificaciones: carga, almacenamiento en GridFS, OCR, NER estructurado, creación automática de productos académicos y notificaciones M8                                                                                      |
+| 1.7     | 2026-03-13 | Carlos A. Canabal Cordero | Actualización de fallback LLM por tarea: NER con cadena `qwen -> gpt-oss -> gemini -> llama3.1`, y Chat planificado con cadena `gpt-oss -> gemini -> qwen`                                                                                                                                                     |
+| 1.8     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación de requisitos al hardening operativo del pipeline: timeouts OCR/NER, límite de intentos por candidato NER y trazabilidad por etapa para diagnóstico                                                                                                                                                 |
+| 1.9     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback NER vigente con Groq y Gemini, y compatibilidad de structured outputs con esquema estricto (campos requeridos y valores nulos explícitos cuando aplique)                                                                                                                                |
 
 ---
 
@@ -47,7 +50,7 @@ El sistema está orientado a la **Maestría en Innovación Educativa con Tecnolo
 | **Structured outputs**   | Estrategia del Vercel AI SDK para obtener salidas validadas contra un esquema Zod mediante `generateText` + `Output.object`                                                                           |
 | **Zod**                  | Librería TypeScript de validación de esquemas; define la forma exacta de los datos estructurados que el pipeline debe retornar                                                                        |
 | **pdfjs-dist**           | Librería npm oficial de Mozilla para extraer texto de PDFs nativos (con texto seleccionable) sin necesidad de OCR ni LLM                                                                              |
-| **Gemini 2.5 Flash**     | Modelo de Google usado actualmente como proveedor multimodal OCR y como fallback del pipeline estructurado cuando Cerebras no responde                                                                |
+| **Gemini 2.5 Flash**     | Modelo de Google usado actualmente como proveedor multimodal OCR y como fallback intermedio del pipeline NER; en Chat queda previsto como segundo intento tras `gpt-oss-120b`                         |
 | **Mistral OCR 3**        | Motor OCR de alta precisión de Mistral AI (99,54 % en español); proveedor opcional activable vía variable de entorno; plan de pago ($0,002/página)                                                    |
 | **MVP**                  | Minimum Viable Product (Producto Mínimo Viable) — versión más básica pero funcional del sistema que ya cumple su propósito principal y puede ser entregada; agrupa los requisitos de prioridad `Alta` |
 
@@ -62,7 +65,10 @@ El sistema está orientado a la **Maestría en Innovación Educativa con Tecnolo
 - El gestor de paquetes del proyecto es **pnpm**.
 - Los PDFs nativos (con texto seleccionable) se procesan con **`pdfjs-dist`** para extracción directa de texto, sin necesidad de LLM.
 - Los PDFs escaneados e imágenes se procesan enviándolos como entrada multimodal al modelo **Gemini** configurado en el pipeline OCR a través del **Vercel AI SDK**.
-- La extracción de entidades (NER) se realiza mediante **structured outputs** del Vercel AI SDK con esquemas **Zod**, usando **Cerebras** como proveedor primario y **Gemini 2.5 Flash** como fallback en el estado actual implementado.
+- La extracción de entidades (NER) se realiza mediante **structured outputs** del Vercel AI SDK con esquemas **Zod**, usando la cadena de fallback implementada: `gemini-2.5-flash` → `openai/gpt-oss-120b` (Groq) → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` (Groq).
+- El esquema estructurado de NER usa campos requeridos y nulos explícitos para mantener compatibilidad entre proveedores OpenAI-compatible y evitar rechazos de `response_format`.
+- El pipeline usa controles operativos por entorno (`OCR_REQUEST_TIMEOUT_MS`, `NER_REQUEST_TIMEOUT_MS`, `NER_MAX_CANDIDATE_ATTEMPTS`, `NER_CONFIDENCE_THRESHOLD`) para balancear robustez, latencia y costo.
+- El procesamiento registra telemetría por etapa (`ocr`, `ner`, `processing`) para diagnóstico de fallos y trazabilidad de fallback.
 - El proveedor **Mistral OCR 3** puede activarse mediante la variable de entorno `OCR_PROVIDER=mistral` para casos que requieran mayor precisión.
 
 ---
@@ -101,7 +107,7 @@ mindmap
       Normalización de texto
     M4 NLP / NER
       generateText + Output.object
-      Cerebras + Gemini fallback
+      gemini flash -> groq 120b -> gemini flash-lite -> groq 20b
       Extracción de entidades
       Revisión manual
       Retry por score bajo
@@ -127,7 +133,7 @@ mindmap
     M9 Chat Inteligente
       Interfaz conversacional
       Búsqueda por metadatos
-      Tool calling con Gemini
+      Tool calling con fallback gpt-oss -> gemini -> qwen
       Historial de conversaciones
       Enlaces a documentos
 ```

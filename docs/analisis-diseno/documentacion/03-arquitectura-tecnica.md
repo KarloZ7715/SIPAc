@@ -16,6 +16,9 @@
 | 1.5     | 2026-03-11 | Carlos A. Canabal Cordero | Mejora visual de la visión general de la arquitectura: reorganización del diagrama Mermaid por capas y adición de cuadro resumen sin cambios en el contenido técnico                                                                                                                    |
 | 1.6     | 2026-03-11 | Carlos A. Canabal Cordero | Refactorización de la visión general de la arquitectura: reducción del texto introductorio, simplificación del diagrama Mermaid y corrección de sintaxis, manteniendo el mismo significado técnico                                                                                      |
 | 1.7     | 2026-03-11 | Carlos A. Canabal Cordero | Alineación al estado implementado de M2/M8: NER estructurado con `generateText` + `Output.object`, selector real `LLM_PROVIDER`, y notificaciones por correo mediante Resend en modo best-effort                                                                                        |
+| 1.8     | 2026-03-13 | Carlos A. Canabal Cordero | Actualización del proveedor LLM a fallback por tarea implementado: NER `qwen -> gpt-oss -> gemini -> llama3.1`; Chat `gpt-oss -> gemini -> qwen`; documentación alineada a `getStructuredModelCandidates()` y `getChatModelCandidates()`                                                |
+| 1.9     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación final al hardening del pipeline OCR/NER: timeouts configurables, presupuesto de intentos por candidato y observabilidad por etapas (`ocr`, `ner`, `processing`)                                                                                                              |
+| 1.10    | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback real tras validaciones de compatibilidad: NER con Gemini + Groq (`gemini-2.5-flash` → `openai/gpt-oss-120b` → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b`), Chat con Cerebras + Gemini; y ajuste documental de `GROQ_API_KEY` y esquema estructurado estricto |
 
 ---
 
@@ -51,8 +54,9 @@ flowchart TB
 
   subgraph LLMProviders["☁ LLM"]
     direction TB
-    Cerebras["Cerebras<br/>primario"]
-    Gemini["Gemini Flash<br/>fallback"]
+    Gemini["Gemini Flash / Flash-Lite<br/>NER"]
+    Groq["Groq OpenAI-compatible<br/>openai/gpt-oss-120b · openai/gpt-oss-20b"]
+    Cerebras["Cerebras OpenAI-compatible<br/>gpt-oss-120b · qwen-3-235b-a22b-instruct-2507"]
   end
 
   subgraph Data["🗄 Datos"]
@@ -75,10 +79,10 @@ flowchart TB
   OCR --> GeminiVision
   OCR -.->|OCR_PROVIDER=mistral| Mistral
 
-  NER -->|cerebras| Cerebras
-  NER -.->|fallback| Gemini
-  Chat -->|cerebras| Cerebras
-  Chat -.->|fallback| Gemini
+  NER -->|1ro y 3ro| Gemini
+  NER -->|2do y 4to| Groq
+  Chat -->|1ro y 3ro| Cerebras
+  Chat -.->|2do| Gemini
   Chat --> ODM
 
   ODM --> MongoDB
@@ -95,12 +99,12 @@ flowchart TB
   class MongoDB,GridFS dbNode
 ```
 
-| Bloque                   | Elementos principales                                            | Función                                                   |
-| ------------------------ | ---------------------------------------------------------------- | --------------------------------------------------------- |
-| **Cliente**              | Browser                                                          | Consumir la interfaz y las API del sistema                |
-| **Aplicación**           | UI, API Routes, OCR, NER, Chat IA, Storage, Mongoose             | Ejecutar la lógica del sistema en un único servicio Nuxt  |
-| **Proveedores externos** | `pdfjs-dist`, Gemini Vision, Mistral OCR, Cerebras, Gemini Flash | Resolver OCR y capacidades LLM sin microservicios propios |
-| **Persistencia**         | MongoDB Atlas, GridFS                                            | Guardar metadatos, documentos y archivos                  |
+| Bloque                   | Elementos principales                                                  | Función                                                   |
+| ------------------------ | ---------------------------------------------------------------------- | --------------------------------------------------------- |
+| **Cliente**              | Browser                                                                | Consumir la interfaz y las API del sistema                |
+| **Aplicación**           | UI, API Routes, OCR, NER, Chat IA, Storage, Mongoose                   | Ejecutar la lógica del sistema en un único servicio Nuxt  |
+| **Proveedores externos** | `pdfjs-dist`, Gemini Vision, Mistral OCR, Cerebras, Groq, Gemini Flash | Resolver OCR y capacidades LLM sin microservicios propios |
+| **Persistencia**         | MongoDB Atlas, GridFS                                                  | Guardar metadatos, documentos y archivos                  |
 
 > **Principio guía:** Un solo lenguaje (TypeScript), un solo proceso (Node.js), un solo despliegue. El procesamiento con IA se delega a APIs externas de bajo costo (free tier en desarrollo), manteniendo la base de código simple y sin dependencias de entorno Python.
 
@@ -133,19 +137,22 @@ flowchart TB
 
 ### 2.3 Capa de Procesamiento Inteligente
 
-| Tecnología                                   | Versión                          | Rol                                                             | Justificación                                                                                                                                                           |
-| -------------------------------------------- | -------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **pdfjs-dist**                               | latest                           | Extracción de texto de PDFs nativos (digitales)                 | Corre en Node.js sin API externa; extrae texto estructurado sin OCR cuando el PDF contiene texto incrustado                                                             |
-| **Vercel AI SDK** (`ai`)                     | 6.x                              | Capa unificada de acceso a modelos LLM/multimodal               | Abstrae proveedores (Google vía `@ai-sdk/google`, Cerebras vía `@ai-sdk/openai-compatible`, Mistral); API uniforme `generateText` / `streamText` con structured outputs |
-| `**@ai-sdk/google`\*\*                       | latest                           | Proveedor Google Gemini para el AI SDK                          | Acceso a Gemini 2.5 Flash para OCR multimodal y como fallback actual del pipeline estructurado                                                                          |
-| `**@ai-sdk/openai-compatible**`              | latest                           | Proveedor OpenAI-compatible genérico para el AI SDK             | Conecta el Vercel AI SDK a cualquier API con interfaz OpenAI, incluyendo Cerebras Inference (`https://api.cerebras.ai/v1`); sin paquete propietario extra               |
-| **Gemini 2.5 Flash**                         | `gemini-2.5-flash`               | OCR multimodal para PDFs escaneados e imágenes                  | Proveedor actual en la implementación; también se usa como fallback del pipeline estructurado                                                                           |
-| **Cerebras GPT-OSS 120B** _(primario)_       | `gpt-oss-120b`                   | NER estructurado y Chat IA — proveedor primario                 | Modelo de **producción** en Cerebras; ~3.000 tokens/s; API 100% compatible con OpenAI; soporta structured outputs con AI SDK                                            |
-| **Cerebras Qwen 3 235B** _(preview)_         | `qwen-3-235b-a22b-instruct-2507` | NER estructurado — candidato preferido para extracción          | 235B parámetros MoE; ~1.400 tokens/s; superior en extracción estructurada en español; reservado para evolución del proveedor                                            |
-| **Gemini 2.5 Flash** _(fallback automático)_ | `gemini-2.5-flash`               | NER estructurado — fallback cuando Cerebras retorna 429 o error | Garantiza disponibilidad del servicio cuando falla el primario; el pipeline actual lo usa como fallback documentado                                                     |
-| **Zod**                                      | 4.x                              | Esquemas de validación y contrato NER                           | Tipado en compilación y ejecución; combinado con `Output.object` permite structured outputs válidos independientemente del proveedor activo                             |
-| **Resend**                                   | latest                           | Envío de correo transaccional para M8                           | Proveedor simple para notificaciones por correo cuando el procesamiento completa o falla                                                                                |
-| **Mistral OCR 3** _(opcional)_               | `v25.12`                         | OCR de alta precisión para documentos complejos                 | 99,54% de precisión en español; activable vía `OCR_PROVIDER=mistral` en `.env`; costo: $0,002/pág                                                                       |
+| Tecnología                                      | Versión                          | Rol                                                 | Justificación                                                                                                                                                                    |
+| ----------------------------------------------- | -------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **pdfjs-dist**                                  | latest                           | Extracción de texto de PDFs nativos (digitales)     | Corre en Node.js sin API externa; extrae texto estructurado sin OCR cuando el PDF contiene texto incrustado                                                                      |
+| **Vercel AI SDK** (`ai`)                        | 6.x                              | Capa unificada de acceso a modelos LLM/multimodal   | Abstrae proveedores (Google vía `@ai-sdk/google`, Cerebras vía `@ai-sdk/openai-compatible`, Mistral); API uniforme `generateText` / `streamText` con structured outputs          |
+| `**@ai-sdk/google`\*\*                          | latest                           | Proveedor Google Gemini para el AI SDK              | Acceso a Gemini 2.5 Flash para OCR multimodal y como candidato de fallback en NER/Chat                                                                                           |
+| `**@ai-sdk/openai-compatible**`                 | latest                           | Proveedor OpenAI-compatible genérico para el AI SDK | Conecta el Vercel AI SDK a APIs con interfaz OpenAI, incluyendo Cerebras (`https://api.cerebras.ai/v1`) y Groq (`https://api.groq.com/openai/v1`); sin paquete propietario extra |
+| **Gemini 2.5 Flash**                            | `gemini-2.5-flash`               | OCR multimodal para PDFs escaneados e imágenes      | Proveedor OCR visual actual; en LLM participa como candidato intermedio de fallback en NER y Chat                                                                                |
+| **Gemini 2.5 Flash-Lite**                       | `gemini-2.5-flash-lite`          | 3er candidato en NER                                | Variante de menor costo/latencia para degradación controlada antes de último fallback                                                                                            |
+| **Groq GPT-OSS 120B**                           | `openai/gpt-oss-120b`            | 2do candidato en NER                                | Compatible con interfaz OpenAI; validado para structured outputs con esquema estricto                                                                                            |
+| **Groq GPT-OSS 20B**                            | `openai/gpt-oss-20b`             | 4to candidato en NER                                | Último recurso en NER; se prioriza al final por mayor variabilidad de cumplimiento de esquema                                                                                    |
+| **Cerebras GPT-OSS 120B**                       | `gpt-oss-120b`                   | 1er candidato en Chat                               | Modelo de producción para flujo conversacional (M9) con tool calling planificado                                                                                                 |
+| **Cerebras Qwen 3 235B**                        | `qwen-3-235b-a22b-instruct-2507` | 3er candidato en Chat                               | Respaldo adicional en flujo de chat                                                                                                                                              |
+| **Zod**                                         | 4.x                              | Esquemas de validación y contrato NER               | Tipado en compilación y ejecución; combinado con `Output.object` permite structured outputs válidos independientemente del proveedor activo                                      |
+| **Resend**                                      | latest                           | Envío de correo transaccional para M8               | Proveedor simple para notificaciones por correo cuando el procesamiento completa o falla                                                                                         |
+| **Mistral OCR 3** _(opcional)_                  | `v25.12`                         | OCR de alta precisión para documentos complejos     | 99,54% de precisión en español; activable vía `OCR_PROVIDER=mistral` en `.env`; costo: $0,002/pág                                                                                |
+| **pipeline-observability** _(utilidad interna)_ | local                            | Telemetría y diagnóstico por etapa                  | Estandariza eventos estructurados (`start`, `completed`, `failed`) y clasificación de errores para OCR/NER/procesamiento                                                         |
 
 ### 2.4 Capa de Base de Datos
 
@@ -245,7 +252,7 @@ flowchart TB
 
 ### ADR-08 — Function Calling vs. RAG para el Chat Inteligente (M9)
 
-**Decisión:** El módulo de chat utiliza **function calling** (tool use) del Vercel AI SDK y queda previsto para operar con Cerebras como primario y Gemini 2.5 Flash como fallback al traducir preguntas en lenguaje natural a queries MongoDB sobre metadatos estructurados.
+**Decisión:** El módulo de chat utiliza **function calling** (tool use) del Vercel AI SDK y queda previsto para operar con fallback ordenado `gpt-oss-120b` → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507` al traducir preguntas en lenguaje natural a queries MongoDB sobre metadatos estructurados.
 
 **Justificación técnica:** Los documentos académicos de SIPAc tienen metadatos estructurados bien definidos (autores, título, fecha, tipo, institución, DOI, palabras clave) almacenados en campos tipados de MongoDB. Este escenario favorece el enfoque de function calling sobre RAG (Retrieval Augmented Generation) porque: (a) no se requiere búsqueda semántica sobre texto libre — las consultas operan sobre campos discretos y filtros combinables; (b) function calling permite al LLM invocar herramientas de búsqueda tipadas con esquemas Zod, garantizando queries válidas; (c) no se necesitan embeddings vectoriales ni infraestructura adicional de vector search; (d) el LLM puede encadenar múltiples herramientas en una sola respuesta para queries complejas. La arquitectura define un conjunto de herramientas (`searchByDateRange`, `searchByAuthor`, `searchByKeywords`, `searchByTitle`, `searchByProductType`, `searchByInstitution`, `searchCombined`) que el LLM invoca según la intención del usuario.
 
@@ -253,20 +260,23 @@ flowchart TB
 
 ---
 
-### ADR-09 — Estrategia multi-proveedor LLM: Cerebras + Gemini fallback (M4 y M9)
+### ADR-09 — Estrategia multi-proveedor LLM con fallback por tarea (M4 y M9)
 
-**Decisión:** El NER implementado utiliza structured outputs del AI SDK (`generateText` + `Output.object`) con **Cerebras Inference** como primario y **Gemini 2.5 Flash** como fallback. La implementación actual usa un selector único `LLM_PROVIDER` y una lista ordenada de candidatos con fallback al siguiente proveedor cuando el primario falla. Esta misma estrategia queda prevista para el módulo de Chat IA (M9).
+**Decisión:** El NER implementado utiliza structured outputs del AI SDK (`generateText` + `Output.object`) con la cadena fija `gemini-2.5-flash` → `openai/gpt-oss-120b` (Groq) → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` (Groq). Para Chat IA (M9) se define la cadena `gpt-oss-120b` (Cerebras) → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507` (Cerebras).
 
-**Justificación técnica:** Un único proveedor LLM para NER y Chat representa un punto de falla en un sistema multiusuario académico. Cerebras resuelve esta limitación con un modelo de producción apto para el primer intento y Gemini 2.5 Flash actúa como respaldo operativo cuando el primario falla:
+**Justificación técnica:** Un único proveedor LLM para NER y Chat representa un punto de falla en un sistema multiusuario académico. El fallback por tarea reduce ese riesgo y permite optimizar por compatibilidad de salida estructurada y disponibilidad:
 
-- `gpt-oss-120b` (producción): ~3.000 tokens/s; API 100% compatible con OpenAI; sin restricciones severas de rate limit en free tier; soporta structured outputs y `streamText` con tool calling. Queda disponible para NER y para la evolución del Chat.
-- `qwen-3-235b-a22b-instruct-2507` (Preview): 235B parámetros MoE; rendimiento superior en extracción estructurada en español; actualmente en Preview con free tier.
+- `gemini-2.5-flash`: primer intento NER y proveedor OCR multimodal actual.
+- `openai/gpt-oss-120b` (Groq): segundo intento NER, validado con structured outputs bajo esquema estricto.
+- `gemini-2.5-flash-lite`: tercer intento NER para degradación de costo/latencia.
+- `openai/gpt-oss-20b` (Groq): último recurso NER.
+- `gpt-oss-120b` y `qwen-3-235b-a22b-instruct-2507` (Cerebras): primer y tercer intento para Chat.
 
-La integración se realiza mediante `@ai-sdk/openai-compatible` (paquete oficial del Vercel AI SDK para APIs con interfaz OpenAI, base URL: `https://api.cerebras.ai/v1`), sin SDK propietario de Cerebras. El fallback automático a Gemini 2.5 Flash garantiza disponibilidad continua del sistema.
+La integración se realiza mediante `@ai-sdk/openai-compatible` (paquete oficial del Vercel AI SDK para APIs con interfaz OpenAI), usando `https://api.groq.com/openai/v1` para Groq y `https://api.cerebras.ai/v1` para Cerebras.
 
-**Variable de entorno actual:** `LLM_PROVIDER` (valores: `gemini` | `cerebras`). En el estado implementado controla la selección del proveedor para NER estructurado. La separación por tarea (`NER`/`Chat`) queda reservada para una evolución posterior del módulo M9.
+**Variables de entorno:** `GROQ_API_KEY` habilita candidatos Groq para NER. `CEREBRAS_API_KEY` habilita candidatos Cerebras para Chat. `LLM_PROVIDER` se mantiene por compatibilidad de configuración, pero el orden efectivo se define explícitamente en el proveedor LLM.
 
-**Alternativa descartada:** Mantener Gemini como único proveedor LLM. Se descartó por ausencia de resiliencia ante fallos del proveedor y por la oportunidad de distribuir carga entre proveedores de alta calidad.
+**Alternativa descartada:** Mantener un único proveedor LLM. Se descartó por ausencia de resiliencia y por incompatibilidades puntuales de structured outputs según proveedor/modelo.
 
 ---
 
@@ -293,21 +303,13 @@ flowchart TD
     H --> J
     I --> J
 
-    J --> K{{"LLM_PROVIDER en .env"}}
-
-    K -- "cerebras" --> K1["Cerebras Inference — @ai-sdk/openai-compatible structured outputs + Zod"]
-    K -- "gemini" --> K2["Gemini 2.5 Flash — AI SDK structured outputs + Zod"]
-    K1 -. "fallback automático (429 / error)" .-> K2
-
-    K1 --> L["Objeto TypeScript validado { titulo, autores, doi, indexacion, nombreEvento, fecha, ... }"]
-    K2 --> L
+    J --> K["Cadena NER de candidatos\ngemini flash -> groq 120b -> gemini flash-lite -> groq 20b"]
+    K --> L["Objeto TypeScript validado { titulo, autores, doi, indexacion, nombreEvento, fecha, ... }"]
     L --> M["Guardar entidades en MongoDB estado: 'completado'"]
     M --> N(["✅ Usuario revisa y edita entidades en la UI"])
 
     style A fill:#4f86c6,color:#fff
     style N fill:#4caf50,color:#fff
-    style K1 fill:#ff9800,color:#fff
-    style K2 fill:#e65100,color:#fff
     style H fill:#9c27b0,color:#fff
     style I fill:#795548,color:#fff
 ```
@@ -316,7 +318,7 @@ flowchart TD
 
 ## 5. Estrategia de Proveedores OCR / LLM
 
-El sistema gestiona dos categorías de proveedores de IA, desacoplados mediante interfaces internas y el patrón fábrica: **OCR** (extracción de texto de documentos) y **LLM** (extracción de entidades NER y chat inteligente). Ambas categorías permiten selección y fallback controlados por variables de entorno, sin cambios en la lógica de negocio.
+El sistema gestiona dos categorías de proveedores de IA, desacoplados mediante interfaces internas y el patrón fábrica: **OCR** (extracción de texto de documentos) y **LLM** (extracción de entidades NER y chat inteligente). El fallback de LLM se define por tarea (NER y Chat) con listas ordenadas de candidatos.
 
 ---
 
@@ -352,13 +354,13 @@ export function createOCRProvider(): OCRProvider {
 | `gemini` _(default)_    | Google Gemini | `gemini-2.5-flash` | Según cuota del proveedor | Desarrollo, producción inicial, PDFs escaneados e imágenes |
 | `mistral`               | Mistral AI    | `v25.12`           | $0,002/pág                | Documentos complejos, tablas, fórmulas, máxima precisión   |
 
-> **Nota importante:** Cerebras no ofrece capacidad multimodal/visión. Por tanto, el OCR de imágenes y PDFs escaneados siempre usa el modelo Gemini configurado para OCR, independientemente de `LLM_PROVIDER`.
+> **Nota importante:** Cerebras no ofrece capacidad multimodal/visión. Por tanto, el OCR de imágenes y PDFs escaneados siempre usa el modelo Gemini configurado para OCR.
 
 ---
 
 ### 5.2 Abstracción `LLMProvider` (M4 — NER y evolución hacia M9)
 
-El módulo `server/services/llm/` implementa una abstracción ligera para seleccionar modelos de texto. Los modelos Cerebras se consumen vía `@ai-sdk/openai-compatible` apuntando a `https://api.cerebras.ai/v1`; Google Gemini se consume vía `@ai-sdk/google`. Ambos comparten la misma API del Vercel AI SDK y en el estado actual se usan para NER estructurado mediante `generateText` + `Output.object`.
+El módulo `server/services/llm/` implementa una abstracción ligera para seleccionar modelos de texto. Los modelos Groq y Cerebras se consumen vía `@ai-sdk/openai-compatible` (respectivamente `https://api.groq.com/openai/v1` y `https://api.cerebras.ai/v1`), y Google Gemini se consume vía `@ai-sdk/google`. Todos comparten la misma API del Vercel AI SDK y en el estado actual se usan para NER estructurado mediante `generateText` + `Output.object`.
 
 ```typescript
 // server/services/llm/types.ts
@@ -371,19 +373,45 @@ export interface LLMProvider {
 }
 ```
 
-La implementación actual expone una selección ordenada de candidatos para structured outputs y deja preparada la reutilización del patrón en Chat:
+La implementación actual expone dos selecciones ordenadas: una para NER estructurado y otra para Chat.
 
 ```typescript
 // server/services/llm/provider.ts
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 
 const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_API_KEY })
 
 export function getStructuredModelCandidates() {
   const candidates = []
 
-  if (process.env.LLM_PROVIDER === 'cerebras' && process.env.CEREBRAS_API_KEY) {
+  const groq = process.env.GROQ_API_KEY
+    ? createOpenAICompatible({
+        name: 'groq',
+        apiKey: process.env.GROQ_API_KEY,
+        baseURL: 'https://api.groq.com/openai/v1',
+      })
+    : null
+
+  candidates.push(google('gemini-2.5-flash'))
+
+  if (groq) {
+    candidates.push(groq('openai/gpt-oss-120b'))
+  }
+
+  candidates.push(google('gemini-2.5-flash-lite'))
+
+  if (groq) {
+    candidates.push(groq('openai/gpt-oss-20b'))
+  }
+
+  return candidates
+}
+
+export function getChatModelCandidates() {
+  const candidates = []
+
+  if (process.env.CEREBRAS_API_KEY) {
     const cerebras = createOpenAICompatible({
       name: 'cerebras',
       apiKey: process.env.CEREBRAS_API_KEY,
@@ -391,54 +419,67 @@ export function getStructuredModelCandidates() {
     })
 
     candidates.push(cerebras('gpt-oss-120b'))
+    candidates.push(google('gemini-2.5-flash'))
+    candidates.push(cerebras('qwen-3-235b-a22b-instruct-2507'))
+    return candidates
   }
 
   candidates.push(google('gemini-2.5-flash'))
   return candidates
 }
 
-// El servicio consumidor intenta los candidatos en orden hasta obtener respuesta válida.
+// El servicio consumidor intenta candidatos en orden hasta obtener respuesta válida.
 ```
 
 #### Tabla de proveedores LLM
 
-| Variable de entorno | Valor              | Proveedor     | Model ID activo                  | Params   | Velocidad    | Costo                            | Rol en SIPAc                                                                 |
-| ------------------- | ------------------ | ------------- | -------------------------------- | -------- | ------------ | -------------------------------- | ---------------------------------------------------------------------------- |
-| `LLM_PROVIDER`      | `cerebras` _(def)_ | Cerebras      | `gpt-oss-120b`                   | 120B     | ~3.000 tok/s | Gratis (prod, sin restricciones) | Primario actual para NER estructurado; estrategia prevista también para Chat |
-| `LLM_PROVIDER`      | `gemini`           | Google Gemini | `gemini-2.5-flash`               | —        | —            | Según cuota del proveedor        | Fallback automático actual y selección forzada para NER                      |
-| `LLM_PROVIDER`      | `cerebras`         | Cerebras      | `qwen-3-235b-a22b-instruct-2507` | 235B MoE | ~1.400 tok/s | Gratis (Preview)                 | Candidato documentado para evolución; no activo en la implementación actual  |
+| Flujo    | Orden de fallback implementado                                                                            | Observación operativa                                                      |
+| -------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **NER**  | `gemini-2.5-flash` → `openai/gpt-oss-120b` (Groq) → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` (Groq) | Si no hay `GROQ_API_KEY`, la cadena queda en candidatos Gemini disponibles |
+| **Chat** | `gpt-oss-120b` (Cerebras) → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507` (Cerebras)              | Definido en proveedor LLM para el módulo M9                                |
 
-#### Estado actual de modelos Cerebras (2026-03)
+#### Estado actual de modelos LLM (2026-03)
 
-| Nombre comercial         | Model ID                         | Tier       | Estado                                       | Uso recomendado en SIPAc                                    |
-| ------------------------ | -------------------------------- | ---------- | -------------------------------------------- | ----------------------------------------------------------- |
-| **OpenAI GPT OSS**       | `gpt-oss-120b`                   | Producción | ✅ Disponible — sin restricciones de demanda | NER activo — modelo por defecto; previsto también para Chat |
-| **Qwen 3 235B Instruct** | `qwen-3-235b-a22b-instruct-2507` | Preview    | ⚠️ Rate limit reducido                       | Candidato futuro para extracción estructurada               |
-| **Z.ai GLM 4.7**         | `zai-glm-4.7`                    | Preview    | ⚠️ Rate limit reducido                       | No previsto en SIPAc actualmente                            |
-| **Llama 3.1 8B**         | `llama3.1-8b`                    | Producción | ✅ Disponible                                | Reserva ligera (menor capacidad de reasoning estructurado)  |
+| Proveedor | Nombre comercial      | Model ID                         | Uso en SIPAc (fallback) |
+| --------- | --------------------- | -------------------------------- | ----------------------- |
+| Google    | Gemini 2.5 Flash      | `gemini-2.5-flash`               | 1ro en NER, 2do en Chat |
+| Google    | Gemini 2.5 Flash-Lite | `gemini-2.5-flash-lite`          | 3ro en NER              |
+| Groq      | OpenAI GPT OSS 120B   | `openai/gpt-oss-120b`            | 2do en NER              |
+| Groq      | OpenAI GPT OSS 20B    | `openai/gpt-oss-20b`             | 4to en NER              |
+| Cerebras  | OpenAI GPT OSS 120B   | `gpt-oss-120b`                   | 1ro en Chat             |
+| Cerebras  | Qwen 3 235B Instruct  | `qwen-3-235b-a22b-instruct-2507` | 3ro en Chat             |
 
 ---
 
 ### 5.3 Plan de costos y variables de entorno
 
-| Fase                      | OCR (`OCR_PROVIDER`)   | NER estructurado (`LLM_PROVIDER`)            | Chat (`M9`, futuro)                      |
-| ------------------------- | ---------------------- | -------------------------------------------- | ---------------------------------------- |
-| **Desarrollo / Pasantía** | `gemini` (default)     | `cerebras` (default) con fallback a `gemini` | Estrategia prevista, no implementada aún |
-| **Producción inicial**    | `gemini` (default)     | `cerebras` (default) con fallback a `gemini` | Cerebras o Gemini según cuota            |
-| **Documentos complejos**  | `mistral` ($0,002/pág) | Sin cambio                                   | Sin cambio                               |
+| Fase                      | OCR (`OCR_PROVIDER`)   | NER estructurado (orden actual)                                                             | Chat (`M9`, orden previsto)                                                       |
+| ------------------------- | ---------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Desarrollo / Pasantía** | `gemini` (default)     | `gemini-2.5-flash` → `openai/gpt-oss-120b` → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` | `gpt-oss-120b` (Cerebras) → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507` |
+| **Producción inicial**    | `gemini` (default)     | Misma cadena; degradación automática al siguiente candidato ante error de proveedor         | Misma cadena; definida para implementación del endpoint `/api/chat`               |
+| **Documentos complejos**  | `mistral` ($0,002/pág) | Sin cambio                                                                                  | Sin cambio                                                                        |
 
-**Lógica de fallback:** Ante un error HTTP 429 (rate limit) o error de disponibilidad del proveedor primario Cerebras, el servicio reintenta automáticamente con `gemini-2.5-flash`. El fallo es transparente para el usuario y se registra en el log de auditoría (`AuditLog`).
+**Lógica de fallback:** El servicio recorre candidatos en orden y usa el primer modelo que responda correctamente. Ante error del candidato activo (rate limit, disponibilidad u otro error de proveedor), reintenta automáticamente con el siguiente.
 
-**Variables de entorno requeridas (`.env`):**
+**Observabilidad del pipeline:** El procesamiento registra eventos estructurados por etapa (`ocr`, `ner`, `processing`) con `traceId`, `documentId`, intento, proveedor/modelo, duración y tipo de error. Esto permite identificar con precisión por qué un documento cayó a fallback y en qué punto ocurrió la degradación.
+
+**Variables de entorno del pipeline (`.env`):**
 
 ```
 # Proveedores IA — obligatorias
 GOOGLE_API_KEY=...           # Google AI Studio — OCR siempre + LLM fallback
-CEREBRAS_API_KEY=...         # Cerebras Cloud — NER y Chat IA (primario)
+GROQ_API_KEY=...             # Groq Cloud — candidatos NER openai/gpt-oss-120b y openai/gpt-oss-20b
+CEREBRAS_API_KEY=...         # Cerebras Cloud — candidatos del flujo Chat
 
 # Selección de proveedores — valores por defecto indicados
 OCR_PROVIDER=gemini          # gemini | mistral
-LLM_PROVIDER=cerebras        # gemini | cerebras (selector actual implementado para NER)
+LLM_PROVIDER=cerebras        # Compatibilidad de config; el orden real se define en provider.ts
+
+# Hardening OCR/NER (control operativo)
+OCR_REQUEST_TIMEOUT_MS=45000      # Timeout OCR visual por solicitud
+NER_REQUEST_TIMEOUT_MS=35000      # Timeout por intento de candidato NER
+NER_MAX_CANDIDATE_ATTEMPTS=4      # Presupuesto máximo de candidatos por extracción
+NER_CONFIDENCE_THRESHOLD=0.7      # Umbral para activar segunda pasada NER
 
 # Solo si OCR_PROVIDER=mistral
 MISTRAL_API_KEY=...
@@ -583,28 +624,29 @@ sipac/
 
 ## 8. Herramientas de Desarrollo
 
-| Herramienta                   | Propósito                                                                                        |
-| ----------------------------- | ------------------------------------------------------------------------------------------------ |
-| **pnpm**                      | Gestor de paquetes — más eficiente que npm; usado en todo el proyecto                            |
-| **VS Code**                   | IDE principal con extensiones Vue, TypeScript, Mermaid y PlantUML                                |
-| **Git + GitHub**              | Control de versiones y repositorio del proyecto de pasantía                                      |
-| **MongoDB Atlas**             | Cluster cloud gratuito (M0); sin instalación local de MongoDB                                    |
-| **Vercel AI SDK**             | Integración con Gemini, Cerebras y Mistral; structured outputs y `streamText` con Zod            |
-| **@ai-sdk/openai-compatible** | Conecta el Vercel AI SDK a Cerebras Inference (`https://api.cerebras.ai/v1`) sin SDK propietario |
-| **Cerebras Inference API**    | Proveedor LLM primario: `gpt-oss-120b` (NER + Chat) y `qwen-3-235b` (NER — futuro)               |
-| **Zod**                       | Validación de esquemas en tiempo de ejecución y tipado TypeScript                                |
-| **PlantUML**                  | Diagramas UML formales en archivos `.puml` de la carpeta `docs/`                                 |
-| **Mermaid**                   | Diagramas inline en Markdown (extensión VS Code instalada)                                       |
-| **Postman / Hoppscotch**      | Pruebas manuales de Nuxt API Routes                                                              |
-| **MongoDB Compass**           | Exploración visual de documentos con discriminators en desarrollo                                |
+| Herramienta                   | Propósito                                                                               |
+| ----------------------------- | --------------------------------------------------------------------------------------- |
+| **pnpm**                      | Gestor de paquetes — más eficiente que npm; usado en todo el proyecto                   |
+| **VS Code**                   | IDE principal con extensiones Vue, TypeScript, Mermaid y PlantUML                       |
+| **Git + GitHub**              | Control de versiones y repositorio del proyecto de pasantía                             |
+| **MongoDB Atlas**             | Cluster cloud gratuito (M0); sin instalación local de MongoDB                           |
+| **Vercel AI SDK**             | Integración con Gemini, Cerebras y Mistral; structured outputs y `streamText` con Zod   |
+| **@ai-sdk/openai-compatible** | Conecta el Vercel AI SDK a Cerebras y Groq (APIs OpenAI-compatible) sin SDK propietario |
+| **Groq API**                  | Modelos NER: `openai/gpt-oss-120b`, `openai/gpt-oss-20b`                                |
+| **Cerebras Inference API**    | Modelos chat: `gpt-oss-120b`, `qwen-3-235b-a22b-instruct-2507`                          |
+| **Zod**                       | Validación de esquemas en tiempo de ejecución y tipado TypeScript                       |
+| **PlantUML**                  | Diagramas UML formales en archivos `.puml` de la carpeta `docs/`                        |
+| **Mermaid**                   | Diagramas inline en Markdown (extensión VS Code instalada)                              |
+| **Postman / Hoppscotch**      | Pruebas manuales de Nuxt API Routes                                                     |
+| **MongoDB Compass**           | Exploración visual de documentos con discriminators en desarrollo                       |
 
 ---
 
 ## 9. Decisiones Resueltas (Temporales)
 
-| Decisión                                               | Resolución                                                                                                                                                                                                                                            |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Almacenamiento de archivos cargados**                | MongoDB GridFS para todos los archivos (ver ADR-07). Los archivos se almacenan en las colecciones `uploads.files` y `uploads.chunks`, accesibles mediante streaming a través de `GridFSBucket`                                                        |
-| **Estrategia de despliegue en producción**             | Vercel como plataforma principal (capa gratuita, CI/CD integrado con GitHub). Al usar GridFS en vez de filesystem local, no se requiere persistencia de disco en el servidor                                                                          |
-| **Umbral de score para retry NER**                     | Configurable vía `runtimeConfig.nerConfidenceThreshold` (default 0.70). Se ajustará durante pruebas con documentos reales sin necesidad de redespliegue                                                                                               |
-| **Gestión de rate limit — estrategia multi-proveedor** | NER usa Cerebras (`gpt-oss-120b`) como primario con fallback automático a Gemini (`gemini-2.5-flash`). El mismo patrón queda previsto para Chat. Rate limit por usuario: 15 docs/hora. OCR de imágenes sigue usando Gemini como proveedor multimodal. |
+| Decisión                                               | Resolución                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Almacenamiento de archivos cargados**                | MongoDB GridFS para todos los archivos (ver ADR-07). Los archivos se almacenan en las colecciones `uploads.files` y `uploads.chunks`, accesibles mediante streaming a través de `GridFSBucket`                                                                |
+| **Estrategia de despliegue en producción**             | Vercel como plataforma principal (capa gratuita, CI/CD integrado con GitHub). Al usar GridFS en vez de filesystem local, no se requiere persistencia de disco en el servidor                                                                                  |
+| **Umbral de score para retry NER**                     | Configurable vía `runtimeConfig.nerConfidenceThreshold` (default 0.70). Se ajustará durante pruebas con documentos reales sin necesidad de redespliegue                                                                                                       |
+| **Gestión de rate limit — estrategia multi-proveedor** | NER usa fallback encadenado `gemini flash -> groq 120b -> gemini flash-lite -> groq 20b`. Chat define `gpt-oss (cerebras) -> gemini -> qwen (cerebras)`. Rate limit por usuario: 15 docs/hora. OCR de imágenes sigue usando Gemini como proveedor multimodal. |

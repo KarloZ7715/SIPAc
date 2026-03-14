@@ -13,6 +13,9 @@
 | 1.2     | 2026-03-04 | Carlos A. Canabal Cordero | Simplificación a 2 roles (`admin`, `docente`), eliminación de roles `coordinador` y `estudiante`, nuevo módulo M9 — Chat Inteligente con IA, almacenamiento de archivos en MongoDB GridFS, eliminación del flujo de verificación/aprobación, actualización de stakeholders |
 | 1.3     | 2026-03-06 | Carlos A. Canabal Cordero | Alineación a los cambios de la arquitectura: adición de @nuxt/ui en stack UI, @ai-sdk/vue instalada como dependencia                                                                                                                                                       |
 | 1.4     | 2026-03-07 | Carlos A. Canabal Cordero | Estrategia multi-proveedor LLM: Cerebras (`gpt-oss-120b`, `qwen-3-235b-a22b-instruct-2507`) como proveedores primarios para NER y Chat con Gemini 2.0 Flash como fallback automático; actualización de M4, M9 y stack tecnológico                                          |
+| 1.5     | 2026-03-13 | Carlos A. Canabal Cordero | Ajuste de fallback por tarea implementado en `server/services/llm/provider.ts`: NER prioriza `qwen-3-235b-a22b-instruct-2507`; Chat mantiene `gpt-oss-120b` como primer intento, con fallback multi-modelo documentado                                                     |
+| 1.6     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al hardening del pipeline documental: observabilidad por etapas (`ocr`, `ner`, `processing`) y parámetros operativos de timeout/reintentos configurables por entorno                                                                                            |
+| 1.7     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback vigente en código: NER `gemini-2.5-flash` → `openai/gpt-oss-120b` (Groq) → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` (Groq); Chat mantiene fallback previsto `gpt-oss-120b` (Cerebras) → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507` |
 
 ---
 
@@ -57,18 +60,18 @@ El proyecto responde a recomendaciones del proyecto de investigación **FINV-012
 
 ## 4. Alcance Funcional
 
-| Módulo                             | Descripción                                                                                                                                                                                                                                           |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **M1 — Autenticación y roles**     | Registro, login JWT, gestión de usuarios y 2 roles (`admin`, `docente`)                                                                                                                                                                               |
-| **M2 — Carga de documentos**       | Upload de PDFs e imágenes (JPG/PNG) con validación MIME, límite de 20 MB, almacenamiento en MongoDB GridFS y tracking de estado                                                                                                                       |
-| **M3 — OCR**                       | Extracción de texto: `pdfjs-dist` para PDFs nativos y Gemini 2.5 Flash para escaneados/imágenes                                                                                                                                                       |
-| **M4 — NER**                       | Extracción de entidades académicas vía `generateText` + `Output.object` (Vercel AI SDK) + esquemas Zod                                                                                                                                                |
-| **M5A — Repositorio estructurado** | CRUD de productos académicos con discriminator pattern, filtros por tipo/usuario/año y full-text search                                                                                                                                               |
-| **M5B — Dashboard analítico**      | Indicadores de productividad, gráficas interactivas, exportación de reportes PDF/Excel                                                                                                                                                                |
-| **M6 — Perfil de usuario**         | Consulta y edición de datos personales, cambio de contraseña                                                                                                                                                                                          |
-| **M7 — Seguridad y auditoría**     | Sanitización de inputs, log de auditoría inmutable, rate limiting                                                                                                                                                                                     |
-| **M8 — Notificaciones**            | Alertas en interfaz y correo electrónico sobre estado de procesamiento                                                                                                                                                                                |
-| **M9 — Chat Inteligente**          | Búsqueda conversacional de documentos académicos con consultas en lenguaje natural sobre metadatos, historial de conversaciones y enlaces a documentos; estrategia prevista: Cerebras (`gpt-oss-120b`) como primario y Gemini 2.5 Flash como fallback |
+| Módulo                             | Descripción                                                                                                                                                                                                                                       |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **M1 — Autenticación y roles**     | Registro, login JWT, gestión de usuarios y 2 roles (`admin`, `docente`)                                                                                                                                                                           |
+| **M2 — Carga de documentos**       | Upload de PDFs e imágenes (JPG/PNG) con validación MIME, límite de 20 MB, almacenamiento en MongoDB GridFS y tracking de estado                                                                                                                   |
+| **M3 — OCR**                       | Extracción de texto: `pdfjs-dist` para PDFs nativos y Gemini 2.5 Flash para escaneados/imágenes                                                                                                                                                   |
+| **M4 — NER**                       | Extracción de entidades académicas vía `generateText` + `Output.object` (Vercel AI SDK) + esquemas Zod                                                                                                                                            |
+| **M5A — Repositorio estructurado** | CRUD de productos académicos con discriminator pattern, filtros por tipo/usuario/año y full-text search                                                                                                                                           |
+| **M5B — Dashboard analítico**      | Indicadores de productividad, gráficas interactivas, exportación de reportes PDF/Excel                                                                                                                                                            |
+| **M6 — Perfil de usuario**         | Consulta y edición de datos personales, cambio de contraseña                                                                                                                                                                                      |
+| **M7 — Seguridad y auditoría**     | Sanitización de inputs, log de auditoría inmutable, rate limiting                                                                                                                                                                                 |
+| **M8 — Notificaciones**            | Alertas en interfaz y correo electrónico sobre estado de procesamiento                                                                                                                                                                            |
+| **M9 — Chat Inteligente**          | Búsqueda conversacional de documentos académicos con consultas en lenguaje natural sobre metadatos, historial de conversaciones y enlaces a documentos; fallback previsto: `gpt-oss-120b` → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507` |
 
 ---
 
@@ -86,19 +89,20 @@ El proyecto responde a recomendaciones del proyecto de investigación **FINV-012
 
 ## 6. Stack Tecnológico (resumen)
 
-| Capa                       | Tecnologías principales                                                                                                                                              |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **UI**                     | Nuxt 4 (SSR) + Vue 3 + TypeScript 5 + @nuxt/ui 4 + TailwindCSS 4 + Pinia                                                                                             |
-| **Backend**                | Nuxt Server Routes (`/server/api`) + H3 Multipart + JWT (`jose`) + bcrypt                                                                                            |
-| **Base de datos**          | MongoDB + Mongoose ODM (discriminator pattern)                                                                                                                       |
-| **OCR (PDF nativo)**       | `pdfjs-dist` — extracción local sin API                                                                                                                              |
-| **OCR (escaneado/imagen)** | Gemini 2.5 Flash Vision (Vercel AI SDK) — proveedor actual para OCR multimodal en la implementación                                                                  |
-| **NER**                    | `generateText` + `Output.object` (Vercel AI SDK) + Zod; primario: Cerebras `gpt-oss-120b` via `@ai-sdk/openai-compatible`; fallback: Gemini 2.5 Flash                |
-| **OCR opcional**           | Mistral OCR 3 — activable vía `OCR_PROVIDER=mistral` en `.env`                                                                                                       |
-| **Chat IA**                | `streamText` + tool calling (Vercel AI SDK) + `useChat` (`@ai-sdk/vue`); estrategia prevista: Cerebras `gpt-oss-120b` como primario y Gemini 2.5 Flash como fallback |
-| **LLM provider (bridge)**  | `@ai-sdk/openai-compatible` — conecta Vercel AI SDK a Cerebras Inference (`https://api.cerebras.ai/v1`) sin SDK propietario                                          |
-| **Almacenamiento**         | MongoDB GridFS — archivos almacenados directamente en la base de datos                                                                                               |
-| **DevOps**                 | MongoDB Atlas (cloud) + pnpm + Git/GitHub                                                                                                                            |
+| Capa                       | Tecnologías principales                                                                                                                                                                  |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **UI**                     | Nuxt 4 (SSR) + Vue 3 + TypeScript 5 + @nuxt/ui 4 + TailwindCSS 4 + Pinia                                                                                                                 |
+| **Backend**                | Nuxt Server Routes (`/server/api`) + H3 Multipart + JWT (`jose`) + bcrypt                                                                                                                |
+| **Base de datos**          | MongoDB + Mongoose ODM (discriminator pattern)                                                                                                                                           |
+| **OCR (PDF nativo)**       | `pdfjs-dist` — extracción local sin API                                                                                                                                                  |
+| **OCR (escaneado/imagen)** | Gemini 2.5 Flash Vision (Vercel AI SDK) — proveedor actual para OCR multimodal en la implementación                                                                                      |
+| **NER**                    | `generateText` + `Output.object` (Vercel AI SDK) + Zod; fallback implementado: `gemini-2.5-flash` → `openai/gpt-oss-120b` (Groq) → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` (Groq) |
+| **OCR opcional**           | Mistral OCR 3 — activable vía `OCR_PROVIDER=mistral` en `.env`                                                                                                                           |
+| **Chat IA**                | `streamText` + tool calling (Vercel AI SDK) + `useChat` (`@ai-sdk/vue`); fallback previsto: `gpt-oss-120b` → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507`                       |
+| **Observabilidad IA**      | Telemetría estructurada de pipeline (`pipeline-observability`) con `traceId`, etapa, modelo, duración y tipo de error                                                                    |
+| **LLM provider (bridge)**  | `@ai-sdk/openai-compatible` — conecta Vercel AI SDK a Cerebras (`https://api.cerebras.ai/v1`) y Groq (`https://api.groq.com/openai/v1`) sin SDK propietario                              |
+| **Almacenamiento**         | MongoDB GridFS — archivos almacenados directamente en la base de datos                                                                                                                   |
+| **DevOps**                 | MongoDB Atlas (cloud) + pnpm + Git/GitHub                                                                                                                                                |
 
 > Arquitectura de **servicio único** — un solo lenguaje (TypeScript), un solo proceso (Node.js), un solo despliegue.
 

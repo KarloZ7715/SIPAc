@@ -11,26 +11,33 @@ Proyecto de pasantía profesional (Semestre 2026-I).
 SIPAc automatiza un proceso que hoy es completamente manual: capturar, clasificar y analizar los productos académicos de un programa de posgrado. El docente sube un PDF o imagen de su artículo, ponencia, tesis o certificado, y el sistema:
 
 1. **Extrae el texto** del documento (OCR con Gemini Vision para escaneados, `pdfjs-dist` para PDFs nativos)
-2. **Identifica entidades** académicas automáticamente (autores, título, DOI, revista, indexación, etc.) usando NER con `generateObject` + Zod
+2. **Identifica entidades** académicas automáticamente (autores, título, DOI, revista, indexación, etc.) usando NER con `generateText` + `Output.object` + Zod
 3. **Permite revisión humana** de los metadatos extraídos antes de almacenar
 4. **Organiza un repositorio** estructurado con filtros, búsqueda full-text y control por roles
 5. **Genera un dashboard** analítico con indicadores de productividad y exportación de reportes
+
+### Fallback LLM vigente
+
+- **NER (implementado):** `gemini-2.5-flash` -> `openai/gpt-oss-120b` (Groq) -> `gemini-2.5-flash-lite` -> `openai/gpt-oss-20b` (Groq)
+- **Chat (planificado en M9):** `gpt-oss-120b` (Cerebras) -> `gemini-2.5-flash` -> `qwen-3-235b-a22b-instruct-2507` (Cerebras)
+- **Nota de compatibilidad:** para structured outputs se usa esquema estricto (campos requeridos y `null` explicito cuando aplica) para evitar errores de `response_format` en proveedores OpenAI-compatible
 
 ---
 
 ## Stack
 
-| Capa          | Tecnología                                  |
-| ------------- | ------------------------------------------- |
-| Framework     | Nuxt 4 · Vue 3 · TypeScript 5               |
-| UI            | @nuxt/ui 4 · Tailwind CSS 4                 |
-| Estado        | Pinia                                       |
-| Base de datos | MongoDB (Atlas) · Mongoose ODM              |
-| Auth          | JWT (jose) · bcrypt                         |
-| OCR           | pdfjs-dist · Gemini 2.5 Flash · Mistral OCR |
-| NER           | Vercel AI SDK · generateObject + Zod        |
-| Testing       | Vitest · @nuxt/test-utils · Playwright      |
-| Calidad       | ESLint · Prettier · Husky · commitlint      |
+| Capa          | Tecnología                                         |
+| ------------- | -------------------------------------------------- |
+| Framework     | Nuxt 4 · Vue 3 · TypeScript 5                      |
+| UI            | @nuxt/ui 4 · Tailwind CSS 4                        |
+| Estado        | Pinia                                              |
+| Base de datos | MongoDB (Atlas) · Mongoose ODM                     |
+| Auth          | JWT (jose) · bcrypt                                |
+| OCR           | pdfjs-dist · Gemini 2.5 Flash · Mistral OCR        |
+| NER           | Vercel AI SDK · generateText + Output.object + Zod |
+| LLM providers | Google Gemini · Groq (NER) · Cerebras (Chat M9)    |
+| Testing       | Vitest · @nuxt/test-utils · Playwright             |
+| Calidad       | ESLint · Prettier · Husky · commitlint             |
 
 ---
 
@@ -41,6 +48,14 @@ pnpm dev
 ```
 
 El servidor arranca en `http://localhost:3000`.
+
+### Variables de entorno IA (resumen)
+
+- `GOOGLE_API_KEY`: requerido para OCR multimodal y candidatos Gemini en fallback
+- `GROQ_API_KEY`: habilita candidatos Groq en NER (`openai/gpt-oss-120b`, `openai/gpt-oss-20b`)
+- `CEREBRAS_API_KEY`: habilita candidatos Cerebras para chat (M9)
+- `OCR_PROVIDER`: `gemini` (default) o `mistral`
+- `NER_REQUEST_TIMEOUT_MS`, `NER_MAX_CANDIDATE_ATTEMPTS`, `NER_CONFIDENCE_THRESHOLD`: control operativo del pipeline NER
 
 ### Scripts disponibles
 
