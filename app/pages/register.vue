@@ -19,6 +19,7 @@ async function onSubmit() {
   try {
     await register(state)
     await navigateTo('/')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const msg =
       err?.data?.data?.error?.message || err?.data?.statusMessage || 'Error al registrarse'

@@ -8,6 +8,11 @@ export const PRODUCT_TYPES = [
   'thesis',
   'certificate',
   'research_project',
+  'book',
+  'book_chapter',
+  'technical_report',
+  'software',
+  'patent',
 ] as const
 export type ProductType = (typeof PRODUCT_TYPES)[number]
 
@@ -134,6 +139,67 @@ export interface IResearchProject extends IAcademicProduct {
   budget?: number
 }
 
+export interface IBook extends IAcademicProduct {
+  bookPublisher?: string
+  bookIsbn?: string
+  bookEdition?: string
+  bookCity?: string
+  bookCollection?: string
+  bookTotalPages?: number
+  bookLanguage?: string
+  bookPublicationDate?: Date
+}
+
+export interface IBookChapter extends IAcademicProduct {
+  chapterBookTitle?: string
+  chapterNumber?: string
+  chapterPages?: string
+  chapterEditors: string[]
+  chapterPublisher?: string
+  chapterIsbn?: string
+  chapterEdition?: string
+  chapterLanguage?: string
+  chapterPublicationDate?: Date
+}
+
+export interface ITechnicalReport extends IAcademicProduct {
+  reportNumber?: string
+  reportInstitution?: string
+  reportType?: 'final' | 'interim' | 'white_paper' | 'manual' | 'other'
+  reportSponsor?: string
+  reportPublicationDate?: Date
+  reportRevision?: string
+  reportPages?: number
+  reportRepositoryUrl?: string
+  reportAreaOfKnowledge?: string
+  reportLanguage?: string
+}
+
+export interface ISoftware extends IAcademicProduct {
+  softwareVersion?: string
+  softwareReleaseDate?: Date
+  softwareRepositoryUrl?: string
+  softwareLicense?: string
+  softwareProgrammingLanguage?: string
+  softwarePlatform?: string
+  softwareType?: 'desktop' | 'web' | 'mobile' | 'library' | 'other'
+  softwareRegistrationNumber?: string
+}
+
+export interface IPatent extends IAcademicProduct {
+  patentOffice?: string
+  patentApplicationNumber?: string
+  patentPublicationNumber?: string
+  patentApplicationDate?: Date
+  patentPublicationDate?: Date
+  patentGrantDate?: Date
+  patentStatus?: 'submitted' | 'published' | 'granted' | 'expired'
+  patentAssignee?: string
+  patentInventors: string[]
+  patentCountry?: string
+  patentClassification?: string
+}
+
 export interface ExtractedEntitiesPublic {
   authors: ExtractedEntityWithEvidence<string>[]
   title?: ExtractedEntityWithEvidence<string>
@@ -237,6 +303,57 @@ export interface AcademicProductPublic {
   researchProjectAreaOfKnowledge?: string
   researchProjectKeywords?: string[]
   budget?: number
+  // Book-specific public fields
+  bookPublisher?: string
+  bookIsbn?: string
+  bookEdition?: string
+  bookCity?: string
+  bookCollection?: string
+  bookTotalPages?: number
+  bookLanguage?: string
+  bookPublicationDate?: string
+  // Book chapter-specific public fields
+  chapterBookTitle?: string
+  chapterNumber?: string
+  chapterPages?: string
+  chapterEditors?: string[]
+  chapterPublisher?: string
+  chapterIsbn?: string
+  chapterEdition?: string
+  chapterLanguage?: string
+  chapterPublicationDate?: string
+  // Technical report-specific public fields
+  reportNumber?: string
+  reportInstitution?: string
+  reportType?: 'final' | 'interim' | 'white_paper' | 'manual' | 'other'
+  reportSponsor?: string
+  reportPublicationDate?: string
+  reportRevision?: string
+  reportPages?: number
+  reportRepositoryUrl?: string
+  reportAreaOfKnowledge?: string
+  reportLanguage?: string
+  // Software-specific public fields
+  softwareVersion?: string
+  softwareReleaseDate?: string
+  softwareRepositoryUrl?: string
+  softwareLicense?: string
+  softwareProgrammingLanguage?: string
+  softwarePlatform?: string
+  softwareType?: 'desktop' | 'web' | 'mobile' | 'library' | 'other'
+  softwareRegistrationNumber?: string
+  // Patent-specific public fields
+  patentOffice?: string
+  patentApplicationNumber?: string
+  patentPublicationNumber?: string
+  patentApplicationDate?: string
+  patentPublicationDate?: string
+  patentGrantDate?: string
+  patentStatus?: 'submitted' | 'published' | 'granted' | 'expired'
+  patentAssignee?: string
+  patentInventors?: string[]
+  patentCountry?: string
+  patentClassification?: string
 }
 
 export type ProductReviewAction = 'save-draft' | 'confirm'
@@ -319,6 +436,62 @@ export interface UpdateAcademicProductDTO {
     areaOfKnowledge?: string
     keywords?: string[]
     budget?: number
+  }
+  book?: {
+    bookPublisher?: string
+    bookIsbn?: string
+    bookEdition?: string
+    bookCity?: string
+    bookCollection?: string
+    bookTotalPages?: number
+    bookLanguage?: string
+    bookPublicationDate?: string
+  }
+  bookChapter?: {
+    chapterBookTitle?: string
+    chapterNumber?: string
+    chapterPages?: string
+    chapterEditors?: string[]
+    chapterPublisher?: string
+    chapterIsbn?: string
+    chapterEdition?: string
+    chapterLanguage?: string
+    chapterPublicationDate?: string
+  }
+  technicalReport?: {
+    reportNumber?: string
+    reportInstitution?: string
+    reportType?: 'final' | 'interim' | 'white_paper' | 'manual' | 'other'
+    reportSponsor?: string
+    reportPublicationDate?: string
+    reportRevision?: string
+    reportPages?: number
+    reportRepositoryUrl?: string
+    reportAreaOfKnowledge?: string
+    reportLanguage?: string
+  }
+  software?: {
+    softwareVersion?: string
+    softwareReleaseDate?: string
+    softwareRepositoryUrl?: string
+    softwareLicense?: string
+    softwareProgrammingLanguage?: string
+    softwarePlatform?: string
+    softwareType?: 'desktop' | 'web' | 'mobile' | 'library' | 'other'
+    softwareRegistrationNumber?: string
+  }
+  patent?: {
+    patentOffice?: string
+    patentApplicationNumber?: string
+    patentPublicationNumber?: string
+    patentApplicationDate?: string
+    patentPublicationDate?: string
+    patentGrantDate?: string
+    patentStatus?: 'submitted' | 'published' | 'granted' | 'expired'
+    patentAssignee?: string
+    patentInventors?: string[]
+    patentCountry?: string
+    patentClassification?: string
   }
 }
 

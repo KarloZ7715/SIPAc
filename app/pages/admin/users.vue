@@ -124,6 +124,7 @@ async function onCreate() {
     })
     toast.add({ title: 'Usuario creado', icon: 'i-lucide-check-circle', color: 'success' })
     await loadUsers()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const msg = err?.data?.data?.error?.message || 'Error al crear usuario'
     toast.add({ title: 'Error', description: msg, icon: 'i-lucide-circle-alert', color: 'error' })
@@ -141,6 +142,7 @@ async function onEdit() {
     editingUser.value = null
     toast.add({ title: 'Usuario actualizado', icon: 'i-lucide-check-circle', color: 'success' })
     await loadUsers()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const msg = err?.data?.data?.error?.message || 'Error al actualizar usuario'
     toast.add({ title: 'Error', description: msg, icon: 'i-lucide-circle-alert', color: 'error' })

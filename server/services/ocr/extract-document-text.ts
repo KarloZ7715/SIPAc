@@ -20,6 +20,7 @@ interface OcrExtractionInput {
   mimeType: AllowedMimeType
   traceId?: string
   documentId?: string
+  forceProvider?: OcrProvider
 }
 
 export interface OcrExtractionResult {
@@ -39,6 +40,8 @@ interface TextSignal {
   length: number
   words: number
   letterRatio: number
+  suspiciousRatio: number
+  languageSignal: boolean
 }
 
 type NativePdfErrorCategory =
@@ -115,32 +118,84 @@ function measureTextSignal(value: string): TextSignal {
   const words = normalized.split(/\s+/).filter(Boolean).length
   const letters = (normalized.match(/[\p{L}]/gu) ?? []).length
 
+  const standardChars = (normalized.match(/[\p{L}\p{N}\s.,:;!?()[\]{}-]/gu) ?? []).length
+  const suspiciousRatio = length === 0 ? 0 : 1 - standardChars / length
+
+  const tokens = new Set(normalized.toLowerCase().split(/\s+/))
+  const commonStopWords = new Set([
+    'de',
+    'la',
+    'el',
+    'en',
+    'the',
+    'and',
+    'of',
+    'to',
+    'in',
+    'para',
+    'con',
+    'por',
+    'que',
+  ])
+  const foundStopWords = [...commonStopWords].filter((word) => tokens.has(word)).length
+  const languageSignal = foundStopWords >= 2
+
   return {
     length,
     words,
     letterRatio: length === 0 ? 0 : letters / length,
+    suspiciousRatio,
+    languageSignal,
   }
 }
 
 function isNativeTextReliable(value: string): boolean {
   const signal = measureTextSignal(value)
-  return signal.length >= 120 && signal.words >= 25 && signal.letterRatio >= 0.45
+  return (
+    signal.length >= 120 &&
+    signal.words >= 25 &&
+    signal.letterRatio >= 0.45 &&
+    signal.suspiciousRatio < 0.15 &&
+    signal.languageSignal
+  )
 }
 
 function estimateNativeConfidence(value: string): number {
   const signal = measureTextSignal(value)
   if (signal.length === 0) return 0
 
-  const score = 0.42 + Math.min(signal.length / 6000, 0.28) + Math.min(signal.words / 350, 0.2)
-  return Number(Math.min(0.95, score).toFixed(3))
+  let score = 0.42 + Math.min(signal.length / 6000, 0.28) + Math.min(signal.words / 350, 0.2)
+
+  if (signal.suspiciousRatio > 0.05) {
+    score -= signal.suspiciousRatio * 1.5
+  }
+
+  if (signal.languageSignal) {
+    score += 0.05
+  } else if (signal.words > 30) {
+    score -= 0.15
+  }
+
+  return Number(Math.max(0, Math.min(0.95, score)).toFixed(3))
 }
 
 function estimateVisionConfidence(value: string): number {
   const signal = measureTextSignal(value)
   if (signal.length === 0) return 0
 
-  const score = 0.46 + Math.min(signal.length / 5000, 0.25) + Math.min(signal.words / 300, 0.2)
-  return Number(Math.min(0.9, score).toFixed(3))
+  let score = 0.46 + Math.min(signal.length / 5000, 0.25) + Math.min(signal.words / 300, 0.2)
+
+  if (signal.suspiciousRatio > 0.05) {
+    score -= signal.suspiciousRatio * 1.5
+  }
+
+  if (signal.languageSignal) {
+    score += 0.05
+  } else if (signal.words > 30) {
+    score -= 0.15
+  }
+
+  return Number(Math.max(0, Math.min(0.9, score)).toFixed(3))
 }
 
 function clampToUnit(value: number): number {
@@ -206,6 +261,8 @@ async function extractNativePdfText(
         const content = await page.getTextContent()
         const pageTokens: string[] = []
 
+        const pageBlocks: OcrTextBlock[] = []
+
         for (const item of content.items) {
           if (!('str' in item && 'transform' in item && 'width' in item)) {
             continue
@@ -240,7 +297,7 @@ async function extractNativePdfText(
             continue
           }
 
-          blocks.push({
+          pageBlocks.push({
             text,
             anchor: {
               page: pageIndex,
@@ -248,7 +305,7 @@ async function extractNativePdfText(
               y: normalized.y,
               width: normalized.width,
               height: normalized.height,
-              confidence: 0.94,
+              confidence: 0,
               provider: 'pdfjs_native',
               sourceText: text,
             },
@@ -259,6 +316,11 @@ async function extractNativePdfText(
         const pageText = pageTokens.join(' ').trim()
 
         if (pageText.length > 0) {
+          const pageConfidence = estimateNativeConfidence(pageText)
+          for (const block of pageBlocks) {
+            block.anchor.confidence = pageConfidence
+            blocks.push(block)
+          }
           pages.push(pageText)
         }
       } catch (error) {
@@ -340,7 +402,7 @@ export async function extractDocumentText(input: OcrExtractionInput): Promise<Oc
     },
   })
 
-  if (input.mimeType === 'application/pdf') {
+  if (input.mimeType === 'application/pdf' && input.forceProvider !== 'gemini_vision') {
     const nativeStart = Date.now()
 
     try {
@@ -417,13 +479,38 @@ export async function extractDocumentText(input: OcrExtractionInput): Promise<Oc
       traceId: input.traceId,
       documentId: input.documentId,
       stage: 'ocr',
-      event: 'completed',
+      event: 'native_pdf_unreliable_fallback_triggered',
       provider: 'pdfjs_native',
-      durationMs: Date.now() - ocrStart,
       metadata: {
         source: 'native_pdf_partial',
         confidence: estimateNativeConfidence(nativeText),
         nativeDiagnostics,
+      },
+    })
+  }
+
+  let visionText = ''
+
+  try {
+    visionText = await extractWithGemini(input.buffer, input.mimeType)
+  } catch (error) {
+    if (!nativeExtractionSucceeded) {
+      throw error
+    }
+
+    const classified = classifyPipelineError(error)
+
+    logPipelineEvent({
+      traceId: input.traceId,
+      documentId: input.documentId,
+      stage: 'ocr',
+      event: 'vision_fallback_failed_kept_native_partial',
+      provider: 'gemini_vision',
+      errorType: classified.errorType,
+      errorMessage: classified.errorMessage,
+      metadata: {
+        source: 'native_pdf_partial',
+        nativeConfidence: estimateNativeConfidence(nativeText),
       },
     })
 
@@ -434,8 +521,6 @@ export async function extractDocumentText(input: OcrExtractionInput): Promise<Oc
       blocks: nativeBlocks,
     }
   }
-
-  const visionText = await extractWithGemini(input.buffer, input.mimeType)
 
   if (nativeExtractionError && input.mimeType === 'application/pdf') {
     console.warn(

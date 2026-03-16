@@ -106,6 +106,57 @@ interface ProductLike {
   programOrCall?: string
   keywords?: string[]
   budget?: number
+  // Book
+  bookPublisher?: string
+  bookIsbn?: string
+  bookEdition?: string
+  bookCity?: string
+  bookCollection?: string
+  bookTotalPages?: number
+  bookLanguage?: string
+  bookPublicationDate?: unknown
+  // Book chapter
+  chapterBookTitle?: string
+  chapterNumber?: string
+  chapterPages?: string
+  chapterEditors?: string[]
+  chapterPublisher?: string
+  chapterIsbn?: string
+  chapterEdition?: string
+  chapterLanguage?: string
+  chapterPublicationDate?: unknown
+  // Technical report
+  reportNumber?: string
+  reportInstitution?: string
+  reportType?: 'final' | 'interim' | 'white_paper' | 'manual' | 'other'
+  reportSponsor?: string
+  reportPublicationDate?: unknown
+  reportRevision?: string
+  reportPages?: number
+  reportRepositoryUrl?: string
+  reportAreaOfKnowledge?: string
+  reportLanguage?: string
+  // Software
+  softwareVersion?: string
+  softwareReleaseDate?: unknown
+  softwareRepositoryUrl?: string
+  softwareLicense?: string
+  softwareProgrammingLanguage?: string
+  softwarePlatform?: string
+  softwareType?: 'desktop' | 'web' | 'mobile' | 'library' | 'other'
+  softwareRegistrationNumber?: string
+  // Patent
+  patentOffice?: string
+  patentApplicationNumber?: string
+  patentPublicationNumber?: string
+  patentApplicationDate?: unknown
+  patentPublicationDate?: unknown
+  patentGrantDate?: unknown
+  patentStatus?: 'submitted' | 'published' | 'granted' | 'expired'
+  patentAssignee?: string
+  patentInventors?: string[]
+  patentCountry?: string
+  patentClassification?: string
 }
 
 interface UploadedFileLike {
@@ -269,6 +320,52 @@ export function toAcademicProductPublic(product: ProductLike): AcademicProductPu
     researchProjectKeywords:
       product.productType === 'research_project' ? product.keywords : undefined,
     budget: product.budget,
+    bookPublisher: product.bookPublisher,
+    bookIsbn: product.bookIsbn,
+    bookEdition: product.bookEdition,
+    bookCity: product.bookCity,
+    bookCollection: product.bookCollection,
+    bookTotalPages: product.bookTotalPages,
+    bookLanguage: product.bookLanguage,
+    bookPublicationDate: toOptionalIsoString(product.bookPublicationDate),
+    chapterBookTitle: product.chapterBookTitle,
+    chapterNumber: product.chapterNumber,
+    chapterPages: product.chapterPages,
+    chapterEditors: product.chapterEditors,
+    chapterPublisher: product.chapterPublisher,
+    chapterIsbn: product.chapterIsbn,
+    chapterEdition: product.chapterEdition,
+    chapterLanguage: product.chapterLanguage,
+    chapterPublicationDate: toOptionalIsoString(product.chapterPublicationDate),
+    reportNumber: product.reportNumber,
+    reportInstitution: product.reportInstitution,
+    reportType: product.reportType,
+    reportSponsor: product.reportSponsor,
+    reportPublicationDate: toOptionalIsoString(product.reportPublicationDate),
+    reportRevision: product.reportRevision,
+    reportPages: product.reportPages,
+    reportRepositoryUrl: product.reportRepositoryUrl,
+    reportAreaOfKnowledge: product.reportAreaOfKnowledge,
+    reportLanguage: product.reportLanguage,
+    softwareVersion: product.softwareVersion,
+    softwareReleaseDate: toOptionalIsoString(product.softwareReleaseDate),
+    softwareRepositoryUrl: product.softwareRepositoryUrl,
+    softwareLicense: product.softwareLicense,
+    softwareProgrammingLanguage: product.softwareProgrammingLanguage,
+    softwarePlatform: product.softwarePlatform,
+    softwareType: product.softwareType,
+    softwareRegistrationNumber: product.softwareRegistrationNumber,
+    patentOffice: product.patentOffice,
+    patentApplicationNumber: product.patentApplicationNumber,
+    patentPublicationNumber: product.patentPublicationNumber,
+    patentApplicationDate: toOptionalIsoString(product.patentApplicationDate),
+    patentPublicationDate: toOptionalIsoString(product.patentPublicationDate),
+    patentGrantDate: toOptionalIsoString(product.patentGrantDate),
+    patentStatus: product.patentStatus,
+    patentAssignee: product.patentAssignee,
+    patentInventors: product.patentInventors,
+    patentCountry: product.patentCountry,
+    patentClassification: product.patentClassification,
   }
 }
 

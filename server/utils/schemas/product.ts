@@ -113,6 +113,85 @@ const researchProjectUpdateSchema = z
   })
   .partial()
 
+const bookUpdateSchema = z
+  .object({
+    bookPublisher: z.string().trim().optional(),
+    bookIsbn: z.string().trim().optional(),
+    bookEdition: z.string().trim().optional(),
+    bookCity: z.string().trim().optional(),
+    bookCollection: z.string().trim().optional(),
+    bookTotalPages: z.coerce.number().int().positive().optional(),
+    bookLanguage: z.string().trim().optional(),
+    bookPublicationDate: z.coerce.date().optional(),
+  })
+  .partial()
+
+const bookChapterUpdateSchema = z
+  .object({
+    chapterBookTitle: z.string().trim().optional(),
+    chapterNumber: z.string().trim().optional(),
+    chapterPages: z
+      .string()
+      .trim()
+      .regex(/^\d+(-\d+)?$/, 'Formato de páginas inválido')
+      .optional(),
+    chapterEditors: z.array(z.string().trim()).optional(),
+    chapterPublisher: z.string().trim().optional(),
+    chapterIsbn: z.string().trim().optional(),
+    chapterEdition: z.string().trim().optional(),
+    chapterLanguage: z.string().trim().optional(),
+    chapterPublicationDate: z.coerce.date().optional(),
+  })
+  .partial()
+
+const technicalReportUpdateSchema = z
+  .object({
+    reportNumber: z.string().trim().optional(),
+    reportInstitution: z.string().trim().optional(),
+    reportType: z.enum(['final', 'interim', 'white_paper', 'manual', 'other']).optional(),
+    reportSponsor: z.string().trim().optional(),
+    reportPublicationDate: z.coerce.date().optional(),
+    reportRevision: z.string().trim().optional(),
+    reportPages: z.coerce.number().int().positive().optional(),
+    reportRepositoryUrl: z.string().trim().url('La URL del repositorio debe ser válida').optional(),
+    reportAreaOfKnowledge: z.string().trim().optional(),
+    reportLanguage: z.string().trim().optional(),
+  })
+  .partial()
+
+const softwareUpdateSchema = z
+  .object({
+    softwareVersion: z.string().trim().optional(),
+    softwareReleaseDate: z.coerce.date().optional(),
+    softwareRepositoryUrl: z
+      .string()
+      .trim()
+      .url('La URL del repositorio debe ser válida')
+      .optional(),
+    softwareLicense: z.string().trim().optional(),
+    softwareProgrammingLanguage: z.string().trim().optional(),
+    softwarePlatform: z.string().trim().optional(),
+    softwareType: z.enum(['desktop', 'web', 'mobile', 'library', 'other']).optional(),
+    softwareRegistrationNumber: z.string().trim().optional(),
+  })
+  .partial()
+
+const patentUpdateSchema = z
+  .object({
+    patentOffice: z.string().trim().optional(),
+    patentApplicationNumber: z.string().trim().optional(),
+    patentPublicationNumber: z.string().trim().optional(),
+    patentApplicationDate: z.coerce.date().optional(),
+    patentPublicationDate: z.coerce.date().optional(),
+    patentGrantDate: z.coerce.date().optional(),
+    patentStatus: z.enum(['submitted', 'published', 'granted', 'expired']).optional(),
+    patentAssignee: z.string().trim().optional(),
+    patentInventors: z.array(z.string().trim()).optional(),
+    patentCountry: z.string().trim().optional(),
+    patentClassification: z.string().trim().optional(),
+  })
+  .partial()
+
 export const updateProductSchema = z.object({
   manualMetadata: manualMetadataSchema.optional(),
   action: productReviewActionSchema.optional(),
@@ -122,6 +201,11 @@ export const updateProductSchema = z.object({
   conferencePaper: conferencePaperUpdateSchema.optional(),
   certificate: certificateUpdateSchema.optional(),
   researchProject: researchProjectUpdateSchema.optional(),
+  book: bookUpdateSchema.optional(),
+  bookChapter: bookChapterUpdateSchema.optional(),
+  technicalReport: technicalReportUpdateSchema.optional(),
+  software: softwareUpdateSchema.optional(),
+  patent: patentUpdateSchema.optional(),
 })
 
 export const productQuerySchema = z.object({

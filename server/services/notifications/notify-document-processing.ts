@@ -11,6 +11,7 @@ interface NotifyDocumentProcessingInput {
   filename: string
   status: 'completed' | 'error'
   errorMessage?: string
+  warningMessage?: string
 }
 
 function buildNotificationContent(input: NotifyDocumentProcessingInput): {
@@ -19,10 +20,16 @@ function buildNotificationContent(input: NotifyDocumentProcessingInput): {
   message: string
 } {
   if (input.status === 'completed') {
+    const message = input.warningMessage
+      ? `El documento ${input.filename} fue procesado y agregado al repositorio con observaciones: ${input.warningMessage}`
+      : `El documento ${input.filename} fue procesado y agregado al repositorio.`
+
     return {
       type: 'processing_complete',
-      title: 'Documento procesado correctamente',
-      message: `El documento ${input.filename} fue procesado y agregado al repositorio.`,
+      title: input.warningMessage
+        ? 'Documento procesado con observaciones'
+        : 'Documento procesado correctamente',
+      message,
     }
   }
 

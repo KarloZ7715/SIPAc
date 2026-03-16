@@ -25,6 +25,7 @@ async function onProfileSubmit() {
     })
     await fetchUser()
     toast.add({ title: 'Perfil actualizado', icon: 'i-lucide-check-circle', color: 'success' })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const msg = err?.data?.data?.error?.message || 'Error al actualizar perfil'
     toast.add({ title: 'Error', description: msg, icon: 'i-lucide-circle-alert', color: 'error' })
@@ -43,6 +44,7 @@ async function onPasswordSubmit() {
     passwordState.currentPassword = ''
     passwordState.newPassword = ''
     toast.add({ title: 'Contraseña actualizada', icon: 'i-lucide-check-circle', color: 'success' })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const msg = err?.data?.data?.error?.message || 'Error al cambiar contraseña'
     toast.add({ title: 'Error', description: msg, icon: 'i-lucide-circle-alert', color: 'error' })

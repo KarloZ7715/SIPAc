@@ -13,6 +13,9 @@ export type OcrProvider = (typeof OCR_PROVIDERS)[number]
 export const DOCUMENT_CLASSIFICATIONS = ['academic', 'non_academic', 'uncertain'] as const
 export type DocumentClassification = (typeof DOCUMENT_CLASSIFICATIONS)[number]
 
+export const DOCUMENT_CLASSIFICATION_SOURCES = ['heuristic', 'llm', 'hybrid'] as const
+export type DocumentClassificationSource = (typeof DOCUMENT_CLASSIFICATION_SOURCES)[number]
+
 export const NER_PROVIDERS = ['cerebras', 'gemini', 'groq'] as const
 export type NerProvider = (typeof NER_PROVIDERS)[number]
 
@@ -53,6 +56,7 @@ export interface IUploadedFile {
   nerModel?: string
   nerAttemptTrace?: NerAttemptTraceEntry[]
   documentClassification?: DocumentClassification
+  documentClassificationSource?: DocumentClassificationSource
   classificationConfidence?: number
   classificationRationale?: string
   processingAttempt?: number
@@ -94,6 +98,7 @@ export interface UploadedFileStatusDTO {
   nerModel?: string
   nerAttemptTrace?: NerAttemptTraceEntry[]
   documentClassification?: DocumentClassification
+  documentClassificationSource?: DocumentClassificationSource
   classificationConfidence?: number
   classificationRationale?: string
   processingAttempt?: number

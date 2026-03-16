@@ -1,13 +1,13 @@
 const maxUploadFileSizeBytes = 20_971_520
 const maxMultipartRequestSizeBytes = 22_020_096
+const isProduction = process.env.NODE_ENV === 'production'
+const hasSentryDsn = Boolean(process.env.SENTRY_DSN)
+const enableSentry = isProduction && hasSentryDsn
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
-
   devtools: { enabled: true },
-
-  modules: ['@nuxt/ui', '@pinia/nuxt', '@nuxt/eslint', 'nuxt-security'],
-
+  modules: ['@nuxt/ui', '@pinia/nuxt', '@nuxt/eslint', 'nuxt-security', '@sentry/nuxt/module'],
   css: ['~/assets/css/main.css'],
 
   typescript: {
@@ -45,6 +45,10 @@ export default defineNuxtConfig({
       appName: 'SIPAc',
       appDescription: 'Sistema Inteligente de Productividad Académica',
       enableTestingMetrics: process.env.NUXT_PUBLIC_ENABLE_TESTING_METRICS === 'true',
+      sentry: {
+        dsn: process.env.SENTRY_DSN ?? '',
+        environment: process.env.SENTRY_ENV ?? process.env.NODE_ENV ?? 'development',
+      },
     },
   },
 
@@ -55,9 +59,10 @@ export default defineNuxtConfig({
   },
 
   security: {
-    // Desactivamos nuxt-security completo en desarrollo para evitar conflictos
-    // con CSP (por ejemplo, bloqueos de pdfjs-dist por 'unsafe-eval').
-    enabled: process.env.NODE_ENV === 'production',
+    // Solo activo en producción. En desarrollo lo desactivamos porque Vite (HMR)
+    // y el tooling pueden usar eval; en producción la CSP va activa y la vista
+    // previa PDF es compatible gracias a getDocument({ isEvalSupported: false }).
+    enabled: isProduction,
     headers: {
       crossOriginEmbedderPolicy: false,
       contentSecurityPolicy: {
@@ -79,4 +84,18 @@ export default defineNuxtConfig({
       asyncContext: true,
     },
   },
+
+  sentry: enableSentry
+    ? {
+        org: process.env.SENTRY_ORG ?? 'carlos-cc',
+        project: process.env.SENTRY_PROJECT ?? 'sipac-nuxt',
+        autoInjectServerSentry: 'top-level-import',
+      }
+    : false,
+
+  sourcemap: enableSentry
+    ? {
+        client: 'hidden',
+      }
+    : undefined,
 })

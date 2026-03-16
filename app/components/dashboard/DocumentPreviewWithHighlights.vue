@@ -13,6 +13,7 @@ interface RenderedPage {
   page: number
   width: number
   height: number
+  scale: number
 }
 
 const props = defineProps<{
@@ -39,6 +40,7 @@ const containerWidth = ref(0)
 const canvasRefs = new Map<number, HTMLCanvasElement>()
 const pageRefs = new Map<number, HTMLElement>()
 const renderedPageNumbers = new Set<number>()
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let pdfDocument: any | null = null
 let pageObserver: IntersectionObserver | null = null
 let activeRenderToken = 0
@@ -264,7 +266,10 @@ async function renderPdfDocument(url: string) {
   try {
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
     pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerSrc
-    const loadingTask = pdfjs.getDocument(url)
+    const loadingTask = pdfjs.getDocument({
+      url,
+      isEvalSupported: false,
+    })
     const pdf = await loadingTask.promise
 
     const pages: RenderedPage[] = []
@@ -288,6 +293,7 @@ async function renderPdfDocument(url: string) {
         page: pageNumber,
         width: viewport.width,
         height: viewport.height,
+        scale,
       })
     }
 
@@ -323,17 +329,23 @@ async function resolveCanvasForPage(pageNumber: number): Promise<HTMLCanvasEleme
 }
 
 async function renderSinglePage(pageNumber: number) {
+  const renderToken = activeRenderToken
+
   if (!pdfDocument || renderedPageNumbers.has(pageNumber)) {
     return
   }
 
+  const pageMeta = renderedPages.value.find((entry) => entry.page === pageNumber)
+  if (!pageMeta) {
+    return
+  }
+
   const page = await pdfDocument.getPage(pageNumber)
-  const initialViewport = page.getViewport({ scale: 1 })
-  const availableWidth =
-    containerWidth.value || viewerContainer.value?.clientWidth || initialViewport.width
-  const targetWidth = Math.max(220, Math.min(availableWidth - 16, 980))
-  const scale = targetWidth / Math.max(initialViewport.width, 1)
-  const viewport = page.getViewport({ scale })
+  if (renderToken !== activeRenderToken) {
+    return
+  }
+
+  const viewport = page.getViewport({ scale: pageMeta.scale })
 
   const canvas = await resolveCanvasForPage(pageNumber)
   if (!canvas) {
@@ -347,10 +359,13 @@ async function renderSinglePage(pageNumber: number) {
 
   canvas.width = Math.floor(viewport.width)
   canvas.height = Math.floor(viewport.height)
-  canvas.style.width = `${Math.floor(viewport.width)}px`
-  canvas.style.height = `${Math.floor(viewport.height)}px`
 
-  await page.render({ canvas, canvasContext: context, viewport }).promise
+  await page.render({ canvasContext: context, viewport }).promise
+
+  if (renderToken !== activeRenderToken) {
+    return
+  }
+
   renderedPageNumbers.add(pageNumber)
 }
 
@@ -630,15 +645,18 @@ watch(
   position: relative;
   overflow: auto;
   scrollbar-gutter: stable both-edges;
-  max-height: 34rem;
+  max-height: min(70vh, 44rem);
+  min-height: 18rem;
   border: 1px solid rgb(196 214 202 / 0.85);
   border-radius: 1.2rem;
   background: linear-gradient(180deg, rgb(252 255 253 / 0.9), rgb(242 248 244 / 0.92));
   padding: 0.75rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(209 213 219 / 0.55) transparent;
 }
 
 .document-viewer-empty {
-  min-height: 22rem;
+  min-height: 18rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -650,7 +668,7 @@ watch(
 .image-preview-shell,
 .pdf-page-shell {
   position: relative;
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
   margin: 0 auto;
 }
@@ -658,7 +676,7 @@ watch(
 .image-preview {
   display: block;
   width: 100%;
-  max-height: 32rem;
+  height: auto;
   object-fit: contain;
   border-radius: 0.9rem;
   border: 1px solid rgb(196 214 202 / 0.7);
@@ -691,6 +709,8 @@ watch(
 
 .pdf-page-canvas {
   display: block;
+  width: 100%;
+  height: auto;
   border-radius: 0.9rem;
   border: 1px solid rgb(196 214 202 / 0.7);
   background: white;
@@ -745,5 +765,36 @@ watch(
 
 .highlight-dimmed {
   opacity: 0.32;
+}
+
+@media (max-width: 640px) {
+  .document-viewer-shell {
+    padding: 0.6rem;
+    max-height: 62vh;
+    min-height: 16rem;
+  }
+}
+
+.document-viewer-shell::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.document-viewer-shell::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.document-viewer-shell::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background-color: rgb(209 213 219 / 0.4);
+}
+
+.document-viewer-shell:hover::-webkit-scrollbar-thumb,
+.document-viewer-shell:focus-within::-webkit-scrollbar-thumb {
+  background-color: rgb(148 163 184 / 0.75);
+}
+
+.document-viewer-shell::-webkit-scrollbar-thumb:active {
+  background-color: rgb(100 116 139 / 0.9);
 }
 </style>

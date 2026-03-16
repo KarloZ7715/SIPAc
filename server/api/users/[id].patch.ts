@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
   if (Object.keys(updates).length === 0) {
     throw createValidationError({
       issues: [{ path: [], message: 'Se debe enviar al menos un campo para actualizar' }],
-    } as any)
+    } as any) // eslint-disable-line @typescript-eslint/no-explicit-any
   }
 
   const user = await User.findByIdAndUpdate(

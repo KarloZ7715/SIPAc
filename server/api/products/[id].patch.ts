@@ -120,6 +120,62 @@ const subtypeFieldsByProductType: Record<string, string[]> = {
     'keywords',
     'budget',
   ],
+  book: [
+    'bookPublisher',
+    'bookIsbn',
+    'bookEdition',
+    'bookCity',
+    'bookCollection',
+    'bookTotalPages',
+    'bookLanguage',
+    'bookPublicationDate',
+  ],
+  book_chapter: [
+    'chapterBookTitle',
+    'chapterNumber',
+    'chapterPages',
+    'chapterEditors',
+    'chapterPublisher',
+    'chapterIsbn',
+    'chapterEdition',
+    'chapterLanguage',
+    'chapterPublicationDate',
+  ],
+  technical_report: [
+    'reportNumber',
+    'reportInstitution',
+    'reportType',
+    'reportSponsor',
+    'reportPublicationDate',
+    'reportRevision',
+    'reportPages',
+    'reportRepositoryUrl',
+    'reportAreaOfKnowledge',
+    'reportLanguage',
+  ],
+  software: [
+    'softwareVersion',
+    'softwareReleaseDate',
+    'softwareRepositoryUrl',
+    'softwareLicense',
+    'softwareProgrammingLanguage',
+    'softwarePlatform',
+    'softwareType',
+    'softwareRegistrationNumber',
+  ],
+  patent: [
+    'patentOffice',
+    'patentApplicationNumber',
+    'patentPublicationNumber',
+    'patentApplicationDate',
+    'patentPublicationDate',
+    'patentGrantDate',
+    'patentStatus',
+    'patentAssignee',
+    'patentInventors',
+    'patentCountry',
+    'patentClassification',
+  ],
 }
 
 function buildSubtypeUnsetPayload(nextProductType: string) {
@@ -160,6 +216,11 @@ export default defineEventHandler(async (event) => {
     conferencePaper,
     certificate,
     researchProject,
+    book,
+    bookChapter,
+    technicalReport,
+    software,
+    patent,
   } = parsed.data
   if (
     !manualMetadata &&
@@ -169,7 +230,12 @@ export default defineEventHandler(async (event) => {
     !thesis &&
     !conferencePaper &&
     !certificate &&
-    !researchProject
+    !researchProject &&
+    !book &&
+    !bookChapter &&
+    !technicalReport &&
+    !software &&
+    !patent
   ) {
     throw createBadRequestError('Se debe enviar al menos un cambio para actualizar')
   }
@@ -240,6 +306,26 @@ export default defineEventHandler(async (event) => {
 
   if (effectiveProductType === 'research_project' && researchProject) {
     Object.assign(product, researchProject)
+  }
+
+  if (effectiveProductType === 'book' && book) {
+    Object.assign(product, book)
+  }
+
+  if (effectiveProductType === 'book_chapter' && bookChapter) {
+    Object.assign(product, bookChapter)
+  }
+
+  if (effectiveProductType === 'technical_report' && technicalReport) {
+    Object.assign(product, technicalReport)
+  }
+
+  if (effectiveProductType === 'software' && software) {
+    Object.assign(product, software)
+  }
+
+  if (effectiveProductType === 'patent' && patent) {
+    Object.assign(product, patent)
   }
 
   if (action === 'confirm') {

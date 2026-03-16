@@ -157,6 +157,7 @@ academicProductSchema.index(
   {
     name: 'idx_fulltext_search',
     default_language: 'spanish',
+    language_override: 'textIndexLanguage',
     weights: {
       'manualMetadata.title': 10,
       'manualMetadata.authors': 5,
@@ -286,6 +287,88 @@ const researchProjectSchema = new Schema({
   budget: { type: Number, min: 0 },
 })
 
+const bookSchema = new Schema({
+  bookPublisher: { type: String, trim: true },
+  bookIsbn: { type: String, trim: true },
+  bookEdition: { type: String, trim: true },
+  bookCity: { type: String, trim: true },
+  bookCollection: { type: String, trim: true },
+  bookTotalPages: { type: Number, min: 1 },
+  bookLanguage: { type: String, trim: true },
+  bookPublicationDate: { type: Date, default: null },
+})
+
+const bookChapterSchema = new Schema({
+  chapterBookTitle: { type: String, trim: true },
+  chapterNumber: { type: String, trim: true },
+  chapterPages: {
+    type: String,
+    trim: true,
+    match: [/^\d+(-\d+)?$/, 'Formato de páginas inválido'],
+  },
+  chapterEditors: { type: [String], default: [] },
+  chapterPublisher: { type: String, trim: true },
+  chapterIsbn: { type: String, trim: true },
+  chapterEdition: { type: String, trim: true },
+  chapterLanguage: { type: String, trim: true },
+  chapterPublicationDate: { type: Date, default: null },
+})
+
+const technicalReportSchema = new Schema({
+  reportNumber: { type: String, trim: true },
+  reportInstitution: { type: String, trim: true },
+  reportType: {
+    type: String,
+    enum: ['final', 'interim', 'white_paper', 'manual', 'other'],
+  },
+  reportSponsor: { type: String, trim: true },
+  reportPublicationDate: { type: Date, default: null },
+  reportRevision: { type: String, trim: true },
+  reportPages: { type: Number, min: 1 },
+  reportRepositoryUrl: {
+    type: String,
+    trim: true,
+    match: [/^https?:\/\//, 'La URL del repositorio debe iniciar con http(s)://'],
+  },
+  reportAreaOfKnowledge: { type: String, trim: true },
+  reportLanguage: { type: String, trim: true },
+})
+
+const softwareSchema = new Schema({
+  softwareVersion: { type: String, trim: true },
+  softwareReleaseDate: { type: Date, default: null },
+  softwareRepositoryUrl: {
+    type: String,
+    trim: true,
+    match: [/^https?:\/\//, 'La URL del repositorio debe iniciar con http(s)://'],
+  },
+  softwareLicense: { type: String, trim: true },
+  softwareProgrammingLanguage: { type: String, trim: true },
+  softwarePlatform: { type: String, trim: true },
+  softwareType: {
+    type: String,
+    enum: ['desktop', 'web', 'mobile', 'library', 'other'],
+  },
+  softwareRegistrationNumber: { type: String, trim: true },
+})
+
+const patentSchema = new Schema({
+  patentOffice: { type: String, trim: true },
+  patentApplicationNumber: { type: String, trim: true },
+  patentPublicationNumber: { type: String, trim: true },
+  patentApplicationDate: { type: Date, default: null },
+  patentPublicationDate: { type: Date, default: null },
+  patentGrantDate: { type: Date, default: null },
+  patentStatus: {
+    type: String,
+    enum: ['submitted', 'published', 'granted', 'expired'],
+  },
+  patentAssignee: { type: String, trim: true },
+  patentInventors: { type: [String], default: [] },
+  patentCountry: { type: String, trim: true },
+  patentClassification: { type: String, trim: true },
+})
+
 const AcademicProduct =
   (models.AcademicProduct as mongoose.Model<IAcademicProduct> | undefined) ||
   model<IAcademicProduct>('AcademicProduct', academicProductSchema)
@@ -304,6 +387,21 @@ if (!AcademicProduct.discriminators?.certificate) {
 }
 if (!AcademicProduct.discriminators?.research_project) {
   AcademicProduct.discriminator('research_project', researchProjectSchema)
+}
+if (!AcademicProduct.discriminators?.book) {
+  AcademicProduct.discriminator('book', bookSchema)
+}
+if (!AcademicProduct.discriminators?.book_chapter) {
+  AcademicProduct.discriminator('book_chapter', bookChapterSchema)
+}
+if (!AcademicProduct.discriminators?.technical_report) {
+  AcademicProduct.discriminator('technical_report', technicalReportSchema)
+}
+if (!AcademicProduct.discriminators?.software) {
+  AcademicProduct.discriminator('software', softwareSchema)
+}
+if (!AcademicProduct.discriminators?.patent) {
+  AcademicProduct.discriminator('patent', patentSchema)
 }
 
 export default AcademicProduct

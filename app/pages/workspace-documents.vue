@@ -34,6 +34,11 @@ const productTypeOptions = [
   { label: 'Tesis o trabajo de grado', value: 'thesis' },
   { label: 'Certificado o constancia', value: 'certificate' },
   { label: 'Proyecto de investigación', value: 'research_project' },
+  { label: 'Libro', value: 'book' },
+  { label: 'Capítulo de libro', value: 'book_chapter' },
+  { label: 'Reporte técnico', value: 'technical_report' },
+  { label: 'Software', value: 'software' },
+  { label: 'Patente', value: 'patent' },
 ] satisfies Array<{ label: string; value: ProductType }>
 
 const stageCopy: Record<WorkspaceStage, { eyebrow: string; title: string; description: string }> = {
@@ -503,6 +508,11 @@ type SupportedSubtypeProductType =
   | 'conference_paper'
   | 'certificate'
   | 'research_project'
+  | 'book'
+  | 'book_chapter'
+  | 'technical_report'
+  | 'software'
+  | 'patent'
 
 const articleFields = reactive({
   journalName: '',
@@ -584,12 +594,78 @@ const researchProjectFields = reactive({
   budget: '',
 })
 
+const bookFields = reactive({
+  bookPublisher: '',
+  bookIsbn: '',
+  bookEdition: '',
+  bookCity: '',
+  bookCollection: '',
+  bookTotalPages: '',
+  bookLanguage: '',
+  bookPublicationDate: '',
+})
+
+const bookChapterFields = reactive({
+  chapterBookTitle: '',
+  chapterNumber: '',
+  chapterPages: '',
+  chapterEditors: '',
+  chapterPublisher: '',
+  chapterIsbn: '',
+  chapterEdition: '',
+  chapterLanguage: '',
+  chapterPublicationDate: '',
+})
+
+const technicalReportFields = reactive({
+  reportNumber: '',
+  reportInstitution: '',
+  reportType: '' as '' | 'final' | 'interim' | 'white_paper' | 'manual' | 'other',
+  reportSponsor: '',
+  reportPublicationDate: '',
+  reportRevision: '',
+  reportPages: '',
+  reportRepositoryUrl: '',
+  reportAreaOfKnowledge: '',
+  reportLanguage: '',
+})
+
+const softwareFields = reactive({
+  softwareVersion: '',
+  softwareReleaseDate: '',
+  softwareRepositoryUrl: '',
+  softwareLicense: '',
+  softwareProgrammingLanguage: '',
+  softwarePlatform: '',
+  softwareType: '' as '' | 'desktop' | 'web' | 'mobile' | 'library' | 'other',
+  softwareRegistrationNumber: '',
+})
+
+const patentFields = reactive({
+  patentOffice: '',
+  patentApplicationNumber: '',
+  patentPublicationNumber: '',
+  patentApplicationDate: '',
+  patentPublicationDate: '',
+  patentGrantDate: '',
+  patentStatus: '' as '' | 'submitted' | 'published' | 'granted' | 'expired',
+  patentAssignee: '',
+  patentInventors: '',
+  patentCountry: '',
+  patentClassification: '',
+})
+
 const subtypeFieldsByProductType = {
   article: articleFields,
   thesis: thesisFields,
   conference_paper: conferencePaperFields,
   certificate: certificateFields,
   research_project: researchProjectFields,
+  book: bookFields,
+  book_chapter: bookChapterFields,
+  technical_report: technicalReportFields,
+  software: softwareFields,
+  patent: patentFields,
 } as const
 
 const specificFieldsByProductType = computed(() =>
@@ -751,20 +827,101 @@ function buildSubtypeUpdatePayload(): Partial<UpdateAcademicProductDTO> {
     }
   }
 
+  if (selectedProductType.value === 'research_project') {
+    return {
+      researchProject: {
+        projectCode: researchProjectFields.projectCode || undefined,
+        fundingSource: researchProjectFields.fundingSource || undefined,
+        startDate: toIsoDate(researchProjectFields.startDate),
+        endDate: toIsoDate(researchProjectFields.endDate),
+        projectStatus: researchProjectFields.projectStatus || undefined,
+        coResearchers: splitMultivalue(researchProjectFields.coResearchers),
+        principalInvestigatorName: researchProjectFields.principalInvestigatorName || undefined,
+        institution: researchProjectFields.institution || undefined,
+        programOrCall: researchProjectFields.programOrCall || undefined,
+        areaOfKnowledge: researchProjectFields.areaOfKnowledge || undefined,
+        keywords: splitMultivalue(researchProjectFields.keywords),
+        budget: toNumberValue(researchProjectFields.budget),
+      },
+    }
+  }
+
+  if (selectedProductType.value === 'book') {
+    return {
+      book: {
+        bookPublisher: bookFields.bookPublisher || undefined,
+        bookIsbn: bookFields.bookIsbn || undefined,
+        bookEdition: bookFields.bookEdition || undefined,
+        bookCity: bookFields.bookCity || undefined,
+        bookCollection: bookFields.bookCollection || undefined,
+        bookTotalPages: toNumberValue(bookFields.bookTotalPages),
+        bookLanguage: bookFields.bookLanguage || undefined,
+        bookPublicationDate: toIsoDate(bookFields.bookPublicationDate),
+      },
+    }
+  }
+
+  if (selectedProductType.value === 'book_chapter') {
+    return {
+      bookChapter: {
+        chapterBookTitle: bookChapterFields.chapterBookTitle || undefined,
+        chapterNumber: bookChapterFields.chapterNumber || undefined,
+        chapterPages: bookChapterFields.chapterPages || undefined,
+        chapterEditors: splitMultivalue(bookChapterFields.chapterEditors),
+        chapterPublisher: bookChapterFields.chapterPublisher || undefined,
+        chapterIsbn: bookChapterFields.chapterIsbn || undefined,
+        chapterEdition: bookChapterFields.chapterEdition || undefined,
+        chapterLanguage: bookChapterFields.chapterLanguage || undefined,
+        chapterPublicationDate: toIsoDate(bookChapterFields.chapterPublicationDate),
+      },
+    }
+  }
+
+  if (selectedProductType.value === 'technical_report') {
+    return {
+      technicalReport: {
+        reportNumber: technicalReportFields.reportNumber || undefined,
+        reportInstitution: technicalReportFields.reportInstitution || undefined,
+        reportType: technicalReportFields.reportType || undefined,
+        reportSponsor: technicalReportFields.reportSponsor || undefined,
+        reportPublicationDate: toIsoDate(technicalReportFields.reportPublicationDate),
+        reportRevision: technicalReportFields.reportRevision || undefined,
+        reportPages: toNumberValue(technicalReportFields.reportPages),
+        reportRepositoryUrl: technicalReportFields.reportRepositoryUrl || undefined,
+        reportAreaOfKnowledge: technicalReportFields.reportAreaOfKnowledge || undefined,
+        reportLanguage: technicalReportFields.reportLanguage || undefined,
+      },
+    }
+  }
+
+  if (selectedProductType.value === 'software') {
+    return {
+      software: {
+        softwareVersion: softwareFields.softwareVersion || undefined,
+        softwareReleaseDate: toIsoDate(softwareFields.softwareReleaseDate),
+        softwareRepositoryUrl: softwareFields.softwareRepositoryUrl || undefined,
+        softwareLicense: softwareFields.softwareLicense || undefined,
+        softwareProgrammingLanguage: softwareFields.softwareProgrammingLanguage || undefined,
+        softwarePlatform: softwareFields.softwarePlatform || undefined,
+        softwareType: softwareFields.softwareType || undefined,
+        softwareRegistrationNumber: softwareFields.softwareRegistrationNumber || undefined,
+      },
+    }
+  }
+
   return {
-    researchProject: {
-      projectCode: researchProjectFields.projectCode || undefined,
-      fundingSource: researchProjectFields.fundingSource || undefined,
-      startDate: toIsoDate(researchProjectFields.startDate),
-      endDate: toIsoDate(researchProjectFields.endDate),
-      projectStatus: researchProjectFields.projectStatus || undefined,
-      coResearchers: splitMultivalue(researchProjectFields.coResearchers),
-      principalInvestigatorName: researchProjectFields.principalInvestigatorName || undefined,
-      institution: researchProjectFields.institution || undefined,
-      programOrCall: researchProjectFields.programOrCall || undefined,
-      areaOfKnowledge: researchProjectFields.areaOfKnowledge || undefined,
-      keywords: splitMultivalue(researchProjectFields.keywords),
-      budget: toNumberValue(researchProjectFields.budget),
+    patent: {
+      patentOffice: patentFields.patentOffice || undefined,
+      patentApplicationNumber: patentFields.patentApplicationNumber || undefined,
+      patentPublicationNumber: patentFields.patentPublicationNumber || undefined,
+      patentApplicationDate: toIsoDate(patentFields.patentApplicationDate),
+      patentPublicationDate: toIsoDate(patentFields.patentPublicationDate),
+      patentGrantDate: toIsoDate(patentFields.patentGrantDate),
+      patentStatus: patentFields.patentStatus || undefined,
+      patentAssignee: patentFields.patentAssignee || undefined,
+      patentInventors: splitMultivalue(patentFields.patentInventors),
+      patentCountry: patentFields.patentCountry || undefined,
+      patentClassification: patentFields.patentClassification || undefined,
     },
   }
 }
@@ -866,6 +1023,88 @@ function hydrateSubtypeFieldsFromProduct() {
       typeof product.budget === 'number' && Number.isFinite(product.budget)
         ? String(product.budget)
         : ''
+  }
+
+  if (product.productType === 'book') {
+    bookFields.bookPublisher = product.bookPublisher ?? ''
+    bookFields.bookIsbn = product.bookIsbn ?? ''
+    bookFields.bookEdition = product.bookEdition ?? ''
+    bookFields.bookCity = product.bookCity ?? ''
+    bookFields.bookCollection = product.bookCollection ?? ''
+    bookFields.bookTotalPages =
+      typeof product.bookTotalPages === 'number' && Number.isFinite(product.bookTotalPages)
+        ? String(product.bookTotalPages)
+        : ''
+    bookFields.bookLanguage = product.bookLanguage ?? ''
+    bookFields.bookPublicationDate = product.bookPublicationDate
+      ? product.bookPublicationDate.slice(0, 10)
+      : ''
+  }
+
+  if (product.productType === 'book_chapter') {
+    bookChapterFields.chapterBookTitle = product.chapterBookTitle ?? ''
+    bookChapterFields.chapterNumber = product.chapterNumber ?? ''
+    bookChapterFields.chapterPages = product.chapterPages ?? ''
+    bookChapterFields.chapterEditors = (product.chapterEditors ?? []).join(', ')
+    bookChapterFields.chapterPublisher = product.chapterPublisher ?? ''
+    bookChapterFields.chapterIsbn = product.chapterIsbn ?? ''
+    bookChapterFields.chapterEdition = product.chapterEdition ?? ''
+    bookChapterFields.chapterLanguage = product.chapterLanguage ?? ''
+    bookChapterFields.chapterPublicationDate = product.chapterPublicationDate
+      ? product.chapterPublicationDate.slice(0, 10)
+      : ''
+  }
+
+  if (product.productType === 'technical_report') {
+    technicalReportFields.reportNumber = product.reportNumber ?? ''
+    technicalReportFields.reportInstitution = product.reportInstitution ?? ''
+    technicalReportFields.reportType =
+      (product.reportType as typeof technicalReportFields.reportType) ?? ''
+    technicalReportFields.reportSponsor = product.reportSponsor ?? ''
+    technicalReportFields.reportPublicationDate = product.reportPublicationDate
+      ? product.reportPublicationDate.slice(0, 10)
+      : ''
+    technicalReportFields.reportRevision = product.reportRevision ?? ''
+    technicalReportFields.reportPages =
+      typeof product.reportPages === 'number' && Number.isFinite(product.reportPages)
+        ? String(product.reportPages)
+        : ''
+    technicalReportFields.reportRepositoryUrl = product.reportRepositoryUrl ?? ''
+    technicalReportFields.reportAreaOfKnowledge = product.reportAreaOfKnowledge ?? ''
+    technicalReportFields.reportLanguage = product.reportLanguage ?? ''
+  }
+
+  if (product.productType === 'software') {
+    softwareFields.softwareVersion = product.softwareVersion ?? ''
+    softwareFields.softwareReleaseDate = product.softwareReleaseDate
+      ? product.softwareReleaseDate.slice(0, 10)
+      : ''
+    softwareFields.softwareRepositoryUrl = product.softwareRepositoryUrl ?? ''
+    softwareFields.softwareLicense = product.softwareLicense ?? ''
+    softwareFields.softwareProgrammingLanguage = product.softwareProgrammingLanguage ?? ''
+    softwareFields.softwarePlatform = product.softwarePlatform ?? ''
+    softwareFields.softwareType = (product.softwareType as typeof softwareFields.softwareType) ?? ''
+    softwareFields.softwareRegistrationNumber = product.softwareRegistrationNumber ?? ''
+  }
+
+  if (product.productType === 'patent') {
+    patentFields.patentOffice = product.patentOffice ?? ''
+    patentFields.patentApplicationNumber = product.patentApplicationNumber ?? ''
+    patentFields.patentPublicationNumber = product.patentPublicationNumber ?? ''
+    patentFields.patentApplicationDate = product.patentApplicationDate
+      ? product.patentApplicationDate.slice(0, 10)
+      : ''
+    patentFields.patentPublicationDate = product.patentPublicationDate
+      ? product.patentPublicationDate.slice(0, 10)
+      : ''
+    patentFields.patentGrantDate = product.patentGrantDate
+      ? product.patentGrantDate.slice(0, 10)
+      : ''
+    patentFields.patentStatus = (product.patentStatus as typeof patentFields.patentStatus) ?? ''
+    patentFields.patentAssignee = product.patentAssignee ?? ''
+    patentFields.patentInventors = (product.patentInventors ?? []).join(', ')
+    patentFields.patentCountry = product.patentCountry ?? ''
+    patentFields.patentClassification = product.patentClassification ?? ''
   }
 }
 
@@ -1060,7 +1299,32 @@ function resetWorkspaceVisualState() {
   highlightSerial = 0
 }
 
-function clearLocalDraft() {
+async function clearLocalDraft() {
+  if (hasPersistedDraft.value || documentsStore.activeUploadId) {
+    try {
+      await documentsStore.cancelDraft()
+      resetWorkspaceVisualState()
+      activeHighlightKey.value = null
+
+      toast.add({
+        title: 'Archivo eliminado',
+        description: 'Se eliminó el archivo pendiente.',
+        icon: 'i-lucide-trash-2',
+        color: 'success',
+      })
+    } catch (error) {
+      toast.add({
+        title: 'No pudimos quitar este archivo',
+        description:
+          error instanceof Error ? error.message : 'Inténtalo de nuevo en unos segundos.',
+        icon: 'i-lucide-octagon-alert',
+        color: 'error',
+      })
+    }
+
+    return
+  }
+
   resetWorkspaceVisualState()
   activeHighlightKey.value = null
   documentsStore.clearWorkspaceDraft()
@@ -1398,8 +1662,12 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section class="grid gap-6 xl:grid-cols-[19rem_minmax(0,1fr)]">
-      <aside class="panel-surface fade-up stagger-2 space-y-4 p-5 sm:p-6 xl:top-40 xl:self-start">
+    <section
+      class="grid gap-6 lg:grid-cols-[19rem_minmax(0,1fr)] xl:grid-cols-[19rem_minmax(0,1fr)]"
+    >
+      <aside
+        class="panel-surface fade-up stagger-2 space-y-4 p-5 sm:p-6 lg:top-28 lg:self-start xl:top-40 xl:self-start"
+      >
         <div class="space-y-2">
           <p class="section-chip">Subir archivo</p>
           <h2 class="text-xl font-semibold text-text">Trae tu documento</h2>
@@ -1497,6 +1765,7 @@ onBeforeUnmount(() => {
               size="sm"
               color="neutral"
               variant="ghost"
+              :loading="documentsStore.cancelingDraft"
               @click="clearLocalDraft"
             >
               Quitar archivo
@@ -1591,8 +1860,10 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else-if="currentStage === 'draft'">
-          <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-            <div class="panel-muted overflow-hidden p-4">
+          <div
+            class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_22rem]"
+          >
+            <div class="panel-muted p-3 sm:p-4">
               <DocumentPreviewWithHighlights
                 :preview-url="currentPreviewUrl"
                 :mime-type="currentMimeType"
@@ -1634,8 +1905,10 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else-if="currentStage === 'analyzing'">
-          <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_25rem] xl:items-start">
-            <div class="panel-muted overflow-hidden p-4 sm:p-5">
+          <div
+            class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_25rem] lg:items-start xl:grid-cols-[minmax(0,1fr)_25rem] xl:items-start"
+          >
+            <div class="panel-muted p-3 sm:p-4 lg:p-5">
               <DocumentPreviewWithHighlights
                 :preview-url="currentPreviewUrl"
                 :mime-type="currentMimeType"
@@ -1721,9 +1994,11 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else>
-          <div class="grid gap-4 xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
+          <div
+            class="grid gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]"
+          >
             <div class="space-y-4">
-              <div class="panel-muted overflow-hidden p-4">
+              <div class="panel-muted p-3 sm:p-4">
                 <DocumentPreviewWithHighlights
                   :preview-url="currentPreviewUrl"
                   :mime-type="currentMimeType"

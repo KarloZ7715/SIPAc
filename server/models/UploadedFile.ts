@@ -11,6 +11,7 @@ import {
 } from '~~/app/types'
 
 const { Schema, model, models } = mongoose
+const NER_ATTEMPT_ERROR_MESSAGE_MAX_LENGTH = 280
 
 const uploadedFileSchema = new Schema<IUploadedFile>(
   {
@@ -148,6 +149,11 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
       enum: [...DOCUMENT_CLASSIFICATIONS],
       default: 'uncertain',
     },
+    documentClassificationSource: {
+      type: String,
+      enum: ['heuristic', 'llm', 'hybrid'],
+      default: null,
+    },
     classificationConfidence: {
       type: Number,
       min: 0,
@@ -209,6 +215,36 @@ uploadedFileSchema.index(
     name: 'idx_processing_queue',
   },
 )
+
+uploadedFileSchema.pre('validate', function sanitizeLegacyNerAttemptTrace() {
+  const nerAttemptTrace = this.get('nerAttemptTrace')
+  if (!Array.isArray(nerAttemptTrace) || nerAttemptTrace.length === 0) {
+    return
+  }
+
+  this.set(
+    'nerAttemptTrace',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    nerAttemptTrace.map((entry: any) => {
+      if (!entry?.errorMessage || typeof entry.errorMessage !== 'string') {
+        return entry
+      }
+
+      const compact = entry.errorMessage.replace(/\s+/g, ' ').trim()
+      if (compact.length <= NER_ATTEMPT_ERROR_MESSAGE_MAX_LENGTH) {
+        return {
+          ...entry,
+          errorMessage: compact,
+        }
+      }
+
+      return {
+        ...entry,
+        errorMessage: `${compact.slice(0, NER_ATTEMPT_ERROR_MESSAGE_MAX_LENGTH - 3)}...`,
+      }
+    }),
+  )
+})
 
 const UploadedFileModel =
   (models.UploadedFile as mongoose.Model<IUploadedFile> | undefined) ||
