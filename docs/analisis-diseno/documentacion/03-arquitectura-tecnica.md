@@ -19,6 +19,7 @@
 | 1.8     | 2026-03-13 | Carlos A. Canabal Cordero | Actualización del proveedor LLM a fallback por tarea implementado: NER `qwen -> gpt-oss -> gemini -> llama3.1`; Chat `gpt-oss -> gemini -> qwen`; documentación alineada a `getStructuredModelCandidates()` y `getChatModelCandidates()`                                                |
 | 1.9     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación final al hardening del pipeline OCR/NER: timeouts configurables, presupuesto de intentos por candidato y observabilidad por etapas (`ocr`, `ner`, `processing`)                                                                                                              |
 | 1.10    | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback real tras validaciones de compatibilidad: NER con Gemini + Groq (`gemini-2.5-flash` → `openai/gpt-oss-120b` → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b`), Chat con Cerebras + Gemini; y ajuste documental de `GROQ_API_KEY` y esquema estructurado estricto |
+| 1.11    | 2026-03-14 | Carlos A. Canabal Cordero | Alineación de arquitectura al estado funcional vigente: M5A parcial (borrador/revisión), M5B y M9 pendientes, estructura de directorios actualizada sin marcadores de "futuro"                                                                                                          |
 
 ---
 
@@ -375,6 +376,8 @@ export interface LLMProvider {
 
 La implementación actual expone dos selecciones ordenadas: una para NER estructurado y otra para Chat.
 
+> **Estado funcional (14/03/2026):** la selección NER está en uso en el pipeline M2-M4. La selección de Chat (`getChatModelCandidates()`) está definida a nivel de proveedor, pero los endpoints de M9 (`/api/chat/*`) aún no están implementados.
+
 ```typescript
 // server/services/llm/provider.ts
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
@@ -511,113 +514,38 @@ RESEND_FROM_EMAIL=notificaciones@sipac.example
 
 ```
 sipac/
-├── server/                         ← Código exclusivo del servidor Node.js (Nuxt)
-│   ├── api/                        ← API Routes REST
-│   │   ├── auth/
-│   │   │   ├── login.post.ts
-│   │   │   ├── logout.post.ts
-│   │   │   ├── me.get.ts
-│   │   │   └── register.post.ts
-│   │   ├── profile/
-│   │   │   ├── index.get.ts
-│   │   │   ├── index.patch.ts
-│   │   │   └── change-password.post.ts
-│   │   ├── users/
-│   │   │   ├── index.get.ts
-│   │   │   ├── index.post.ts
-│   │   │   ├── [id].get.ts
-│   │   │   └── [id].patch.ts
-│   │   ├── dashboard/
-│   │   ├── notifications/
-│   │   ├── products/
-│   │   └── upload/
-│   ├── middleware/
-│   │   └── auth.ts                 ← Lectura de cookie JWT y carga de contexto
-│   ├── models/
-│   │   ├── User.ts                 ← Modelo ODM con métodos de seguridad
-│   │   └── AuditLog.ts             ← Log de auditoría inmutable
+├── app/
+│   ├── pages/                      ← login, register, profile, workspace-documents, admin/users, index
+│   ├── stores/                     ← auth, users, documents, notifications
+│   ├── components/dashboard/       ← workspace documental, inbox de notificaciones, preview con highlights
+│   ├── middleware/                 ← auth.global, admin
+│   └── types/                      ← contratos compartidos (productos, archivos, notificaciones, API)
+├── server/
+│   ├── api/
+│   │   ├── auth/                   ← login, register, me, logout
+│   │   ├── users/                  ← CRUD administrativo
+│   │   ├── profile/                ← perfil y cambio de contraseña
+│   │   ├── upload/                 ← carga, estado, archivo autenticado, eliminación
+│   │   ├── products/               ← draft actual + lectura/edición por id
+│   │   └── notifications/          ← listado y marcado como leído
 │   ├── services/
-│   │   ├── ocr/                    Futuro: extracción de texto (GeminiOCRProvider, MistralOCRProvider)
-│   │   ├── ner/                    Futuro: extracción de entidades (usa LLMProvider)
-│   │   ├── llm/                    Futuro: fábrica multi-proveedor LLM (CerebrasLLMProvider, GeminiLLMProvider)
-│   │   └── storage/                Futuro: almacenamiento de archivos
-│   ├── plugins/
-│   │   ├── 01.mongodb.ts           ← Conexión MongoDB Atlas
-│   │   └── 02.admin-seed.ts        ← Creación opcional del admin inicial
-│   └── utils/
-│       ├── jwt.ts                  ← Firma y verificación de tokens
-│       ├── authorize.ts            ← requireAuth, requireRole
-│       ├── env.ts                  ← Validación de variables de entorno
-│       ├── errors.ts               ← Fábricas de errores HTTP tipados
-│       ├── response.ts             ← ok() response helper
-│       ├── audit.ts                ← logAudit (no bloqueante)
-│       └── schemas/
-│           ├── index.ts
-│           ├── auth.ts             ← login, register, password schemas
-│           ├── user.ts             ← createUser, updateUser schemas
-│           ├── product.ts          ← metadata, verificación schemas (preparados)
-│           └── upload.ts           ← file validation schemas (preparados)
-├── app/                            ← Código del cliente (Nuxt app directory)
-│   ├── app.vue                     ← Componente raíz
-│   ├── app.config.ts               ← Configuración de @nuxt/ui y design tokens
-│   ├── assets/css/main.css          ← Estilos globales TailwindCSS + paleta SIPAc
-│   ├── layouts/
-│   │   └── default.vue             ← Sidebar + header + contenido principal
-│   ├── pages/
-│   │   ├── index.vue               ← Dashboard / página de inicio
-│   │   ├── login.vue               ← Login con layout propio
-│   │   ├── register.vue            ← Registro con layout propio
-│   │   ├── profile.vue             ← Gestión de perfil y contraseña
-│   │   └── admin/
-│   │       └── users.vue           ← Panel de gestión de usuarios (admin)
-│   ├── stores/
-│   │   ├── auth.ts                 ← Estado de autenticación
-│   │   └── users.ts                ← Estado de gestión de usuarios
-│   ├── composables/
-│   │   └── useAuth.ts              ← Wrapper sobre auth store
-│   ├── middleware/
-│   │   ├── auth.global.ts          ← Protección global de rutas
-│   │   └── admin.ts                ← Restricción a rol admin
-│   ├── components/
-│   │   ├── layout/
-│   │   │   ├── AppHeader.vue       ← Barra superior con menú de usuario
-│   │   │   └── AppSidebar.vue      ← Navegación lateral colapsable
-│   │   ├── sipac/
-│   │   │   ├── SipacBadge.vue
-│   │   │   ├── SipacButton.vue
-│   │   │   ├── SipacCard.vue
-│   │   │   ├── SipacQuickAction.vue
-│   │   │   └── SipacSectionHeader.vue
-│   │   ├── dashboard/
-│   │   ├── forms/
-│   │   └── ui/
-│   ├── types/
-│   │   ├── index.ts                ← Re-exports de todos los tipos
-│   │   ├── user.ts
-│   │   ├── api.ts
-│   │   ├── academic-product.ts
-│   │   ├── audit-log.ts
-│   │   ├── notification.ts
-│   │   └── uploaded-file.ts
-│   └── utils/
+│   │   ├── upload/process-uploaded-file.ts  ← orquestación OCR + NER + persistencia + notificación
+│   │   ├── ocr/extract-document-text.ts     ← pdfjs nativo + Gemini Vision
+│   │   ├── ner/extract-academic-entities.ts ← extracción estructurada con fallback
+│   │   ├── llm/provider.ts                 ← candidatos de modelos para NER/Chat
+│   │   ├── storage/gridfs.ts               ← acceso a GridFS
+│   │   └── notifications/notify-document-processing.ts
+│   ├── models/                    ← User, UploadedFile, AcademicProduct, Notification, AuditLog
+│   ├── middleware/auth.ts
+│   ├── plugins/                   ← 01.mongodb, 02.admin-seed
+│   └── utils/                     ← authz, jwt, env, audit, response, errors, schemas, observability
 ├── tests/
-│   ├── unit/
-│   │   ├── components/
-│   │   └── server/
-│   └── integration/
-├── e2e/                            ← Tests Playwright
-├── docs/                           ← Documentación del proyecto
-│   ├── analisis-diseno/
-│   │   ├── documentacion/          ← 5 documentos de especificación
-│   │   └── diagramas/
-│   │       ├── puml/               ← 11 diagramas PlantUML fuente
-│   │       └── renders/            ← Renders PNG
-│   └── evidencias/                 ← Evidencias de pasantía
-├── public/                         ← Archivos estáticos
-├── .env                            ← Variables de entorno
-├── nuxt.config.ts
-├── package.json                    ← Gestionado con pnpm
-└── vitest.config.ts / playwright.config.ts
+│   ├── unit/server/               ← OCR, NER, provider, observabilidad y esquema de productos
+│   └── integration/               ← pipeline de procesamiento de archivo
+└── docs/
+  ├── analisis-diseno/documentacion/
+  ├── analisis-diseno/diagramas/
+  └── evidencias/
 ```
 
 ---

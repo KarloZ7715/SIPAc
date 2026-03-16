@@ -14,6 +14,7 @@
 | 1.3     | 2026-03-11 | Carlos A. Canabal Cordero | Actualización de estado de endpoints implementados para M2 y M8; ajuste de contratos de estado de carga y notificaciones                                                                                                                                                 |
 | 1.4     | 2026-03-13 | Carlos A. Canabal Cordero | Actualización de estrategia de fallback LLM para Chat (M9): `gpt-oss-120b` → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507`                                                                                                                                       |
 | 1.5     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación de respuestas de estado de carga (`/api/upload/:id/status`) para incluir trazabilidad NER (`nerAttemptTrace`) y actualización de notas operativas de cuota multi-proveedor                                                                                    |
+| 1.6     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación al estado real de endpoints: previsualización autenticada de upload implementada y módulo M5A marcado como parcial (draft por ID sí, listado global aún pendiente)                                                                                            |
 
 ---
 
@@ -47,22 +48,26 @@
 
 ## 3. M2 — Carga de Documentos (`/api/upload/`)
 
-| Método | Ruta                     | Rol requerido        | Request Body                                | Respuesta                                                                                                                                                | Errores posibles | RF asociados    | Estado       |
-| ------ | ------------------------ | -------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | --------------- | ------------ |
-| POST   | `/api/upload`            | docente              | `multipart/form-data { file, productType }` | `{ uploadedFile }` (202)                                                                                                                                 | 400, 413         | RF-020 a RF-026 | Implementado |
-| GET    | `/api/upload/:id/status` | Autenticado (propio) | —                                           | `{ processingStatus, processingError?, rawExtractedText?, ocrProvider?, ocrConfidence?, nerProvider?, nerModel?, nerAttemptTrace?, academicProductId? }` | 401, 403, 404    | RF-028          | Implementado |
-| DELETE | `/api/upload/:id`        | Autenticado (propio) | —                                           | `{ message }`                                                                                                                                            | 401, 403, 404    | RF-029          | Implementado |
+| Método | Ruta                     | Rol requerido        | Request Body                                 | Respuesta                                                                                                                                                | Errores posibles | RF asociados    | Estado       |
+| ------ | ------------------------ | -------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | --------------- | ------------ |
+| POST   | `/api/upload`            | docente              | `multipart/form-data { file, productType? }` | `{ uploadedFile }` (202)                                                                                                                                 | 400, 413         | RF-020 a RF-026 | Implementado |
+| GET    | `/api/upload/:id/status` | Autenticado (propio) | —                                            | `{ processingStatus, processingError?, rawExtractedText?, ocrProvider?, ocrConfidence?, nerProvider?, nerModel?, nerAttemptTrace?, academicProductId? }` | 401, 403, 404    | RF-028          | Implementado |
+| GET    | `/api/upload/:id/file`   | Autenticado (propio) | —                                            | `Archivo binario (stream autenticado para preview/descarga)`                                                                                             | 401, 403, 404    | RF-028, RF-101  | Implementado |
+| DELETE | `/api/upload/:id`        | Autenticado (propio) | —                                            | `{ message }`                                                                                                                                            | 401, 403, 404    | RF-029          | Implementado |
 
 ---
 
 ## 4. M5A — Productos Académicos (`/api/products/`)
 
-| Método | Ruta                | Rol requerido        | Request Body / Query                             | Respuesta              | Errores posibles   | RF asociados    | Estado    |
-| ------ | ------------------- | -------------------- | ------------------------------------------------ | ---------------------- | ------------------ | --------------- | --------- |
-| GET    | `/api/products`     | Autenticado          | Query: `productType, search, cursor, limit, ...` | `{ products[], meta }` | 401                | RF-052 a RF-061 | Pendiente |
-| GET    | `/api/products/:id` | Autenticado          | —                                                | `{ product }`          | 401, 404           | RF-052          | Pendiente |
-| PATCH  | `/api/products/:id` | Autenticado (propio) | `{ manualMetadata }`                             | `{ product }`          | 400, 401, 403, 404 | RF-056          | Pendiente |
-| DELETE | `/api/products/:id` | Autenticado (propio) | —                                                | `{ message }`          | 401, 403, 404      | RF-057          | Pendiente |
+| Método | Ruta                           | Rol requerido        | Request Body / Query                                      | Respuesta              | Errores posibles   | RF asociados    | Estado       |
+| ------ | ------------------------------ | -------------------- | --------------------------------------------------------- | ---------------------- | ------------------ | --------------- | ------------ |
+| GET    | `/api/products`                | Autenticado          | Query planificada: `productType?, search?, page?, limit?` | `{ products[], meta }` | 401                | RF-052 a RF-061 | Pendiente    |
+| GET    | `/api/products/drafts/current` | Autenticado          | —                                                         | `{ draft o null }`     | 401                | RF-052, RF-056  | Implementado |
+| GET    | `/api/products/:id`            | Autenticado          | —                                                         | `{ draft }`            | 401, 403, 404      | RF-052, RF-056  | Implementado |
+| PATCH  | `/api/products/:id`            | Autenticado (propio) | `{ manualMetadata?, action?, productType?, ... }`         | `{ draft }`            | 400, 401, 403, 404 | RF-056          | Implementado |
+| DELETE | `/api/products/:id`            | Autenticado (propio) | —                                                         | `{ message }`          | 401, 403, 404      | RF-057          | Pendiente    |
+
+> **Nota M5A (estado parcial, 14/03/2026):** Están implementados `GET /api/products/drafts/current`, `GET /api/products/:id` y `PATCH /api/products/:id`. Aún falta `GET /api/products` (listado global con filtros) y `DELETE /api/products/:id`.
 
 ---
 
@@ -121,14 +126,13 @@
 
 ---
 
-## 10. Archivos — Descarga y Previsualización (`/api/files/`)
+## 10. Archivos — Descarga y Previsualización
 
-| Método | Ruta                      | Rol requerido | Request Body / Query | Respuesta                             | Errores posibles | RF asociados | Estado    |
-| ------ | ------------------------- | ------------- | -------------------- | ------------------------------------- | ---------------- | ------------ | --------- |
-| GET    | `/api/files/:id/download` | Autenticado   | —                    | Archivo binario (stream) `attachment` | 401, 404         | RF-101       | Pendiente |
-| GET    | `/api/files/:id/preview`  | Autenticado   | —                    | Archivo binario (stream) `inline`     | 401, 404         | RF-101       | Pendiente |
+| Método | Ruta                   | Rol requerido        | Request Body / Query | Respuesta                                              | Errores posibles | RF asociados | Estado       |
+| ------ | ---------------------- | -------------------- | -------------------- | ------------------------------------------------------ | ---------------- | ------------ | ------------ |
+| GET    | `/api/upload/:id/file` | Autenticado (propio) | —                    | Archivo binario (stream autenticado para uso en visor) | 401, 403, 404    | RF-101       | Implementado |
 
-> **Nota técnica (diseño previsto):** Ambos endpoints leerán el archivo desde el servicio de almacenamiento y lo servirán como stream HTTP. La diferencia será el header `Content-Disposition`: `attachment` para descarga y `inline` para previsualización.
+> **Nota técnica:** Actualmente la descarga/previsualización se resuelve con `GET /api/upload/:id/file`. Los endpoints dedicados bajo `/api/files/*` no están implementados en el estado actual.
 
 ---
 

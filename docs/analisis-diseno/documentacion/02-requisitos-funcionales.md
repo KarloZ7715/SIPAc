@@ -21,6 +21,7 @@
 | 1.7     | 2026-03-13 | Carlos A. Canabal Cordero | Actualización de fallback LLM por tarea: NER con cadena `qwen -> gpt-oss -> gemini -> llama3.1`, y Chat planificado con cadena `gpt-oss -> gemini -> qwen`                                                                                                                                                     |
 | 1.8     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación de requisitos al hardening operativo del pipeline: timeouts OCR/NER, límite de intentos por candidato NER y trazabilidad por etapa para diagnóstico                                                                                                                                                 |
 | 1.9     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback NER vigente con Groq y Gemini, y compatibilidad de structured outputs con esquema estricto (campos requeridos y valores nulos explícitos cuando aplique)                                                                                                                                |
+| 1.10    | 2026-03-14 | Carlos A. Canabal Cordero | Alineación de estados RF con implementación real: carga sin `productType` obligatorio, M5A parcial con flujo de borrador/revisión, y actualización de notas de rate limiting y dependencias                                                                                                                    |
 
 ---
 
@@ -186,13 +187,13 @@ mindmap
 | RF-023 | El sistema debe rechazar archivos cuyo tamaño supere los 20 MB, mostrando un mensaje de error descriptivo                                                                    | Alta      | Completado |
 | RF-024 | El sistema debe asociar cada documento cargado al usuario que lo subió                                                                                                       | Alta      | Completado |
 | RF-025 | El sistema debe registrar la fecha y hora exacta en que el documento fue cargado                                                                                             | Alta      | Completado |
-| RF-026 | El sistema debe requerir que el usuario indique el tipo de producto académico al cargar un documento                                                                         | Alta      | Completado |
+| RF-026 | El sistema debe permitir definir el tipo de producto académico en el flujo de revisión del documento (manual o detectado por el pipeline)                                    | Alta      | Parcial    |
 | RF-027 | El sistema debe permitir cargar múltiples documentos de forma simultánea en una misma sesión                                                                                 | Media     | Pendiente  |
 | RF-028 | El sistema debe mostrar en tiempo real el estado de procesamiento de cada documento cargado (`pendiente`, `procesando`, `completado`, `error`)                               | Alta      | Parcial    |
 | RF-029 | El sistema debe permitir al usuario eliminar sus documentos propios, solicitando confirmación explícita antes de ejecutar la acción                                          | Media     | Parcial    |
 | RF-030 | El sistema debe almacenar los archivos cargados directamente en la base de datos mediante MongoDB GridFS, garantizando que no sean accesibles públicamente sin autenticación | Alta      | Completado |
 
-> **Nota M2:** El pipeline de carga ya opera de extremo a extremo para un documento por envío. El seguimiento del estado se expone en la interfaz mediante polling periódico y la eliminación backend ya existe, pero la confirmación explícita previa en UI y la carga múltiple en una sola operación siguen pendientes.
+> **Nota M2:** El pipeline de carga ya opera de extremo a extremo para un documento por envío y puede detectar automáticamente el tipo de producto durante el procesamiento. El seguimiento del estado se expone en la interfaz mediante polling periódico y la eliminación backend ya existe, pero la confirmación explícita previa en UI y la carga múltiple en una sola operación siguen pendientes.
 
 ---
 
@@ -208,7 +209,7 @@ mindmap
 | RF-034 | El sistema debe procesar documentos en idioma español como idioma principal del OCR                                                                                                                                                                                                                              | Alta      | Completado |
 | RF-035 | El sistema debe limpiar el texto extraído: eliminar saltos de línea irregulares, caracteres basura y espacios múltiples                                                                                                                                                                                          | Media     | Completado |
 | RF-036 | El sistema debe almacenar el texto crudo extraído, asociado al documento original, en la base de datos                                                                                                                                                                                                           | Alta      | Completado |
-| RF-037 | El sistema debe registrar el nivel de confianza del OCR por documento cuando el motor lo provea                                                                                                                                                                                                                  | Baja      | Pendiente  |
+| RF-037 | El sistema debe registrar el nivel de confianza del OCR por documento cuando el motor lo provea                                                                                                                                                                                                                  | Baja      | Parcial    |
 | RF-038 | El sistema debe exponer el resultado del OCR al usuario en la interfaz de revisión antes de continuar con NER                                                                                                                                                                                                    | Media     | Pendiente  |
 
 > **Nota M3:** La extracción actual usa `pdfjs-dist` para PDF nativo y Gemini Vision para escaneados/imágenes. El selector `OCR_PROVIDER` ya está previsto en configuración, pero la rama efectiva con Mistral OCR aún no está conectada en la implementación.
@@ -230,7 +231,7 @@ mindmap
 | RF-046 | El sistema debe identificar automáticamente el nombre del evento o la revista (para ponencias y artículos)                                                                                                                                                                                                                                                                    | Media     | Completado |
 | RF-047 | El sistema debe calcular y almacenar un score de confianza por cada entidad extraída                                                                                                                                                                                                                                                                                          | Alta      | Completado |
 | RF-048 | Cuando el score de confianza promedio de las entidades extraídas sea inferior al umbral configurado (por defecto 0,70), el sistema debe reintentar la extracción NER usando structured outputs con un prompt enriquecido y mayor temperatura; si `OCR_PROVIDER=mistral` está activo y el origen fue escaneado, debe re-extraer el texto con Mistral OCR 3 antes de reintentar | Media     | Parcial    |
-| RF-049 | El sistema debe presentar al usuario una interfaz de revisión donde pueda confirmar, corregir o eliminar cada entidad extraída antes de guardar                                                                                                                                                                                                                               | Alta      | Pendiente  |
+| RF-049 | El sistema debe presentar al usuario una interfaz de revisión donde pueda confirmar, corregir o eliminar cada entidad extraída antes de guardar                                                                                                                                                                                                                               | Alta      | Parcial    |
 | RF-050 | El sistema debe almacenar las entidades extraídas (originales y corregidas) de forma estructurada en la base de datos, diferenciando la fuente de extracción: `pdfjs_native`, `gemini_vision` o `mistral_ocr_3`                                                                                                                                                               | Alta      | Completado |
 
 > **Nota M4:** La extracción estructurada y el reintento por bajo score ya están implementados. La parte pendiente en RF-048 es la re-extracción específica con Mistral OCR y en RF-049 la revisión/corrección manual antes del guardado definitivo.
@@ -248,12 +249,14 @@ mindmap
 | RF-053 | El sistema debe permitir consultar productos académicos filtrando por año de producción                                                                                  | Alta      | Pendiente  |
 | RF-054 | El sistema debe permitir consultar productos académicos filtrando por usuario propietario                                                                                | Alta      | Pendiente  |
 | RF-055 | El sistema debe permitir consultar productos académicos filtrando por institución                                                                                        | Media     | Pendiente  |
-| RF-056 | El sistema debe permitir al usuario editar manualmente los metadatos de sus propios productos académicos                                                                 | Alta      | Pendiente  |
+| RF-056 | El sistema debe permitir al usuario editar manualmente los metadatos de sus propios productos académicos                                                                 | Alta      | Parcial    |
 | RF-057 | El sistema debe permitir al usuario eliminar sus propios productos académicos, solicitando confirmación explícita antes de ejecutar la acción                            | Media     | Pendiente  |
 | RF-058 | El sistema debe implementar búsqueda de texto completo sobre títulos, autores y palabras clave                                                                           | Media     | Pendiente  |
 | RF-059 | El sistema debe paginar los resultados de consultas con un mínimo de 10 y máximo de 50 registros por página                                                              | Media     | Pendiente  |
 | RF-060 | Cualquier usuario autenticado debe poder consultar y visualizar los productos académicos de todos los usuarios del sistema                                               | Alta      | Pendiente  |
 | RF-061 | Los usuarios solo pueden editar y eliminar sus propios productos académicos; la visualización del repositorio completo es irrestricta para cualquier usuario autenticado | Alta      | Pendiente  |
+
+> **Nota M5A (estado actualizado al 14/03/2026):** El backend implementa flujo de borrador/revisión por documento (`GET /api/products/drafts/current`, `GET /api/products/:id`, `PATCH /api/products/:id`). El listado global (`GET /api/products`) y la eliminación (`DELETE /api/products/:id`) siguen pendientes.
 
 ---
 
@@ -304,7 +307,7 @@ mindmap
 | RF-082 | El sistema debe implementar rate limiting en los endpoints de autenticación: máximo 10 peticiones por minuto por IP              | Alta      | Parcial    |
 | RF-083 | El sistema debe rechazar cualquier archivo cuya extensión real no corresponda a los formatos permitidos (PDF, JPG, JPEG, PNG)    | Alta      | Completado |
 
-> **Nota RF-082:** La implementación actual utiliza `nuxt-security` con rate limiting **global** de 150 tokens por intervalo de 5 minutos (30 req/min), no específico para endpoints de autenticación a 10 req/min. Cubre el objetivo de protección base pero no la granularidad descrita.
+> **Nota RF-082:** La implementación actual utiliza `nuxt-security` con rate limiting **global** de 150 tokens por intervalo de 5 minutos (30 req/min), no específico para endpoints de autenticación a 10 req/min. Cubre el objetivo de protección base pero no la granularidad descrita para `/api/auth/*`.
 
 ---
 

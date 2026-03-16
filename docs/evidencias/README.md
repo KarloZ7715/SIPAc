@@ -32,13 +32,19 @@ Cada documento de evidencia debería contener, cuando aplique, las siguientes se
 
 ## 3. Evidencias actualmente generadas
 
-| Archivo                                                         | Cobertura                                                                          |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `2026-03-05_m1-autenticacion-gestion-usuarios.md`               | Implementación del módulo de autenticación, roles y administración de cuentas      |
-| `2026-03-05_m6-perfil-usuario.md`                               | Implementación del módulo de perfil del usuario autenticado                        |
-| `2026-03-05_m7-seguridad-auditoria-base.md`                     | Infraestructura base de seguridad, validación de entorno y auditoría               |
-| `2026-03-06_base-interfaz-navegacion-experiencia.md`            | Consolidación de la interfaz base, navegación protegida y experiencia de usuario   |
-| `2026-03-06_consolidacion-tecnica-alineacion-arquitectonica.md` | Consolidación técnica del proyecto, tooling de calidad y alineación arquitectónica |
+| Archivo                                                         | Cobertura                                                                                  |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `2026-03-05_m1-autenticacion-gestion-usuarios.md`               | Implementación del módulo de autenticación, roles y administración de cuentas              |
+| `2026-03-05_m6-perfil-usuario.md`                               | Implementación del módulo de perfil del usuario autenticado                                |
+| `2026-03-05_m7-seguridad-auditoria-base.md`                     | Infraestructura base de seguridad, validación de entorno y auditoría                       |
+| `2026-03-06_base-interfaz-navegacion-experiencia.md`            | Consolidación de la interfaz base, navegación protegida y experiencia de usuario           |
+| `2026-03-06_consolidacion-tecnica-alineacion-arquitectonica.md` | Consolidación técnica del proyecto, tooling de calidad y alineación arquitectónica         |
+| `2026-03-14_m2-carga-documentos.md`                             | Implementación de carga documental, validación binaria, GridFS y arranque de pipeline      |
+| `2026-03-14_m3-ocr-pipeline.md`                                 | Implementación OCR con extracción PDF nativa, fallback visual y telemetría técnica         |
+| `2026-03-14_m4-ner-extraccion-entidades.md`                     | Extracción NER estructurada con fallback de modelos, evidencia por anchors y trazabilidad  |
+| `2026-03-14_m5a-repositorio-borrador-revision.md`               | Estado parcial de repositorio: flujo de borrador, edición y confirmación manual            |
+| `2026-03-14_m8-notificaciones-dashboard-base.md`                | Notificaciones in-app y correo best-effort integradas al pipeline documental               |
+| `2026-03-15_refuerzo-ner-ocr-metadatos.md`                      | Hardening transversal OCR/NER: validación semántica, retry por error, quality gates y eval |
 
 ## 4. Evidencias complementarias recomendadas
 

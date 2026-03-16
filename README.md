@@ -72,9 +72,17 @@ El servidor arranca en `http://localhost:3000`.
 | `pnpm typecheck`     | Verificación de tipos TypeScript         |
 | `pnpm test`          | Tests unitarios/integración con Vitest   |
 | `pnpm test:watch`    | Tests en modo watch                      |
+| `pnpm test:eval:ner` | Eval baseline de campos NER              |
 | `pnpm test:e2e`      | Tests end-to-end con Playwright          |
 | `pnpm test:e2e:ui`   | Tests E2E con interfaz de Playwright     |
 | `pnpm test:coverage` | Tests con reporte de cobertura           |
+
+### Runbook de triage OCR NER
+
+1. Revisar eventos `quality_gate_evaluated` y `quality_gate_retry_triggered` para confirmar decision de calidad OCR.
+2. Revisar en NER los metadatos `semanticPenalty`, `evidenceCoverage` y `retryPolicy` en `candidate_succeeded` o `completed`.
+3. Si `semanticPenalty` es alto (>0.35), priorizar correccion en normalizacion y reglas semanticas antes de tocar prompts.
+4. Si `qualityGateDecision` permanece en `retry` sin mejora, inspeccionar fuente OCR y tipo de documento para ajustar fallback.
 
 ---
 

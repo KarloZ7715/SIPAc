@@ -16,6 +16,7 @@
 | 1.5     | 2026-03-13 | Carlos A. Canabal Cordero | Ajuste de fallback por tarea implementado en `server/services/llm/provider.ts`: NER prioriza `qwen-3-235b-a22b-instruct-2507`; Chat mantiene `gpt-oss-120b` como primer intento, con fallback multi-modelo documentado                                                     |
 | 1.6     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al hardening del pipeline documental: observabilidad por etapas (`ocr`, `ner`, `processing`) y parámetros operativos de timeout/reintentos configurables por entorno                                                                                            |
 | 1.7     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback vigente en código: NER `gemini-2.5-flash` → `openai/gpt-oss-120b` (Groq) → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` (Groq); Chat mantiene fallback previsto `gpt-oss-120b` (Cerebras) → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507` |
+| 1.8     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación de estado funcional por módulos: M2-M4 y M8 implementados; M5A parcial (flujo borrador/revisión), M5B y M9 pendientes                                                                                                                                           |
 
 ---
 
@@ -23,7 +24,7 @@
 
 **SIPAc** (Sistema Inteligente de Productividad Académica) es una plataforma web fullstack que automatiza la gestión, extracción y análisis de la producción intelectual de los docentes de la **Maestría en Innovación Educativa con Tecnología e Inteligencia Artificial** de la Universidad de Córdoba (Colombia).
 
-El sistema aplica **OCR** (Reconocimiento Óptico de Caracteres) y **NER** (Named Entity Recognition) para extraer metadatos estructurados desde documentos académicos probatorios (PDFs e imágenes), eliminando la transcripción manual y garantizando consistencia, trazabilidad y disponibilidad de evidencias para procesos de acreditación institucional. Además, incorpora un **chat inteligente** que permite a los usuarios buscar y explorar los documentos almacenados mediante consultas en lenguaje natural.
+El sistema aplica **OCR** (Reconocimiento Óptico de Caracteres) y **NER** (Named Entity Recognition) para extraer metadatos estructurados desde documentos académicos probatorios (PDFs e imágenes), eliminando la transcripción manual y garantizando consistencia, trazabilidad y disponibilidad de evidencias para procesos de acreditación institucional. Además, contempla un **chat inteligente** para búsqueda conversacional sobre metadatos.
 
 Se desarrolla como proyecto de **pasantía de grado** del Programa de Ingeniería de Sistemas, Semestre 2026-I (febrero–mayo 2026).
 
@@ -84,6 +85,11 @@ El proyecto responde a recomendaciones del proyecto de investigación **FINV-012
 | `thesis`             | Nivel (maestría, doctorado), director, facultad, URL repositorio   |
 | `certificate`        | Entidad emisora, tipo (participación, ponente, asistencia), horas  |
 | `research_project`   | Código, fuente de financiación, estado, co-investigadores          |
+| `book`               | Editorial, ISBN, edición, ciudad, idioma, total de páginas         |
+| `book_chapter`       | Libro origen, número de capítulo, páginas, editores                |
+| `technical_report`   | Institución emisora, tipo de reporte, revisión, URL repositorio    |
+| `software`           | Versión, licencia, repositorio, lenguaje y plataforma              |
+| `patent`             | Oficina de patentes, números de solicitud/publicación, estado      |
 
 ---
 

@@ -33,7 +33,7 @@ Se implementaron los siguientes componentes base:
 - limitación de tamaño de requests,
 - rate limiting base configurado a nivel del servidor.
 
-Quedan pendientes elementos de la fase completa del módulo, especialmente consulta administrativa de logs (RF-081) y controles complementarios sobre archivos (RF-083).
+Quedan pendientes elementos de la fase completa del módulo, especialmente consulta administrativa de logs (RF-081) y granularidad de rate limiting específica para autenticación (RF-082).
 
 ## 3. Trazabilidad con requisitos funcionales
 
@@ -44,8 +44,8 @@ Quedan pendientes elementos de la fase completa del módulo, especialmente consu
 | RF-079 | Registro de operaciones críticas               | `logAudit(event, entry)`                                                                                        | Completado                |
 | RF-080 | Auditoría con usuario, acción, timestamp e IP  | modelo `AuditLog`                                                                                               | Completado                |
 | RF-081 | Consulta de log solo por admin                 | No implementado aún                                                                                             | Pendiente                 |
-| RF-082 | Rate limiting en autenticación                 | configuración activa de seguridad en servidor                                                                   | Completado en nivel base  |
-| RF-083 | Rechazo de extensión real inválida en archivos | No implementado aún                                                                                             | Pendiente                 |
+| RF-082 | Rate limiting en autenticación                 | configuración activa de seguridad en servidor (`nuxt-security` global)                                          | Parcial                   |
+| RF-083 | Rechazo de extensión real inválida en archivos | validación de contenido binario real + MIME permitido en flujo de upload                                        | Completado                |
 
 ## 4. Decisiones de ingeniería de seguridad
 
@@ -175,7 +175,7 @@ Durante la implementación se identificaron y corrigieron aspectos relevantes pa
 ## 9. Limitaciones y trabajo pendiente
 
 - RF-081 aún no está cubierto: falta la consulta administrativa del log de auditoría.
-- RF-083 aún no está cubierto: la validación profunda de contenido real del archivo pertenece a la fase de documentos.
+- RF-082 aún no está cubierto al nivel granular solicitado por SRS (10 req/min en `/api/auth/*`), ya que la protección actual es global.
 - La configuración de rate limiting debe refinarse en fases posteriores para ajustarse milimétricamente a todos los RF/RNF del sistema.
 
 ## 10. Conclusión técnica

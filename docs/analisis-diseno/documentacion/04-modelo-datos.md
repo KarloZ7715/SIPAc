@@ -13,6 +13,7 @@
 | 1.2     | 2026-03-04 | Carlos A. Canabal Cordero | Simplificación a 2 roles (`admin`, `docente`), almacenamiento en MongoDB GridFS (eliminar `storagePath`), eliminación de campos de verificación en `academic_products`, nueva colección `chat_conversations`, actualización de enums en `audit_logs` y `notifications` |
 | 1.3     | 2026-03-06 | Carlos A. Canabal Cordero | Alineación a los cambios de la arquitectura: `gridfsFileId` en `uploaded_files`, eliminación del flujo obsoleto de verificación/rechazo y su notificación asociada, implementación del hook pre-save de hash de contraseña                                             |
 | 1.4     | 2026-03-11 | Carlos A. Canabal Cordero | Alineación al pipeline implementado M2/M8: `productType` obligatorio en `uploaded_files`, índice único por `sourceFile` en `academic_products` y persistencia de notificaciones con referencia opcional al producto o archivo                                          |
+| 1.5     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación al estado real del modelo: `productType` opcional en `uploaded_files`, discriminadores extendidos a 10 tipos en `academic_products`, evidencia por entidad (`anchors`) y trazabilidad de intentos NER (`nerAttemptTrace`)                                   |
 
 ---
 
@@ -193,19 +194,52 @@ userSchema.index(
 #### Interfaz TypeScript
 
 ```typescript
+export interface NerAttemptTraceEntry {
+  scope: 'extraction_first_pass' | 'extraction_second_pass'
+  attempt: number
+  provider: 'cerebras' | 'gemini' | 'groq'
+  modelId: string
+  status: 'succeeded' | 'failed'
+  durationMs: number
+  errorType?: string
+  errorMessage?: string
+}
+
 export interface IUploadedFile extends Document {
   _id: Types.ObjectId
   uploadedBy: Types.ObjectId // ref: User
   originalFilename: string
   gridfsFileId: Types.ObjectId
-  productType: 'article' | 'conference_paper' | 'thesis' | 'certificate' | 'research_project'
+  productType?:
+    | 'article'
+    | 'conference_paper'
+    | 'thesis'
+    | 'certificate'
+    | 'research_project'
+    | 'book'
+    | 'book_chapter'
+    | 'technical_report'
+    | 'software'
+    | 'patent'
   mimeType: 'application/pdf' | 'image/jpeg' | 'image/png'
   fileSizeBytes: number
   processingStatus: 'pending' | 'processing' | 'completed' | 'error'
   processingError?: string
   rawExtractedText?: string
   ocrProvider?: 'pdfjs_native' | 'gemini_vision' | 'mistral_ocr_3'
+  ocrModel?: string
   ocrConfidence?: number
+  nerProvider?: 'cerebras' | 'gemini' | 'groq'
+  nerModel?: string
+  nerAttemptTrace?: NerAttemptTraceEntry[]
+  documentClassification?: 'academic' | 'non_academic' | 'uncertain'
+  classificationConfidence?: number
+  classificationRationale?: string
+  processingAttempt?: number
+  processingStartedAt?: Date
+  ocrCompletedAt?: Date
+  nerStartedAt?: Date
+  processingCompletedAt?: Date
   isDeleted: boolean
   deletedAt?: Date
   createdAt: Date
@@ -236,9 +270,20 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
     },
     productType: {
       type: String,
-      required: [true, 'El tipo de producto académico es obligatorio'],
+      default: null,
       enum: {
-        values: ['article', 'conference_paper', 'thesis', 'certificate', 'research_project'],
+        values: [
+          'article',
+          'conference_paper',
+          'thesis',
+          'certificate',
+          'research_project',
+          'book',
+          'book_chapter',
+          'technical_report',
+          'software',
+          'patent',
+        ],
         message: 'El tipo de producto {VALUE} no es válido',
       },
     },
@@ -273,10 +318,85 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
       enum: ['pdfjs_native', 'gemini_vision', 'mistral_ocr_3'],
       default: null,
     },
+    ocrModel: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: null,
+    },
     ocrConfidence: {
       type: Number,
       min: 0,
       max: 1,
+      default: null,
+    },
+    nerProvider: {
+      type: String,
+      enum: ['cerebras', 'gemini', 'groq'],
+      default: null,
+    },
+    nerModel: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: null,
+    },
+    nerAttemptTrace: {
+      type: [
+        {
+          _id: false,
+          scope: {
+            type: String,
+            enum: ['extraction_first_pass', 'extraction_second_pass'],
+            required: true,
+          },
+          attempt: { type: Number, min: 1, required: true },
+          provider: { type: String, enum: ['cerebras', 'gemini', 'groq'], required: true },
+          modelId: { type: String, trim: true, maxlength: 120, required: true },
+          status: { type: String, enum: ['succeeded', 'failed'], required: true },
+          durationMs: { type: Number, min: 0, required: true },
+          errorType: { type: String, trim: true, maxlength: 80, default: null },
+          errorMessage: { type: String, trim: true, maxlength: 280, default: null },
+        },
+      ],
+      default: [],
+    },
+    documentClassification: {
+      type: String,
+      enum: ['academic', 'non_academic', 'uncertain'],
+      default: 'uncertain',
+    },
+    classificationConfidence: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: null,
+    },
+    classificationRationale: {
+      type: String,
+      trim: true,
+      maxlength: 240,
+      default: null,
+    },
+    processingAttempt: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    processingStartedAt: {
+      type: Date,
+      default: null,
+    },
+    ocrCompletedAt: {
+      type: Date,
+      default: null,
+    },
+    nerStartedAt: {
+      type: Date,
+      default: null,
+    },
+    processingCompletedAt: {
+      type: Date,
       default: null,
     },
     isDeleted: {
@@ -317,14 +437,31 @@ uploadedFileSchema.index(
 #### 3.3.1 Interfaz TypeScript — Esquema base
 
 ```typescript
+export interface DocumentAnchor {
+  page: number
+  x: number
+  y: number
+  width: number
+  height: number
+  confidence: number
+  sourceText?: string
+  provider: 'pdfjs_native' | 'gemini_vision' | 'mistral_ocr_3'
+}
+
+export interface ExtractedEntityWithEvidence<T> {
+  value: T
+  confidence: number
+  anchors: DocumentAnchor[]
+}
+
 export interface IExtractedEntities {
-  authors: string[]
-  title?: string
-  institution?: string
-  date?: Date
-  keywords: string[]
-  doi?: string
-  eventOrJournal?: string
+  authors: ExtractedEntityWithEvidence<string>[]
+  title?: ExtractedEntityWithEvidence<string>
+  institution?: ExtractedEntityWithEvidence<string>
+  date?: ExtractedEntityWithEvidence<Date>
+  keywords: ExtractedEntityWithEvidence<string>[]
+  doi?: ExtractedEntityWithEvidence<string>
+  eventOrJournal?: ExtractedEntityWithEvidence<string>
   extractionSource: 'pdfjs_native' | 'gemini_vision' | 'mistral_ocr_3'
   extractionConfidence: number // 0–1 (RF-047)
   extractedAt: Date // timestamp de la extracción
@@ -342,9 +479,21 @@ export interface IManualMetadata {
 
 export interface IAcademicProduct extends Document {
   _id: Types.ObjectId
-  productType: string // discriminador
+  productType:
+    | 'article'
+    | 'conference_paper'
+    | 'thesis'
+    | 'certificate'
+    | 'research_project'
+    | 'book'
+    | 'book_chapter'
+    | 'technical_report'
+    | 'software'
+    | 'patent'
   owner: Types.ObjectId // ref: User
   sourceFile: Types.ObjectId // ref: UploadedFile
+  reviewStatus: 'draft' | 'confirmed'
+  reviewConfirmedAt?: Date
 
   extractedEntities: IExtractedEntities
   manualMetadata: IManualMetadata
@@ -360,19 +509,51 @@ export interface IAcademicProduct extends Document {
 #### 3.3.2 Esquema Mongoose — Base
 
 ```typescript
+const documentAnchorSchema = new Schema(
+  {
+    page: { type: Number, required: true },
+    x: { type: Number, required: true },
+    y: { type: Number, required: true },
+    width: { type: Number, required: true },
+    height: { type: Number, required: true },
+    confidence: { type: Number, required: true },
+    sourceText: { type: String },
+    provider: {
+      type: String,
+      enum: ['pdfjs_native', 'gemini_vision', 'mistral_ocr_3'],
+      required: true,
+    },
+  },
+  { _id: false },
+)
+
+const stringEvidenceSchema = new Schema(
+  {
+    value: { type: String, trim: true },
+    confidence: { type: Number, default: 0 },
+    anchors: { type: [documentAnchorSchema], default: [] },
+  },
+  { _id: false },
+)
+
+const dateEvidenceSchema = new Schema(
+  {
+    value: { type: Date },
+    confidence: { type: Number, default: 0 },
+    anchors: { type: [documentAnchorSchema], default: [] },
+  },
+  { _id: false },
+)
+
 const extractedEntitiesSchema = new Schema<IExtractedEntities>(
   {
-    authors: { type: [String], default: [] },
-    title: { type: String, trim: true },
-    institution: { type: String, trim: true },
-    date: { type: Date },
-    keywords: { type: [String], default: [] },
-    doi: {
-      type: String,
-      trim: true,
-      match: [/^10\.\d{4,}\/\S+$/, 'Formato DOI inválido'],
-    },
-    eventOrJournal: { type: String, trim: true },
+    authors: { type: [stringEvidenceSchema], default: [] },
+    title: { type: stringEvidenceSchema },
+    institution: { type: stringEvidenceSchema },
+    date: { type: dateEvidenceSchema },
+    keywords: { type: [stringEvidenceSchema], default: [] },
+    doi: { type: stringEvidenceSchema },
+    eventOrJournal: { type: stringEvidenceSchema },
     extractionSource: {
       type: String,
       required: true,
@@ -410,7 +591,18 @@ const academicProductSchema = new Schema<IAcademicProduct>(
     productType: {
       type: String,
       required: true,
-      enum: ['article', 'conference_paper', 'thesis', 'certificate', 'research_project'],
+      enum: [
+        'article',
+        'conference_paper',
+        'thesis',
+        'certificate',
+        'research_project',
+        'book',
+        'book_chapter',
+        'technical_report',
+        'software',
+        'patent',
+      ],
     },
     owner: {
       type: Schema.Types.ObjectId,
@@ -422,6 +614,16 @@ const academicProductSchema = new Schema<IAcademicProduct>(
       ref: 'UploadedFile',
       required: [true, 'El producto debe tener un archivo fuente'],
     },
+    reviewStatus: {
+      type: String,
+      enum: ['draft', 'confirmed'],
+      default: 'draft',
+      required: true,
+    },
+    reviewConfirmedAt: {
+      type: Date,
+      default: null,
+    },
 
     extractedEntities: {
       type: extractedEntitiesSchema,
@@ -429,7 +631,7 @@ const academicProductSchema = new Schema<IAcademicProduct>(
     },
     manualMetadata: {
       type: manualMetadataSchema,
-      default: () => ({}),
+      default: () => ({ authors: [], keywords: [] }),
     },
 
     isDeleted: { type: Boolean, default: false },
@@ -608,6 +810,11 @@ academicProductSchema.index(
   { name: 'idx_owner_type' },
 )
 
+academicProductSchema.index(
+  { owner: 1, reviewStatus: 1, isDeleted: 1, createdAt: -1 },
+  { name: 'idx_owner_review_status' },
+)
+
 // Consultas temporales para dashboard (RF-065)
 academicProductSchema.index(
   { 'manualMetadata.date': -1, productType: 1 },
@@ -636,12 +843,13 @@ academicProductSchema.index(
 academicProductSchema.index({ sourceFile: 1 }, { unique: true, name: 'ux_source_file' })
 ```
 
-| Índice                                         | Tipo                     | Soporta (RF)                                                          |
-| ---------------------------------------------- | ------------------------ | --------------------------------------------------------------------- |
-| `{ owner, productType, isDeleted, createdAt }` | Compuesto                | RF-052/054: listar productos por tipo y usuario                       |
-| `{ manualMetadata.date, productType }`         | Compuesto                | RF-065/066: distribución temporal y filtro por rango                  |
-| Text index con pesos                           | Texto completo (español) | RF-058: búsqueda full-text priorizada por título > autores > keywords |
-| `{ sourceFile: 1 }`                            | Único                    | RF-051: evita duplicar productos para un mismo archivo procesado      |
+| Índice                                          | Tipo                     | Soporta (RF)                                                          |
+| ----------------------------------------------- | ------------------------ | --------------------------------------------------------------------- |
+| `{ owner, productType, isDeleted, createdAt }`  | Compuesto                | RF-052/054: listar productos por tipo y usuario                       |
+| `{ owner, reviewStatus, isDeleted, createdAt }` | Compuesto                | Flujo de borrador/revisión: consulta rápida de borradores por usuario |
+| `{ manualMetadata.date, productType }`          | Compuesto                | RF-065/066: distribución temporal y filtro por rango                  |
+| Text index con pesos                            | Texto completo (español) | RF-058: búsqueda full-text priorizada por título > autores > keywords |
+| `{ sourceFile: 1 }`                             | Único                    | RF-051: evita duplicar productos para un mismo archivo procesado      |
 
 ---
 
@@ -824,106 +1032,7 @@ notificationSchema.index(
 
 ### 3.6 `chat_conversations` — Historial de conversaciones del chat (M9)
 
-#### Interfaz TypeScript
-
-```typescript
-export interface IChatMessage {
-  role: 'user' | 'assistant'
-  content: string
-  toolCalls?: {
-    toolName: string
-    args: Record<string, unknown>
-    result?: unknown
-  }[]
-  timestamp: Date
-}
-
-export interface IChatConversation extends Document {
-  _id: Types.ObjectId
-  userId: Types.ObjectId // ref: User
-  title: string
-  messages: IChatMessage[]
-  isActive: boolean
-  createdAt: Date
-  updatedAt: Date
-}
-```
-
-#### Esquema Mongoose
-
-```typescript
-const chatMessageSchema = new Schema<IChatMessage>(
-  {
-    role: {
-      type: String,
-      required: true,
-      enum: ['user', 'assistant'],
-    },
-    content: {
-      type: String,
-      required: true,
-    },
-    toolCalls: [
-      {
-        toolName: { type: String },
-        args: { type: Schema.Types.Mixed },
-        result: { type: Schema.Types.Mixed },
-      },
-    ],
-    timestamp: {
-      type: Date,
-      default: Date.now,
-    },
-  },
-  { _id: false },
-)
-
-const chatConversationSchema = new Schema<IChatConversation>(
-  {
-    userId: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: [true, 'La conversación debe estar asociada a un usuario'],
-    },
-    title: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 200,
-    },
-    messages: {
-      type: [chatMessageSchema],
-      default: [],
-    },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-  },
-  { timestamps: true },
-)
-```
-
-#### Índices
-
-```typescript
-chatConversationSchema.index(
-  { userId: 1, isActive: 1, updatedAt: -1 },
-  { name: 'idx_user_conversations' },
-)
-chatConversationSchema.index(
-  { updatedAt: 1 },
-  {
-    expireAfterSeconds: 15_552_000, // TTL: 180 días
-    name: 'idx_ttl_conversations',
-  },
-)
-```
-
-| Índice                            | Tipo      | Soporta (RF)                                                                      |
-| --------------------------------- | --------- | --------------------------------------------------------------------------------- |
-| `{ userId, isActive, updatedAt }` | Compuesto | RF-100: listar conversaciones activas del usuario, ordenadas por última actividad |
-| `{ updatedAt }` TTL 180 días      | TTL       | Limpieza automática: conversaciones inactivas se eliminan tras 6 meses            |
+> **Estado actual (14/03/2026):** La colección `chat_conversations` está definida a nivel de diseño para M9, pero no existe todavía un modelo Mongoose ni endpoints `/api/chat/*` implementados en el código fuente. Su implementación queda pendiente para la fase de Chat Inteligente.
 
 ---
 
@@ -983,21 +1092,14 @@ erDiagram
         boolean emailSent
     }
 
-    CHAT_CONVERSATIONS {
-        ObjectId _id PK
-        ObjectId userId FK
-        string title
-        array messages
-        boolean isActive
-    }
-
     USERS ||--o{ UPLOADED_FILES : "uploadedBy"
     USERS ||--o{ ACADEMIC_PRODUCTS : "owner"
     USERS ||--o{ AUDIT_LOGS : "userId"
     USERS ||--o{ NOTIFICATIONS : "recipientId"
     UPLOADED_FILES ||--o| ACADEMIC_PRODUCTS : "sourceFile"
-    USERS ||--o{ CHAT_CONVERSATIONS : "userId"
 ```
+
+> `chat_conversations` no se incluye en el ER operativo actual porque M9 está pendiente de implementación.
 
 ---
 
@@ -1378,7 +1480,7 @@ await AcademicProduct.find({ isDeleted: true })
 | `academic_products`  | Centenas (~500-2000)          | 3 (incluye texto completo) | Listado por owner+tipo, búsqueda full-text, aggregation para dashboard |
 | `audit_logs`         | Miles (crecimiento ilimitado) | 2                          | Consulta por recurso/acción, timeline por usuario                      |
 | `notifications`      | Centenas (TTL auto-limpia)    | 2 (incluye TTL)            | No leídas por usuario, limpieza automática a 90 días                   |
-| `chat_conversations` | Centenas (TTL auto-limpia)    | 2 (incluye TTL)            | Conversaciones activas por usuario, limpieza automática a 180 días     |
+| `chat_conversations` | 0 (pendiente M9)              | 0                          | Colección planificada; sin modelo ni índices en estado actual          |
 
 ---
 
@@ -1387,7 +1489,7 @@ await AcademicProduct.find({ isDeleted: true })
 - **Discriminator pattern extensible:** Agregar nuevos tipos de productos (`book_chapter`, `patent`, `software`) requiere solo crear un nuevo discriminador, sin migración de datos.
 - **Índice de texto completo en español:** Configurado con `default_language: 'spanish'` y pesos diferenciados, permite búsqueda semántica básica sin motores externos.
 - **TTL en notificaciones:** La limpieza automática evita crecimiento descontrolado de la colección de notificaciones.
-- **TTL en conversaciones del chat:** La limpieza automática a 180 días evita crecimiento descontrolado del historial de chat, manteniendo solo las conversaciones relevantes.
-- **Paginación cursor-based:** Rendimiento constante O(log n) para el repositorio, independientemente del tamaño de la base.
+- **TTL en conversaciones del chat:** Queda planificado para M9; aún no aplica en el estado actual al no existir la colección en producción.
+- **Paginación del repositorio:** En diseño se consideran estrategias de paginación para escalar consultas; en endpoints actualmente implementados predomina `page/limit`.
 - **Soft delete + pre-find hooks:** Los documentos eliminados lógicamente no aparecen en consultas normales pero se preservan para auditoría y recuperación.
 - **Lean queries en lecturas:** Todas las consultas de lectura usan `.lean()` para evitar la hidratación completa de Mongoose y reducir la huella de memoria.

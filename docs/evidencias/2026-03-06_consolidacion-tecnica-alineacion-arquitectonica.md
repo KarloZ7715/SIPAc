@@ -165,9 +165,9 @@ La definición de tipos compartidos y DTOs en `app/types` y de esquemas Zod en `
 
 ## 10. Limitaciones y trabajo pendiente
 
-- Aunque existe configuración de pruebas, aún no hay suite significativa en `tests/` ni en `e2e/`.
+- Ya existe una base de pruebas unitarias e integración para pipeline/OCR/NER, pero la cobertura aún no es homogénea entre módulos.
 - El workflow usa `--passWithNoTests`, lo que evidencia una fase de preparación más que de cobertura madura.
-- Los módulos M2, M3, M4, M5A, M5B, M8 y M9 siguen pendientes en implementación funcional.
+- Esta evidencia corresponde al corte del 2026-03-06; a la fecha actual varios de esos módulos avanzaron (M2-M4 y M8), por lo que debe leerse junto a las evidencias de actualización de 2026-03-14.
 - La existencia de dependencias y estructura para OCR, NER o chat no debe interpretarse como culminación de esos módulos.
 
 ## 11. Conclusión técnica
