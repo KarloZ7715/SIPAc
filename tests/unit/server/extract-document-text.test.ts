@@ -67,7 +67,7 @@ describe('extractDocumentText', () => {
   })
 
   it('uses pdfjs_native and skips Gemini for reliable PDF native text', async () => {
-    const longText = 'palabra academica '.repeat(40).trim()
+    const longText = 'la palabra academica de prueba '.repeat(40).trim()
     mockGetDocument.mockReturnValue(
       buildPdfLoadingTask({
         itemsByPage: [
@@ -123,7 +123,7 @@ describe('extractDocumentText', () => {
     expect(mockGenerateText).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps pdfjs_native for partial native extraction even below reliability threshold', async () => {
+  it('falls back to Gemini when native PDF text is partial and below reliability threshold', async () => {
     const shortText = 'titulo autor 2026'
     mockGetDocument.mockReturnValue(
       buildPdfLoadingTask({
@@ -140,6 +140,8 @@ describe('extractDocumentText', () => {
       }),
     )
 
+    mockGenerateText.mockResolvedValue({ text: 'texto recuperado con vision desde fallback' })
+
     const { extractDocumentText } =
       await import('../../../server/services/ocr/extract-document-text')
 
@@ -150,8 +152,8 @@ describe('extractDocumentText', () => {
       documentId: 'doc-3',
     })
 
-    expect(result.provider).toBe('pdfjs_native')
-    expect(result.text).toContain('titulo')
-    expect(mockGenerateText).not.toHaveBeenCalled()
+    expect(result.provider).toBe('gemini_vision')
+    expect(result.text).toContain('fallback')
+    expect(mockGenerateText).toHaveBeenCalledTimes(1)
   })
 })

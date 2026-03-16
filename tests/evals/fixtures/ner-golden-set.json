@@ -1,0 +1,114 @@
+[
+  {
+    "id": "article-basic-1",
+    "productType": "article",
+    "expected": {
+      "title": "Articulo de prueba sobre IA educativa",
+      "doi": "10.1000/demo.2026.1",
+      "eventOrJournal": "Revista Colombiana de Educacion",
+      "authors": ["Ada Lovelace", "Alan Turing"]
+    },
+    "predicted": {
+      "title": "Articulo de prueba sobre IA educativa",
+      "doi": "10.1000/demo.2026.1",
+      "eventOrJournal": "Revista Colombiana de Educacion",
+      "authors": ["Ada Lovelace", "Alan Turing"]
+    }
+  },
+  {
+    "id": "patent-1",
+    "productType": "patent",
+    "expected": {
+      "title": "Sistema de deteccion inteligente",
+      "doi": null,
+      "eventOrJournal": null,
+      "authors": ["Grace Hopper"]
+    },
+    "predicted": {
+      "title": "Sistema de deteccion inteligente",
+      "doi": null,
+      "eventOrJournal": null,
+      "authors": ["Grace Hopper", "Equipo Demo"]
+    }
+  },
+  {
+    "id": "book-1",
+    "productType": "book",
+    "expected": {
+      "title": "Fundamentos de Sistemas Inteligentes",
+      "doi": null,
+      "eventOrJournal": null,
+      "authors": ["Alan Turing", "John von Neumann"]
+    },
+    "predicted": {
+      "title": "Fundamentos de Sistemas Inteligentes",
+      "doi": null,
+      "eventOrJournal": null,
+      "authors": ["Alan Turing", "John von Neumann"]
+    }
+  },
+  {
+    "id": "book-chapter-1",
+    "productType": "book_chapter",
+    "expected": {
+      "title": "Redes Neuronales Profundas",
+      "doi": "10.1001/libro.cap3",
+      "eventOrJournal": "Avances en IA",
+      "authors": ["Geoffrey Hinton"]
+    },
+    "predicted": {
+      "title": "Redes Neuronales Profundas",
+      "doi": "10.1001/libro.cap3",
+      "eventOrJournal": "Avances en IA",
+      "authors": ["Geoffrey Hinton"]
+    }
+  },
+  {
+    "id": "technical-report-1",
+    "productType": "technical_report",
+    "expected": {
+      "title": "Evaluacion de Rendimiento de Clusters",
+      "doi": null,
+      "eventOrJournal": "Reporte Tecnico RT-2026",
+      "authors": ["Equipo de Infraestructura"]
+    },
+    "predicted": {
+      "title": "Evaluacion de Rendimiento de Clusters",
+      "doi": null,
+      "eventOrJournal": "Reporte Tecnico RT-2026",
+      "authors": ["Equipo de Infraestructura"]
+    }
+  },
+  {
+    "id": "software-1",
+    "productType": "software",
+    "expected": {
+      "title": "SIPAc Core Engine v2",
+      "doi": null,
+      "eventOrJournal": null,
+      "authors": ["Desarrollador Principal"]
+    },
+    "predicted": {
+      "title": "SIPAc Core Engine v2",
+      "doi": null,
+      "eventOrJournal": null,
+      "authors": ["Desarrollador Principal"]
+    }
+  },
+  {
+    "id": "certificate-1",
+    "productType": "certificate",
+    "expected": {
+      "title": "Certificado Docente Investigador",
+      "doi": null,
+      "eventOrJournal": null,
+      "authors": ["Maria Curie"]
+    },
+    "predicted": {
+      "title": "Certificado Docente Investigador",
+      "doi": null,
+      "eventOrJournal": null,
+      "authors": ["Maria Curie"]
+    }
+  }
+]

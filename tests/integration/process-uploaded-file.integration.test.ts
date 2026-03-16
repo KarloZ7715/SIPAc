@@ -3,6 +3,7 @@ import { processUploadedFile } from '~~/server/services/upload/process-uploaded-
 
 const {
   mockUploadedFileFindById,
+  mockUploadedFileFindOneAndUpdate,
   mockAcademicProductFindOne,
   mockAcademicProductFindByIdAndUpdate,
   mockAcademicProductCreate,
@@ -10,12 +11,14 @@ const {
   mockReadGridFsFileToBuffer,
   mockExtractDocumentText,
   mockExtractAcademicEntities,
+  mockExtractProductSpecificMetadata,
   mockNotifyDocumentProcessing,
   mockLogSystemAudit,
   mockLogPipelineEvent,
   mockClassifyPipelineError,
 } = vi.hoisted(() => ({
   mockUploadedFileFindById: vi.fn(),
+  mockUploadedFileFindOneAndUpdate: vi.fn(),
   mockAcademicProductFindOne: vi.fn(),
   mockAcademicProductFindByIdAndUpdate: vi.fn(),
   mockAcademicProductCreate: vi.fn(),
@@ -23,6 +26,7 @@ const {
   mockReadGridFsFileToBuffer: vi.fn(),
   mockExtractDocumentText: vi.fn(),
   mockExtractAcademicEntities: vi.fn(),
+  mockExtractProductSpecificMetadata: vi.fn(),
   mockNotifyDocumentProcessing: vi.fn(),
   mockLogSystemAudit: vi.fn(),
   mockLogPipelineEvent: vi.fn(),
@@ -32,6 +36,7 @@ const {
 vi.mock('~~/server/models/UploadedFile', () => ({
   default: {
     findById: mockUploadedFileFindById,
+    findOneAndUpdate: mockUploadedFileFindOneAndUpdate,
   },
 }))
 
@@ -59,6 +64,7 @@ vi.mock('~~/server/services/ocr/extract-document-text', () => ({
 
 vi.mock('~~/server/services/ner/extract-academic-entities', () => ({
   extractAcademicEntities: mockExtractAcademicEntities,
+  extractProductSpecificMetadata: mockExtractProductSpecificMetadata,
 }))
 
 vi.mock('~~/server/services/notifications/notify-document-processing', () => ({
@@ -127,6 +133,30 @@ function createOwnerQueryResult() {
   }
 }
 
+function applyMongoLikeUpdate(target: Record<string, unknown>, update: Record<string, unknown>) {
+  const setPayload = (update.$set ?? {}) as Record<string, unknown>
+  const incPayload = (update.$inc ?? {}) as Record<string, unknown>
+
+  Object.entries(setPayload).forEach(([key, value]) => {
+    target[key] = value
+  })
+
+  Object.entries(incPayload).forEach(([key, value]) => {
+    const increment = typeof value === 'number' ? value : 0
+    const current = typeof target[key] === 'number' ? (target[key] as number) : 0
+    target[key] = current + increment
+  })
+}
+
+function mockAtomicUploadedFileUpdates(uploadedFile: UploadedFileDoc) {
+  mockUploadedFileFindOneAndUpdate.mockImplementation(
+    async (_filter: unknown, update: Record<string, unknown>) => {
+      applyMongoLikeUpdate(uploadedFile as unknown as Record<string, unknown>, update)
+      return uploadedFile
+    },
+  )
+}
+
 describe('processUploadedFile integration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -137,11 +167,14 @@ describe('processUploadedFile integration', () => {
       errorType: 'runtime_error',
       errorMessage: 'runtime error',
     })
+    mockExtractProductSpecificMetadata.mockResolvedValue({})
+    mockUploadedFileFindOneAndUpdate.mockReset()
   })
 
   it('completes full pipeline for academic PDF and creates product draft', async () => {
     const uploadedFile = createUploadedFileDoc()
     mockUploadedFileFindById.mockResolvedValue(uploadedFile)
+    mockAtomicUploadedFileUpdates(uploadedFile)
 
     mockExtractDocumentText.mockResolvedValue({
       text: 'texto nativo academico',
@@ -170,6 +203,18 @@ describe('processUploadedFile integration', () => {
       extractedAt: new Date('2026-03-13T01:00:00.000Z'),
     })
 
+    mockExtractProductSpecificMetadata.mockResolvedValue({
+      journalName: 'Revista Internacional Demo',
+      volume: '12',
+      issue: '3',
+      pages: '10-24',
+      issn: '1234-5678',
+      indexing: ['Scopus', 'SciELO'],
+      openAccess: true,
+      articleType: 'original',
+      language: 'es',
+    })
+
     mockAcademicProductFindOne.mockResolvedValue(null)
     mockAcademicProductCreate.mockResolvedValue({
       _id: { toString: () => 'product-1' },
@@ -181,6 +226,15 @@ describe('processUploadedFile integration', () => {
     expect(uploadedFile.ocrProvider).toBe('pdfjs_native')
     expect(uploadedFile.nerProvider).toBe('cerebras')
     expect(mockAcademicProductCreate).toHaveBeenCalledTimes(1)
+    expect(mockAcademicProductCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        journalName: 'Revista Internacional Demo',
+        volume: '12',
+        issue: '3',
+        pages: '10-24',
+        openAccess: true,
+      }),
+    )
     expect(mockNotifyDocumentProcessing).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'completed',
@@ -205,9 +259,10 @@ describe('processUploadedFile integration', () => {
     )
   })
 
-  it('marks upload as error when document policy blocks non academic document', async () => {
+  it('continues processing non-academic classification and notifies with warning', async () => {
     const uploadedFile = createUploadedFileDoc()
     mockUploadedFileFindById.mockResolvedValue(uploadedFile)
+    mockAtomicUploadedFileUpdates(uploadedFile)
 
     mockExtractDocumentText.mockResolvedValue({
       text: 'texto del documento',
@@ -235,23 +290,27 @@ describe('processUploadedFile integration', () => {
       extractedAt: new Date('2026-03-13T01:00:00.000Z'),
     })
 
+    mockAcademicProductFindOne.mockResolvedValue(null)
+    mockAcademicProductCreate.mockResolvedValue({
+      _id: { toString: () => 'product-1' },
+    })
+
     await processUploadedFile('upload-1')
 
-    expect(uploadedFile.processingStatus).toBe('error')
-    expect(uploadedFile.processingError).toContain('no parece corresponder')
-    expect(mockAcademicProductCreate).not.toHaveBeenCalled()
+    expect(uploadedFile.processingStatus).toBe('completed')
+    expect(mockAcademicProductCreate).toHaveBeenCalledTimes(1)
     expect(mockNotifyDocumentProcessing).toHaveBeenCalledWith(
       expect.objectContaining({
-        status: 'error',
+        status: 'completed',
         uploadedFileId: 'upload-1',
+        warningMessage: expect.stringContaining('no academico'),
       }),
     )
 
     expect(mockLogPipelineEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         stage: 'processing',
-        event: 'start',
-        traceId: 'upload:upload-1:attempt:1',
+        event: 'classification_warning_non_academic',
       }),
     )
   })
@@ -259,6 +318,7 @@ describe('processUploadedFile integration', () => {
   it('persists error path when OCR throws and notifies failure', async () => {
     const uploadedFile = createUploadedFileDoc()
     mockUploadedFileFindById.mockResolvedValueOnce(uploadedFile).mockResolvedValueOnce(uploadedFile)
+    mockAtomicUploadedFileUpdates(uploadedFile)
 
     mockExtractDocumentText.mockRejectedValue(new Error('ocr exploded'))
     mockClassifyPipelineError.mockReturnValue({
@@ -285,5 +345,182 @@ describe('processUploadedFile integration', () => {
         traceId: 'upload:upload-1:attempt:1',
       }),
     )
+  })
+
+  it('retries OCR once when quality gate flags poor extraction', async () => {
+    const uploadedFile = createUploadedFileDoc()
+    mockUploadedFileFindById.mockResolvedValue(uploadedFile)
+    mockAtomicUploadedFileUpdates(uploadedFile)
+
+    mockExtractDocumentText
+      .mockResolvedValueOnce({
+        text: '###',
+        provider: 'pdfjs_native',
+        confidence: 0.18,
+        blocks: [],
+      })
+      .mockResolvedValueOnce({
+        text: 'Texto academico corregido con suficiente longitud para procesar metadatos',
+        provider: 'pdfjs_native',
+        confidence: 0.89,
+        blocks: [],
+      })
+
+    mockExtractAcademicEntities.mockResolvedValue({
+      productType: 'article',
+      documentClassification: 'academic',
+      classificationConfidence: 0.91,
+      classificationRationale: 'Documento academico',
+      authors: [{ value: 'Ada Lovelace', confidence: 0.9, anchors: [] }],
+      title: { value: 'Articulo de Prueba', confidence: 0.93, anchors: [] },
+      institution: { value: 'Universidad Demo', confidence: 0.88, anchors: [] },
+      date: { value: new Date('2026-03-13T00:00:00.000Z'), confidence: 0.85, anchors: [] },
+      keywords: [{ value: 'ia', confidence: 0.89, anchors: [] }],
+      doi: { value: '10.1000/demo', confidence: 0.87, anchors: [] },
+      eventOrJournal: { value: 'Revista Demo', confidence: 0.86, anchors: [] },
+      extractionSource: 'pdfjs_native',
+      extractionConfidence: 0.9,
+      nerProvider: 'cerebras',
+      nerModel: 'gpt-oss-120b',
+      extractedAt: new Date('2026-03-13T01:00:00.000Z'),
+    })
+
+    mockAcademicProductFindOne.mockResolvedValue(null)
+    mockAcademicProductCreate.mockResolvedValue({
+      _id: { toString: () => 'product-1' },
+    })
+
+    await processUploadedFile('upload-1')
+
+    expect(mockExtractDocumentText).toHaveBeenCalledTimes(2)
+    expect(uploadedFile.processingStatus).toBe('completed')
+    expect(
+      mockLogPipelineEvent.mock.calls.some(
+        ([payload]) =>
+          payload?.stage === 'ocr' &&
+          payload?.event === 'quality_gate_retry_triggered' &&
+          payload?.metadata?.qualityGateDecision === 'retry',
+      ),
+    ).toBe(true)
+  })
+
+  it('continues with warning when OCR remains poor after retry', async () => {
+    const uploadedFile = createUploadedFileDoc()
+    mockUploadedFileFindById.mockResolvedValue(uploadedFile)
+    mockAtomicUploadedFileUpdates(uploadedFile)
+
+    mockExtractDocumentText
+      .mockResolvedValueOnce({
+        text: '###',
+        provider: 'pdfjs_native',
+        confidence: 0.2,
+        blocks: [],
+      })
+      .mockResolvedValueOnce({
+        text: '### !!',
+        provider: 'gemini_vision',
+        modelId: 'gemini-2.5-flash',
+        confidence: 0.21,
+        blocks: [],
+      })
+
+    mockExtractAcademicEntities.mockResolvedValue({
+      productType: 'article',
+      documentClassification: 'uncertain',
+      classificationConfidence: 0.52,
+      classificationRationale: 'Clasificacion incierta',
+      authors: [{ value: 'Ada Lovelace', confidence: 0.9, anchors: [] }],
+      title: { value: 'Articulo de Prueba', confidence: 0.93, anchors: [] },
+      institution: undefined,
+      date: undefined,
+      keywords: [{ value: 'ia', confidence: 0.89, anchors: [] }],
+      doi: undefined,
+      eventOrJournal: undefined,
+      extractionSource: 'gemini_vision',
+      extractionConfidence: 0.42,
+      nerProvider: 'gemini',
+      nerModel: 'gemini-2.5-flash',
+      extractedAt: new Date('2026-03-13T01:00:00.000Z'),
+    })
+
+    mockAcademicProductFindOne.mockResolvedValue(null)
+    mockAcademicProductCreate.mockResolvedValue({
+      _id: { toString: () => 'product-1' },
+    })
+
+    await processUploadedFile('upload-1')
+
+    expect(uploadedFile.processingStatus).toBe('completed')
+    expect(mockNotifyDocumentProcessing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'completed',
+        warningMessage: expect.stringContaining('calidad OCR se mantiene baja'),
+      }),
+    )
+    expect(
+      mockLogPipelineEvent.mock.calls.some(
+        ([payload]) =>
+          payload?.stage === 'ocr' &&
+          payload?.event === 'quality_gate_retry_exhausted_with_warning',
+      ),
+    ).toBe(true)
+  })
+
+  it('drops invalid patent grant date during product-specific post-validation', async () => {
+    const uploadedFile = createUploadedFileDoc()
+    mockUploadedFileFindById.mockResolvedValue(uploadedFile)
+    mockAtomicUploadedFileUpdates(uploadedFile)
+
+    mockExtractDocumentText.mockResolvedValue({
+      text: 'Documento de patente academica',
+      provider: 'pdfjs_native',
+      confidence: 0.91,
+      blocks: [],
+    })
+
+    mockExtractAcademicEntities.mockResolvedValue({
+      productType: 'patent',
+      documentClassification: 'academic',
+      classificationConfidence: 0.93,
+      classificationRationale: 'Patente academica',
+      authors: [{ value: 'Ada Lovelace', confidence: 0.9, anchors: [] }],
+      title: { value: 'Patente Demo', confidence: 0.93, anchors: [] },
+      institution: { value: 'Universidad Demo', confidence: 0.88, anchors: [] },
+      date: { value: new Date('2026-03-13T00:00:00.000Z'), confidence: 0.85, anchors: [] },
+      keywords: [{ value: 'patente', confidence: 0.89, anchors: [] }],
+      doi: undefined,
+      eventOrJournal: undefined,
+      extractionSource: 'pdfjs_native',
+      extractionConfidence: 0.9,
+      nerProvider: 'cerebras',
+      nerModel: 'gpt-oss-120b',
+      extractedAt: new Date('2026-03-13T01:00:00.000Z'),
+    })
+
+    mockExtractProductSpecificMetadata.mockResolvedValue({
+      patentApplicationDate: '2026-03-10',
+      patentGrantDate: '2026-02-10',
+      patentStatus: 'granted',
+    })
+
+    mockAcademicProductFindOne.mockResolvedValue(null)
+    mockAcademicProductCreate.mockResolvedValue({
+      _id: { toString: () => 'product-1' },
+    })
+
+    await processUploadedFile('upload-1')
+
+    expect(mockAcademicProductCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patentApplicationDate: expect.any(Date),
+        patentGrantDate: undefined,
+      }),
+    )
+    expect(
+      mockLogPipelineEvent.mock.calls.some(
+        ([payload]) =>
+          payload?.stage === 'ner' && payload?.event === 'product_specific_validation_adjusted',
+      ),
+    ).toBe(true)
   })
 })

@@ -37,10 +37,29 @@ vi.mock('nuxt/app', () => ({
 }))
 
 vi.mock('~~/server/utils/pipeline-observability', () => ({
-  classifyPipelineError: (error: unknown) => ({
-    errorType: 'runtime_error',
-    errorMessage: error instanceof Error ? error.message : String(error),
-  }),
+  classifyPipelineError: (error: unknown) => {
+    const message =
+      error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+
+    if (message.includes('schema') || message.includes('validation')) {
+      return {
+        errorType: 'schema_validation',
+        errorMessage: String(error instanceof Error ? error.message : error),
+      }
+    }
+
+    if (message.includes('timeout') || message.includes('timed out')) {
+      return {
+        errorType: 'timeout',
+        errorMessage: String(error instanceof Error ? error.message : error),
+      }
+    }
+
+    return {
+      errorType: 'runtime_error',
+      errorMessage: error instanceof Error ? error.message : String(error),
+    }
+  },
   logPipelineEvent: mockLogPipelineEvent,
   withTimeout: async <T>(input: { run: () => Promise<T> }) => await input.run(),
 }))
@@ -255,8 +274,13 @@ describe('extractAcademicEntities', () => {
     expect(extractionCallCount).toBe(5)
     expect(result.title?.value).toBe('Documento no academico')
     expect(result.nerAttemptTrace?.some((entry) => entry.scope === 'extraction_second_pass')).toBe(
-      false,
+      true,
     )
+    expect(
+      result.nerAttemptTrace?.some(
+        (entry) => entry.scope === 'extraction_second_pass' && entry.status === 'failed',
+      ),
+    ).toBe(true)
   })
 
   it('truncates long provider error messages in ner attempt trace', async () => {
@@ -317,5 +341,198 @@ describe('extractAcademicEntities', () => {
     expect(failedAttempt?.errorMessage).toBeDefined()
     expect(failedAttempt?.errorMessage?.length ?? 0).toBeLessThanOrEqual(280)
     expect(failedAttempt?.errorMessage?.endsWith('...')).toBe(true)
+  })
+
+  it('sanitizes malformed doi/date and applies confidence penalty', async () => {
+    mockGenerateText.mockImplementation(async ({ prompt }: { prompt: string }) => {
+      if (prompt.includes('Clasifica el siguiente texto')) {
+        return {
+          output: {
+            documentClassification: 'academic',
+            classificationConfidence: 0.89,
+            classificationRationale: 'Clasificacion valida',
+            productType: 'article',
+            productTypeConfidence: 0.81,
+          },
+        }
+      }
+
+      return {
+        output: {
+          authors: ['Ada Lovelace'],
+          title: 'Articulo con metadatos inconsistentes',
+          institution: 'Universidad Demo',
+          date: '2026-99-20',
+          keywords: ['ia'],
+          doi: 'doi:ABC123',
+          eventOrJournal: 'Revista de Prueba',
+          confidence: {
+            authors: 0.9,
+            title: 0.9,
+            institution: 0.9,
+            date: 0.9,
+            keywords: 0.9,
+            doi: 0.9,
+            eventOrJournal: 0.9,
+          },
+        },
+      }
+    })
+
+    const { extractAcademicEntities } =
+      await import('../../../server/services/ner/extract-academic-entities')
+
+    const result = await extractAcademicEntities({
+      text: 'Texto academico con DOI malformado y fecha invalida',
+      extractionSource: 'pdfjs_native',
+      traceId: 'trace-ner-5',
+      documentId: 'doc-ner-5',
+    })
+
+    expect(result.doi).toBeUndefined()
+    expect(result.date).toBeUndefined()
+    expect(result.extractionConfidence).toBeLessThan(0.7)
+    expect(
+      mockLogPipelineEvent.mock.calls.some(
+        ([payload]) =>
+          payload?.event === 'completed' &&
+          payload?.stage === 'ner' &&
+          typeof payload?.metadata?.semanticPenalty === 'number' &&
+          typeof payload?.metadata?.evidenceCoverage === 'number',
+      ),
+    ).toBe(true)
+  })
+
+  it('extracts product-specific metadata for the detected subtype schema', async () => {
+    mockGenerateText.mockResolvedValue({
+      output: {
+        journalName: 'Revista de Ingenieria',
+        volume: '8',
+        issue: '2',
+        pages: '44-58',
+        openAccess: true,
+        articleType: 'original',
+      },
+    })
+
+    const { extractProductSpecificMetadata } =
+      await import('../../../server/services/ner/extract-academic-entities')
+
+    const result = await extractProductSpecificMetadata({
+      text: 'Texto OCR con Vol. 8 Num. 2 y DOI',
+      productType: 'article',
+      commonExtraction: {
+        authors: [{ value: 'Ada Lovelace', confidence: 0.92, anchors: [] }],
+        title: { value: 'Articulo Demo', confidence: 0.91, anchors: [] },
+        institution: undefined,
+        date: undefined,
+        doi: { value: '10.1000/demo', confidence: 0.9, anchors: [] },
+        eventOrJournal: undefined,
+      },
+      traceId: 'trace-ner-specific-1',
+      documentId: 'doc-ner-specific-1',
+    })
+
+    expect(result.journalName).toBe('Revista de Ingenieria')
+    expect(result.volume).toBe('8')
+    expect(result.openAccess).toBe(true)
+  })
+
+  it('rejects product-specific payload with unknown keys and invalid enums', async () => {
+    mockGenerateText.mockResolvedValue({
+      output: {
+        journalName: 'Revista de Ingenieria',
+        articleType: 'invalid_type',
+        rogueField: 'unexpected',
+      },
+    })
+
+    const { extractProductSpecificMetadata } =
+      await import('../../../server/services/ner/extract-academic-entities')
+
+    await expect(
+      extractProductSpecificMetadata({
+        text: 'Texto OCR con metadatos de articulo',
+        productType: 'article',
+        commonExtraction: {
+          authors: [{ value: 'Ada Lovelace', confidence: 0.92, anchors: [] }],
+          title: { value: 'Articulo Demo', confidence: 0.91, anchors: [] },
+          institution: undefined,
+          date: undefined,
+          doi: { value: '10.1000/demo', confidence: 0.9, anchors: [] },
+          eventOrJournal: undefined,
+        },
+      }),
+    ).rejects.toThrow()
+  })
+
+  it('retries same candidate with strict schema hint after schema validation failure', async () => {
+    let extractionCallCount = 0
+
+    mockGenerateText.mockImplementation(
+      async ({ prompt, model }: { prompt: string; model: string }) => {
+        if (prompt.includes('Clasifica el siguiente texto')) {
+          return {
+            output: {
+              documentClassification: 'academic',
+              classificationConfidence: 0.9,
+              classificationRationale: 'Clasificacion valida',
+              productType: 'article',
+              productTypeConfidence: 0.82,
+            },
+          }
+        }
+
+        if (model === 'model-gemini-flash') {
+          extractionCallCount += 1
+
+          if (extractionCallCount === 1) {
+            throw new Error('schema validation failed for response payload')
+          }
+
+          return {
+            output: {
+              authors: ['Ada Lovelace'],
+              title: 'Articulo validado',
+              institution: 'Universidad Demo',
+              date: '2026-03-14',
+              keywords: ['ia'],
+              doi: '10.1000/demo.1',
+              eventOrJournal: 'Revista Demo',
+              confidence: {
+                authors: 0.92,
+                title: 0.91,
+                institution: 0.9,
+                date: 0.9,
+                keywords: 0.9,
+                doi: 0.9,
+                eventOrJournal: 0.9,
+              },
+            },
+          }
+        }
+
+        throw new Error('should not move to next candidate for schema_validation retry')
+      },
+    )
+
+    const { extractAcademicEntities } =
+      await import('../../../server/services/ner/extract-academic-entities')
+
+    const result = await extractAcademicEntities({
+      text: 'Texto academico para probar retry de schema',
+      extractionSource: 'pdfjs_native',
+      traceId: 'trace-ner-6',
+      documentId: 'doc-ner-6',
+    })
+
+    expect(result.nerProvider).toBe('gemini')
+    expect(result.nerModel).toBe('gemini-2.5-flash')
+    expect(extractionCallCount).toBe(2)
+    expect(
+      mockLogPipelineEvent.mock.calls.some(
+        ([payload]) => payload?.event === 'candidate_retry_selected',
+      ),
+    ).toBe(true)
   })
 })
