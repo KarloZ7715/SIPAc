@@ -115,6 +115,10 @@ type AnalysisHighlightItem = {
   leaving: boolean
 }
 
+type TestingMetricItem =
+  | { variant: 'card'; label: string; value: string; hint: string }
+  | { variant: 'wide'; label: string; body: string; hint: string; mono?: boolean }
+
 let progressTimer: ReturnType<typeof setInterval> | null = null
 let highlightTimer: ReturnType<typeof setInterval> | null = null
 let highlightCursor = 0
@@ -130,6 +134,14 @@ const currentLocalFile = computed(() => documentsStore.workspaceDraftFile)
 const currentTrackedFile = computed(
   () => documentsStore.activeTrackedDocument ?? documentsStore.draftProduct?.uploadedFile ?? null,
 )
+const uploadForceSingleWork = ref(false)
+const siblingProductIds = computed(() => {
+  const fromTracked = currentTrackedFile.value?.academicProductIds
+  if (fromTracked && fromTracked.length > 0) {
+    return fromTracked
+  }
+  return documentsStore.draftProduct?.uploadedFile.academicProductIds ?? []
+})
 const currentFileName = computed(
   () => currentLocalFile.value?.name ?? currentTrackedFile.value?.originalFilename ?? '',
 )
@@ -222,15 +234,20 @@ const metadataCompletion = computed(() => {
     percent: Math.round((completed / total) * 100),
   }
 })
-const testingMetricsRows = computed(() => {
+const testingMetricsItems = computed((): TestingMetricItem[] => {
   const tracked = currentTrackedFile.value
+  const product = documentsStore.draftProduct?.product
+  const entities = product?.extractedEntities
+  const uploadId = tracked?._id ?? documentsStore.activeUploadId ?? '—'
+  const productId = tracked?.academicProductId ?? '—'
+
   const ocrConfidence = tracked?.ocrConfidence
   const classificationConfidence = tracked?.classificationConfidence
   const processingStartMs = toTimestamp(tracked?.processingStartedAt)
   const ocrCompletedMs = toTimestamp(tracked?.ocrCompletedAt)
   const nerStartedMs = toTimestamp(tracked?.nerStartedAt)
   const processingCompletedMs = toTimestamp(tracked?.processingCompletedAt)
-  const processingAttempt = tracked?.processingAttempt ?? analysisAttempts.value
+  const processingAttempt = tracked?.processingAttempt ?? 0
   const durationMs =
     processingStartMs && processingCompletedMs
       ? processingCompletedMs - processingStartMs
@@ -263,70 +280,216 @@ const testingMetricsRows = computed(() => {
     tracked?.nerModel && tracked?.nerProvider
       ? `${tracked.nerModel} (${tracked.nerProvider})`
       : (tracked?.nerModel ?? 'No disponible')
-  const nerAttemptTraceLabel = formatNerAttemptTrace(tracked?.nerAttemptTrace)
 
-  return [
+  const rawLen = tracked?.rawExtractedText?.length
+  const classificationSourceLabel = tracked?.documentClassificationSource ?? '—'
+  const classificationLabel = tracked?.documentClassification ?? '—'
+
+  const items: TestingMetricItem[] = [
     {
-      label: 'Estado del análisis',
-      value: tracked?.processingStatus ?? currentStage.value,
-      hint: 'Seguimiento del flujo OCR/NER durante pruebas.',
+      variant: 'card',
+      label: 'Estado del análisis (servidor)',
+      value: tracked?.processingStatus ?? 'sin tracked',
+      hint: 'processingStatus en UploadedFile; compáralo con el stage de la UI.',
     },
     {
-      label: 'Duración del procesamiento',
+      variant: 'card',
+      label: 'Stage UI (cliente)',
+      value: currentStage.value,
+      hint: 'Estado del flujo en el workspace (puede adelantarse o retrasarse vs servidor).',
+    },
+    {
+      variant: 'card',
+      label: 'IDs',
+      value: `upload: ${uploadId}\nproduct: ${productId}`,
+      hint: 'Correlación con logs [pipeline] y MongoDB.',
+    },
+    {
+      variant: 'card',
+      label: 'Archivo',
+      value: `${currentFileName.value || '—'}\n${formatFileSize(currentFileSize.value)} · ${currentMimeType.value || '—'}`,
+      hint: 'Nombre, tamaño y MIME vistos en el cliente.',
+    },
+    {
+      variant: 'card',
+      label: 'Duración del procesamiento (servidor)',
       value: formatDuration(durationMs),
-      hint: 'Tiempo medido desde inicio hasta fin de lectura.',
+      hint: 'processingStartedAt → processingCompletedAt (o reloj en curso si aún analyzing).',
     },
     {
+      variant: 'card',
+      label: 'Duración último análisis (cliente)',
+      value: formatDuration(lastAnalysisDurationMs.value),
+      hint: 'Cronómetro local de la sesión desde que pulsaste analizar hasta fin/estado estable.',
+    },
+    {
+      variant: 'card',
+      label: 'Intentos procesamiento (servidor)',
+      value: String(processingAttempt),
+      hint: 'processingAttempt en BD (reintentos/colas).',
+    },
+    {
+      variant: 'card',
+      label: 'Ciclos análisis (cliente)',
+      value: String(analysisAttempts.value),
+      hint: 'Veces que esta pestaña entró en flujo de análisis en la sesión.',
+    },
+    {
+      variant: 'card',
       label: 'Proveedor OCR',
       value: ocrProviderLabel,
       hint: 'Fuente usada para extracción de texto.',
     },
     {
-      label: 'Modelo LLM para OCR',
+      variant: 'card',
+      label: 'Modelo LLM OCR',
       value: ocrModelLabel,
-      hint: 'Solo aplica cuando OCR usó proveedor LLM (no PDF.js nativo).',
+      hint: 'Modelo Gemini (u otro) si la ruta fue visión; pdfjs nativo no usa LLM.',
     },
     {
+      variant: 'card',
       label: 'Confianza OCR',
       value: formatConfidence(ocrConfidence),
-      hint: 'Calidad estimada de lectura de texto.',
+      hint: 'Heurística interna post-OCR.',
     },
     {
+      variant: 'card',
+      label: 'Longitud texto OCR',
+      value: typeof rawLen === 'number' ? `${rawLen.toLocaleString()} caracteres` : 'No disponible',
+      hint: 'rawExtractedText; útil para ver si el OCR devolvió vacío o truncado.',
+    },
+    {
+      variant: 'card',
+      label: 'Duración fase OCR (aprox.)',
+      value: formatDuration(ocrDurationMs),
+      hint: 'processingStartedAt → ocrCompletedAt.',
+    },
+    {
+      variant: 'card',
+      label: 'Duración NER + cierre (aprox.)',
+      value: formatDuration(nerDurationMs),
+      hint: 'nerStartedAt → processingCompletedAt.',
+    },
+    {
+      variant: 'card',
+      label: 'Clasificación documento',
+      value: `${classificationLabel} · fuente: ${classificationSourceLabel}`,
+      hint: 'academic / non_academic / uncertain y si vino de heurística, LLM o híbrido.',
+    },
+    {
+      variant: 'card',
       label: 'Confianza clasificación',
       value: formatConfidence(classificationConfidence),
-      hint: 'Seguridad en tipo de documento detectado.',
+      hint: 'classificationConfidence en el archivo.',
     },
     {
-      label: 'Duración OCR',
-      value: formatDuration(ocrDurationMs),
-      hint: 'Tiempo consumido en extracción inicial de texto.',
+      variant: 'card',
+      label: 'Tipo de producto (ficha)',
+      value: product?.productType ?? selectedProductType.value,
+      hint: 'Tipo en el borrador académico (puede coincidir o no con heurística inicial).',
     },
     {
-      label: 'Duración NER y cierre',
-      value: formatDuration(nerDurationMs),
-      hint: 'Tiempo desde extracción de entidades hasta finalización.',
-    },
-    {
-      label: 'Modelo LLM para NER',
+      variant: 'card',
+      label: 'Modelo NER (ganador)',
       value: nerModelLabel,
-      hint: 'Modelo utilizado para extracción estructurada de entidades.',
+      hint: 'Último modelo que completó extracción estructurada en servidor.',
     },
     {
-      label: 'Traza intentos NER',
-      value: nerAttemptTraceLabel,
-      hint: 'Candidatos intentados por pasada (pass1/pass2), estado y error cuando aplica.',
+      variant: 'card',
+      label: 'Confianza extracción (entidades)',
+      value: formatConfidence(entities?.extractionConfidence),
+      hint: 'extractedEntities.extractionConfidence (promedio calibrado de campos).',
     },
     {
-      label: 'Completitud de metadatos',
+      variant: 'card',
+      label: 'Origen texto para NER',
+      value: entities?.extractionSource ? String(entities.extractionSource) : 'No disponible',
+      hint: 'extractionSource en entidades: qué pipeline OCR alimentó el NER.',
+    },
+    {
+      variant: 'card',
+      label: 'Extracción registrada (ISO)',
+      value: entities?.extractedAt ?? 'No disponible',
+      hint: 'extractedAt del bloque de entidades.',
+    },
+    {
+      variant: 'card',
+      label: 'Traza NER (compacta)',
+      value: formatNerAttemptTrace(tracked?.nerAttemptTrace),
+      hint: 'Una línea; abajo tienes multilínea y JSON.',
+    },
+    {
+      variant: 'card',
+      label: 'Completitud ficha editable',
       value: `${metadataCompletion.value.completed}/${metadataCompletion.value.total} (${metadataCompletion.value.percent}%)`,
-      hint: 'Campos editables llenos en la ficha actual.',
-    },
-    {
-      label: 'Intentos de análisis',
-      value: String(processingAttempt),
-      hint: 'Veces que se lanzó la lectura en esta sesión.',
+      hint: 'Campos del formulario manual llenos.',
     },
   ]
+
+  const rationale = tracked?.classificationRationale?.trim()
+  if (rationale) {
+    items.push({
+      variant: 'wide',
+      label: 'Razonamiento clasificación (completo)',
+      body: rationale,
+      hint: 'Texto devuelto por el clasificador (o híbrido); suele cortarse en UI normal.',
+      mono: false,
+    })
+  }
+
+  const procErr = tracked?.processingError?.trim()
+  if (procErr) {
+    items.push({
+      variant: 'wide',
+      label: 'Error de procesamiento (completo)',
+      body: procErr,
+      hint: 'Mensaje guardado en uploadedFile.processingError.',
+      mono: true,
+    })
+  }
+
+  const tsBlock = [
+    tracked?.processingStartedAt && `processingStartedAt: ${tracked.processingStartedAt}`,
+    tracked?.ocrCompletedAt && `ocrCompletedAt: ${tracked.ocrCompletedAt}`,
+    tracked?.nerStartedAt && `nerStartedAt: ${tracked.nerStartedAt}`,
+    tracked?.processingCompletedAt && `processingCompletedAt: ${tracked.processingCompletedAt}`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  if (tsBlock) {
+    items.push({
+      variant: 'wide',
+      label: 'Marcas de tiempo (ISO del servidor)',
+      body: tsBlock,
+      hint: 'Copiar a logs o comparar latencias entre fases.',
+      mono: true,
+    })
+  }
+
+  const verboseTrace = formatNerAttemptTraceVerbose(tracked?.nerAttemptTrace)
+  if (verboseTrace) {
+    items.push({
+      variant: 'wide',
+      label: 'Traza intentos NER (multilínea)',
+      body: verboseTrace,
+      hint: 'Una línea por intento; error hasta ~500 caracteres.',
+      mono: true,
+    })
+  }
+
+  const traceJson = formatNerAttemptTraceJson(tracked?.nerAttemptTrace)
+  if (traceJson) {
+    items.push({
+      variant: 'wide',
+      label: 'Traza NER (JSON)',
+      body: traceJson,
+      hint: 'Para pegar en issues o comparar con logs del servidor.',
+      mono: true,
+    })
+  }
+
+  return items
 })
 const uploadInputLocked = computed(() =>
   ['analyzing', 'review', 'ready', 'confirmed'].includes(currentStage.value),
@@ -1153,12 +1316,42 @@ function formatNerAttemptTrace(trace: NerAttemptTraceEntry[] | undefined) {
       const statusLabel =
         entry.status === 'succeeded' ? 'ok' : `fallo${entry.errorType ? `:${entry.errorType}` : ''}`
       const compactErrorMessage = entry.errorMessage
-        ? entry.errorMessage.replace(/\s+/g, ' ').slice(0, 90)
+        ? entry.errorMessage.replace(/\s+/g, ' ').slice(0, 120)
         : ''
 
       return `${passLabel}#${entry.attempt} ${entry.modelId} (${entry.provider}) ${statusLabel}${compactErrorMessage ? ` msg:${compactErrorMessage}` : ''}`
     })
     .join(' | ')
+}
+
+function formatNerAttemptTraceVerbose(trace: NerAttemptTraceEntry[] | undefined) {
+  if (!trace?.length) {
+    return ''
+  }
+
+  return trace
+    .map((entry) => {
+      const passLabel = entry.scope === 'extraction_second_pass' ? 'pass2' : 'pass1'
+      const head = `[${passLabel}] #${entry.attempt} ${entry.provider} · ${entry.modelId} · ${entry.status} · ${entry.durationMs}ms`
+      const errType = entry.errorType ? `\n  errorType: ${entry.errorType}` : ''
+      const errMsg = entry.errorMessage
+        ? `\n  errorMessage: ${entry.errorMessage.replace(/\s+/g, ' ').slice(0, 500)}`
+        : ''
+      return `${head}${errType}${errMsg}`
+    })
+    .join('\n\n')
+}
+
+function formatNerAttemptTraceJson(trace: NerAttemptTraceEntry[] | undefined) {
+  if (!trace?.length) {
+    return ''
+  }
+
+  try {
+    return JSON.stringify(trace, null, 2)
+  } catch {
+    return ''
+  }
 }
 
 function toTimestamp(value?: string) {
@@ -1403,6 +1596,29 @@ async function loadPersistedDraft() {
   }
 }
 
+async function openSiblingDraft(productId: string) {
+  if (!productId || productId === documentsStore.activeAcademicProductId) {
+    return
+  }
+
+  try {
+    await documentsStore.loadDraftProduct(productId)
+    toast.add({
+      title: 'Borrador cargado',
+      description: 'Puedes revisar los metadatos de esta obra del mismo archivo.',
+      icon: 'i-lucide-files',
+      color: 'neutral',
+    })
+  } catch (error) {
+    toast.add({
+      title: 'No pudimos abrir ese borrador',
+      description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+      icon: 'i-lucide-octagon-alert',
+      color: 'error',
+    })
+  }
+}
+
 async function startAnalysis() {
   if (!currentLocalFile.value) {
     return
@@ -1419,7 +1635,9 @@ async function startAnalysis() {
   pushAnalysisHighlight(getNextHighlightMessage())
 
   try {
-    await documentsStore.uploadDocument(currentLocalFile.value)
+    await documentsStore.uploadDocument(currentLocalFile.value, {
+      nerForceSingleDocument: uploadForceSingleWork.value,
+    })
   } catch (error) {
     if (analysisStartedAt.value) {
       analysisFinishedAt.value = Date.now()
@@ -1690,6 +1908,14 @@ onBeforeUnmount(() => {
           class="w-full"
         />
 
+        <UCheckbox
+          v-if="currentStage === 'draft' && currentLocalFile"
+          v-model="uploadForceSingleWork"
+          label="Tratar como un solo trabajo (no dividir posibles compendios)"
+          description="Útil si el PDF mezcla varias ponencias pero solo quieres un borrador."
+          class="text-sm"
+        />
+
         <UAlert
           v-if="hasPersistedDraft && !currentLocalFile"
           color="primary"
@@ -1736,6 +1962,36 @@ onBeforeUnmount(() => {
               {{ isImageDraft ? 'Imagen' : 'Documento' }}
             </SipacBadge>
             <SipacBadge color="primary" variant="subtle">{{ currentStageCopy.eyebrow }}</SipacBadge>
+            <SipacBadge
+              v-if="(currentTrackedFile?.sourceWorkCount ?? siblingProductIds.length) > 1"
+              color="warning"
+              variant="subtle"
+            >
+              Compendio ·
+              {{ currentTrackedFile?.sourceWorkCount ?? siblingProductIds.length }} obras
+            </SipacBadge>
+          </div>
+
+          <div
+            v-if="siblingProductIds.length > 1"
+            class="mt-4 rounded-lg border border-dashed border-amber-200/90 bg-amber-50/50 p-3"
+          >
+            <p class="text-xs font-semibold text-text">Varias obras desde este archivo</p>
+            <p class="mt-1 text-xs text-text-muted">
+              Cada botón abre el borrador de una obra (título y autores propios).
+            </p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <SipacButton
+                v-for="(pid, idx) in siblingProductIds"
+                :key="pid"
+                size="xs"
+                variant="soft"
+                :color="documentsStore.activeAcademicProductId === pid ? 'primary' : 'neutral'"
+                @click="openSiblingDraft(pid)"
+              >
+                Obra {{ idx + 1 }}
+              </SipacButton>
+            </div>
           </div>
 
           <div class="mt-4 flex flex-wrap gap-3">
@@ -2348,17 +2604,43 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <article
-          v-for="row in testingMetricsRows"
-          :key="row.label"
-          class="rounded-[1rem] border border-amber-200/80 bg-white/85 p-4"
+        <template
+          v-for="(item, idx) in testingMetricsItems"
+          :key="`${item.variant}-${idx}-${item.label}`"
         >
-          <p class="text-xs font-semibold tracking-[0.12em] text-text-soft uppercase">
-            {{ row.label }}
-          </p>
-          <p class="mt-2 text-base font-semibold text-text">{{ row.value }}</p>
-          <p class="mt-1 text-sm leading-6 text-text-muted">{{ row.hint }}</p>
-        </article>
+          <article
+            v-if="item.variant === 'card'"
+            class="rounded-[1rem] border border-amber-200/80 bg-white/85 p-4"
+          >
+            <p class="text-xs font-semibold tracking-[0.12em] text-text-soft uppercase">
+              {{ item.label }}
+            </p>
+            <p class="mt-2 whitespace-pre-wrap text-base font-semibold text-text">
+              {{ item.value }}
+            </p>
+            <p class="mt-1 text-sm leading-6 text-text-muted">{{ item.hint }}</p>
+          </article>
+          <article
+            v-else
+            class="rounded-[1rem] border border-amber-200/80 bg-white/85 p-4 md:col-span-2 xl:col-span-3"
+          >
+            <p class="text-xs font-semibold tracking-[0.12em] text-text-soft uppercase">
+              {{ item.label }}
+            </p>
+            <pre
+              v-if="item.mono !== false"
+              class="mt-2 max-h-72 overflow-x-auto overflow-y-auto rounded-lg border border-amber-100 bg-amber-50/50 p-3 font-mono text-[0.72rem] leading-relaxed text-text"
+              >{{ item.body }}</pre
+            >
+            <p
+              v-else
+              class="mt-2 whitespace-pre-wrap rounded-lg border border-amber-100 bg-amber-50/50 p-3 text-sm leading-relaxed text-text"
+            >
+              {{ item.body }}
+            </p>
+            <p class="mt-1 text-sm leading-6 text-text-muted">{{ item.hint }}</p>
+          </article>
+        </template>
       </div>
     </section>
 

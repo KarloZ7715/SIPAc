@@ -39,6 +39,15 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
         message: 'El tipo de producto {VALUE} no es válido',
       },
     },
+    nerForceSingleDocument: {
+      type: Boolean,
+      default: false,
+    },
+    sourceWorkCount: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
     mimeType: {
       type: String,
       required: [true, 'El tipo MIME es obligatorio'],

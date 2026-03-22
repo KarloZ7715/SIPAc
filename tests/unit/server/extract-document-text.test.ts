@@ -13,13 +13,20 @@ vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => ({
   getDocument: mockGetDocument,
 }))
 
+const { mockGetGoogleVisionModelCandidates } = vi.hoisted(() => ({
+  mockGetGoogleVisionModelCandidates: vi.fn(() => [
+    { modelId: 'gemini-2.5-flash', model: { provider: 'gemini', modelId: 'gemini-2.5-flash' } },
+  ]),
+}))
+
 vi.mock('~~/server/services/llm/provider', () => ({
-  getGoogleVisionModel: vi.fn(() => 'gemini-vision-model'),
+  getGoogleVisionModelCandidates: mockGetGoogleVisionModelCandidates,
 }))
 
 vi.mock('~~/server/utils/env', () => ({
   validateEnv: vi.fn(() => ({
     ocrRequestTimeoutMs: 45_000,
+    ocrMaxGeminiVisionAttempts: 6,
   })),
 }))
 
@@ -155,5 +162,37 @@ describe('extractDocumentText', () => {
     expect(result.provider).toBe('gemini_vision')
     expect(result.text).toContain('fallback')
     expect(mockGenerateText).toHaveBeenCalledTimes(1)
+  })
+
+  it('prueba el siguiente Gemini de la cadena si el primero falla', async () => {
+    mockGetGoogleVisionModelCandidates.mockReturnValueOnce([
+      { modelId: 'gemini-2.5-flash', model: { id: 'a' } },
+      { modelId: 'gemini-2.5-flash-lite', model: { id: 'b' } },
+    ])
+
+    mockGetDocument.mockReturnValue(
+      buildPdfLoadingTask({
+        itemsByPage: [[], []],
+        failPages: [1, 2],
+      }),
+    )
+
+    mockGenerateText
+      .mockRejectedValueOnce(new Error('429 quota'))
+      .mockResolvedValueOnce({ text: 'texto tras segundo modelo' })
+
+    const { extractDocumentText } =
+      await import('../../../server/services/ocr/extract-document-text')
+
+    const result = await extractDocumentText({
+      buffer: Buffer.from('pdf-content'),
+      mimeType: 'application/pdf',
+      traceId: 'trace-chain',
+      documentId: 'doc-chain',
+    })
+
+    expect(result.provider).toBe('gemini_vision')
+    expect(result.modelId).toBe('gemini-2.5-flash-lite')
+    expect(mockGenerateText).toHaveBeenCalledTimes(2)
   })
 })

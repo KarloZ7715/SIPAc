@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 import { PRODUCT_REVIEW_STATUSES, PRODUCT_TYPES, type IAcademicProduct } from '~~/app/types'
+import { normalizePublicationLanguageForMongo } from '~~/server/utils/publication-language'
 
 const { Schema, model, models } = mongoose
 
@@ -97,6 +98,28 @@ const academicProductSchema = new Schema<IAcademicProduct>(
       ref: 'UploadedFile',
       required: [true, 'El producto debe tener un archivo fuente'],
     },
+    segmentIndex: {
+      type: Number,
+      required: true,
+      min: 0,
+      default: 0,
+    },
+    segmentLabel: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: null,
+    },
+    segmentBounds: {
+      type: {
+        pageFrom: { type: Number, min: 1, default: null },
+        pageTo: { type: Number, min: 1, default: null },
+        textStart: { type: Number, min: 0, default: null },
+        textEnd: { type: Number, min: 0, default: null },
+      },
+      _id: false,
+      default: null,
+    },
     reviewStatus: {
       type: String,
       enum: [...PRODUCT_REVIEW_STATUSES],
@@ -157,7 +180,7 @@ academicProductSchema.index(
   {
     name: 'idx_fulltext_search',
     default_language: 'spanish',
-    language_override: 'textIndexLanguage',
+    language_override: 'sipacTextIndexLang',
     weights: {
       'manualMetadata.title': 10,
       'manualMetadata.authors': 5,
@@ -165,7 +188,21 @@ academicProductSchema.index(
     },
   },
 )
-academicProductSchema.index({ sourceFile: 1 }, { unique: true, name: 'ux_source_file' })
+academicProductSchema.pre('save', function normalizeProductLanguageForMongoTextIndex() {
+  const doc = this as unknown as { language?: string | null }
+  if (typeof doc.language === 'string' && doc.language.trim().length > 0) {
+    const normalized = normalizePublicationLanguageForMongo(doc.language)
+    doc.language = normalized ?? undefined
+  }
+})
+academicProductSchema.index(
+  { sourceFile: 1, segmentIndex: 1 },
+  {
+    unique: true,
+    name: 'ux_source_file_segment',
+    partialFilterExpression: { isDeleted: false },
+  },
+)
 
 const articleSchema = new Schema({
   journalName: { type: String, trim: true },

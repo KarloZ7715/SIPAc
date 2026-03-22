@@ -34,12 +34,12 @@ export default defineEventHandler(async (event) => {
     console.error('[Upload] Error al eliminar archivo GridFS:', error)
   }
 
-  const academicProduct = await AcademicProduct.findOne({
+  const academicProducts = await AcademicProduct.find({
     sourceFile: uploadedFile._id,
     isDeleted: false,
   })
 
-  if (academicProduct) {
+  for (const academicProduct of academicProducts) {
     academicProduct.isDeleted = true
     academicProduct.deletedAt = new Date()
     await academicProduct.save()
@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
     details: `Eliminacion del archivo ${uploadedFile.originalFilename}`,
   })
 
-  if (academicProduct) {
+  for (const academicProduct of academicProducts) {
     await logAudit(event, {
       userId: auth.sub,
       userName: auth.email,

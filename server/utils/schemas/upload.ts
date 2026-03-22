@@ -7,6 +7,8 @@ export const uploadMetadataSchema = z.object({
       error: 'El tipo de producto académico no es válido',
     })
     .optional(),
+  /** multipart: "true" | "1" fuerza un solo trabajo (sin segmentación multi-obra). */
+  nerForceSingleDocument: z.enum(['true', 'false', '1', '0', '']).optional(),
 })
 
 export const fileValidationSchema = z.object({

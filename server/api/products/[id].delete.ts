@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 import AcademicProduct from '~~/server/models/AcademicProduct'
 import UploadedFile from '~~/server/models/UploadedFile'
-import { buildProductWorkspaceDraft } from '~~/server/utils/product'
+import { logAudit } from '~~/server/utils/audit'
 import { createAuthorizationError, createNotFoundError } from '~~/server/utils/errors'
 import { ok } from '~~/server/utils/response'
 
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     throw createNotFoundError('Producto academico')
   }
 
-  const product = await AcademicProduct.findById(productId).lean()
+  const product = await AcademicProduct.findById(productId)
   if (!product || product.isDeleted) {
     throw createNotFoundError('Producto academico')
   }
@@ -23,24 +23,23 @@ export default defineEventHandler(async (event) => {
     throw createAuthorizationError()
   }
 
-  const uploadedFile = await UploadedFile.findById(product.sourceFile).lean()
-  if (!uploadedFile || uploadedFile.isDeleted) {
-    throw createNotFoundError('Archivo')
-  }
+  product.isDeleted = true
+  product.deletedAt = new Date()
+  await product.save()
 
-  const siblingProducts = await AcademicProduct.find({
-    sourceFile: product.sourceFile,
-    isDeleted: false,
+  await UploadedFile.findByIdAndUpdate(product.sourceFile, {
+    isDeleted: true,
+    deletedAt: new Date(),
   })
-    .sort({ segmentIndex: 1 })
-    .select('_id')
-    .lean()
 
-  return ok({
-    draft: buildProductWorkspaceDraft(product, {
-      ...uploadedFile,
-      academicProductIds: siblingProducts.map((p) => p._id),
-      sourceWorkCount: uploadedFile.sourceWorkCount ?? siblingProducts.length,
-    }),
+  await logAudit(event, {
+    userId: auth.sub,
+    userName: auth.email,
+    action: 'delete',
+    resource: 'academic_product',
+    resourceId: product._id,
+    details: `Eliminacion de producto academico ${product._id.toString()} (tipo: ${product.productType})`,
   })
+
+  return ok({ deleted: true })
 })

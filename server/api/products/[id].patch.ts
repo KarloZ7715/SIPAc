@@ -260,7 +260,7 @@ export default defineEventHandler(async (event) => {
         $unset: unsetPayload,
       },
       {
-        new: true,
+        returnDocument: 'after',
         runValidators: true,
         overwriteDiscriminatorKey: true,
       },

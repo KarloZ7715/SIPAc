@@ -1,6 +1,7 @@
 import type {
   AcademicProductPublic,
   ApiSuccessResponse,
+  PaginationMeta,
   ProductWorkspaceDraftDTO,
   ProductType,
   UpdateAcademicProductDTO,
@@ -13,6 +14,18 @@ type UploadResponse = ApiSuccessResponse<{ uploadedFile: UploadedFilePublic }>
 type UploadStatusResponse = ApiSuccessResponse<UploadedFileStatusDTO>
 type DeleteUploadResponse = ApiSuccessResponse<{ message: string }>
 type ProductDraftResponse = ApiSuccessResponse<{ draft: ProductWorkspaceDraftDTO | null }>
+type ProductsListResponse = ApiSuccessResponse<AcademicProductPublic[]>
+type DeleteProductResponse = ApiSuccessResponse<{ deleted: boolean }>
+
+export interface RepositoryFilters {
+  productType?: ProductType
+  year?: string
+  owner?: string
+  institution?: string
+  search?: string
+  page?: number
+  limit?: number
+}
 
 export type WorkspaceStage = 'empty' | 'draft' | 'analyzing' | 'review' | 'ready' | 'confirmed'
 
@@ -28,6 +41,8 @@ export interface WorkspaceMetadataDraft {
 
 export interface TrackedDocument extends UploadedFilePublic, UploadedFileStatusDTO {
   academicProductId?: string
+  academicProductIds?: string[]
+  sourceWorkCount?: number
 }
 
 function createEmptyWorkspaceMetadata(): WorkspaceMetadataDraft {
@@ -235,7 +250,7 @@ export const useDocumentsStore = defineStore('documents', () => {
     )
   }
 
-  async function uploadDocument(file: File) {
+  async function uploadDocument(file: File, options?: { nerForceSingleDocument?: boolean }) {
     uploading.value = true
     workspaceStage.value = 'analyzing'
     draftProduct.value = null
@@ -244,6 +259,9 @@ export const useDocumentsStore = defineStore('documents', () => {
     try {
       const formData = new FormData()
       formData.append('file', file)
+      if (options?.nerForceSingleDocument) {
+        formData.append('nerForceSingleDocument', 'true')
+      }
 
       const response = await $fetch<UploadResponse>('/api/upload', {
         method: 'POST',
@@ -457,6 +475,86 @@ export const useDocumentsStore = defineStore('documents', () => {
     }
   }
 
+  const repositoryProducts = ref<AcademicProductPublic[]>([])
+  const repositoryLoading = ref(false)
+  const repositoryFilters = reactive<RepositoryFilters>({
+    productType: undefined,
+    year: undefined,
+    owner: undefined,
+    institution: undefined,
+    search: undefined,
+    page: 1,
+    limit: 20,
+  })
+  const repositoryMeta = ref<PaginationMeta | null>(null)
+
+  async function fetchProducts(filters?: Partial<RepositoryFilters>) {
+    repositoryLoading.value = true
+
+    try {
+      if (filters) {
+        Object.assign(repositoryFilters, filters)
+      }
+
+      const params = new URLSearchParams()
+      if (repositoryFilters.productType) {
+        params.set('productType', repositoryFilters.productType)
+      }
+      if (repositoryFilters.year) {
+        params.set('year', repositoryFilters.year)
+      }
+      if (repositoryFilters.owner) {
+        params.set('owner', repositoryFilters.owner)
+      }
+      if (repositoryFilters.institution) {
+        params.set('institution', repositoryFilters.institution)
+      }
+      if (repositoryFilters.search) {
+        params.set('search', repositoryFilters.search)
+      }
+      params.set('page', String(repositoryFilters.page ?? 1))
+      params.set('limit', String(repositoryFilters.limit ?? 20))
+
+      const queryString = params.toString()
+      const url = `/api/products${queryString ? `?${queryString}` : ''}`
+
+      const response = await $fetch<ProductsListResponse>(url)
+      repositoryProducts.value = response.data
+      repositoryMeta.value = response.meta ?? null
+
+      return response
+    } finally {
+      repositoryLoading.value = false
+    }
+  }
+
+  async function deleteProduct(productId: string) {
+    const response = await $fetch<DeleteProductResponse>(`/api/products/${productId}`, {
+      method: 'DELETE',
+    })
+
+    repositoryProducts.value = repositoryProducts.value.filter((p) => p._id !== productId)
+
+    if (repositoryMeta.value) {
+      repositoryMeta.value = {
+        ...repositoryMeta.value,
+        total: repositoryMeta.value.total - 1,
+      }
+    }
+
+    return response
+  }
+
+  function resetRepositoryFilters() {
+    repositoryFilters.productType = undefined
+    repositoryFilters.year = undefined
+    repositoryFilters.owner = undefined
+    repositoryFilters.institution = undefined
+    repositoryFilters.search = undefined
+    repositoryFilters.page = 1
+    repositoryFilters.limit = 20
+  }
+
   return {
     documents,
     uploading,
@@ -493,5 +591,12 @@ export const useDocumentsStore = defineStore('documents', () => {
     updateDetectedMetadata,
     clearWorkspaceDraft,
     resetWorkspaceMetadata,
+    repositoryProducts,
+    repositoryLoading,
+    repositoryFilters,
+    repositoryMeta,
+    fetchProducts,
+    deleteProduct,
+    resetRepositoryFilters,
   }
 })

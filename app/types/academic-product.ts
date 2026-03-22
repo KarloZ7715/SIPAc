@@ -42,11 +42,22 @@ export interface IManualMetadata {
   notes?: string
 }
 
+/** Límites de un fragmento de texto dentro del OCR completo (misma fuente, varias obras). */
+export interface ISourceSegmentBounds {
+  pageFrom?: number
+  pageTo?: number
+  textStart?: number
+  textEnd?: number
+}
+
 export interface IAcademicProduct {
   _id: DatabaseId
   productType: ProductType
   owner: DatabaseId
   sourceFile: DatabaseId
+  segmentIndex: number
+  segmentLabel?: string
+  segmentBounds?: ISourceSegmentBounds
   reviewStatus: ProductReviewStatus
   reviewConfirmedAt?: Date
   extractedEntities: IExtractedEntities
@@ -228,6 +239,9 @@ export interface AcademicProductPublic {
   productType: ProductType
   owner: string
   sourceFile: string
+  segmentIndex: number
+  segmentLabel?: string
+  segmentBounds?: ISourceSegmentBounds
   reviewStatus: ProductReviewStatus
   reviewConfirmedAt?: string
   extractedEntities: ExtractedEntitiesPublic

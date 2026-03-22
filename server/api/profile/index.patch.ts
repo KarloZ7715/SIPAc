@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
   const user = await User.findByIdAndUpdate(
     auth.sub,
     { $set: updates },
-    { new: true, runValidators: true },
+    { returnDocument: 'after', runValidators: true },
   ).lean()
 
   if (!user) {

@@ -43,6 +43,7 @@ export async function parseUploadMultipartRequest(
 
   const metadataResult = uploadMetadataSchema.safeParse({
     productType: readOptionalTextPart(getNamedPart(parts, 'productType')),
+    nerForceSingleDocument: readOptionalTextPart(getNamedPart(parts, 'nerForceSingleDocument')),
   })
 
   if (!metadataResult.success) {

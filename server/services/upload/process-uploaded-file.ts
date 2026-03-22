@@ -1,4 +1,4 @@
-import type { ProductType } from '~~/app/types'
+import type { NerAttemptTraceEntry, NerProvider, ProductType } from '~~/app/types'
 import AcademicProduct from '~~/server/models/AcademicProduct'
 import UploadedFile from '~~/server/models/UploadedFile'
 import User from '~~/server/models/User'
@@ -7,12 +7,24 @@ import { readGridFsFileToBuffer } from '~~/server/services/storage/gridfs'
 import { extractDocumentText } from '~~/server/services/ocr/extract-document-text'
 import { evaluateOcrQuality } from '~~/server/services/ocr/quality-gates'
 import {
+  classifyDocumentForNer,
   extractAcademicEntities,
   extractProductSpecificMetadata,
 } from '~~/server/services/ner/extract-academic-entities'
+import { resolveTextSegments } from '~~/server/services/ner/document-segmentation'
 import { validateProductSpecificMetadata } from '~~/server/services/ner/product-specific-validation'
 import { notifyDocumentProcessing } from '~~/server/services/notifications/notify-document-processing'
+import { validateEnv } from '~~/server/utils/env'
 import { classifyPipelineError, logPipelineEvent } from '~~/server/utils/pipeline-observability'
+import { normalizePublicationLanguageForMongo } from '~~/server/utils/publication-language'
+
+function getRuntimeConfigSafe(): Record<string, unknown> {
+  try {
+    return useRuntimeConfig()
+  } catch {
+    return {}
+  }
+}
 
 function toOptionalString(value: unknown): string | undefined {
   if (typeof value !== 'string') {
@@ -80,7 +92,7 @@ function buildProductSpecificFields(
       journalAbbreviation: toOptionalString(productSpecific.journalAbbreviation),
       publisher: toOptionalString(productSpecific.publisher),
       areaOfKnowledge: toOptionalString(productSpecific.areaOfKnowledge),
-      language: toOptionalString(productSpecific.language),
+      language: normalizePublicationLanguageForMongo(toOptionalString(productSpecific.language)),
       license: toOptionalString(productSpecific.license),
     }
   }
@@ -100,7 +112,7 @@ function buildProductSpecificFields(
       pages: toOptionalString(productSpecific.pages),
       eventSponsor: toOptionalString(productSpecific.eventSponsor),
       areaOfKnowledge: toOptionalString(productSpecific.areaOfKnowledge),
-      language: toOptionalString(productSpecific.language),
+      language: normalizePublicationLanguageForMongo(toOptionalString(productSpecific.language)),
     }
   }
 
@@ -118,7 +130,7 @@ function buildProductSpecificFields(
       degreeName: toOptionalString(productSpecific.degreeName),
       areaOfKnowledge: toOptionalString(productSpecific.areaOfKnowledge),
       modality: toOptionalString(productSpecific.modality),
-      language: toOptionalString(productSpecific.language),
+      language: normalizePublicationLanguageForMongo(toOptionalString(productSpecific.language)),
       pages: toOptionalNumber(productSpecific.pages),
       projectCode: toOptionalString(productSpecific.projectCode),
     }
@@ -256,12 +268,13 @@ async function claimUploadedFileForProcessing(uploadedFileId: string) {
         nerProvider: null,
         nerModel: null,
         nerAttemptTrace: [],
+        sourceWorkCount: null,
       },
       $inc: {
         processingAttempt: 1,
       },
     },
-    { new: true },
+    { returnDocument: 'after' },
   )
 }
 
@@ -445,7 +458,7 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
           nerStartedAt: new Date(),
         },
       },
-      { new: true },
+      { returnDocument: 'after' },
     )
 
     if (!uploadWithOcrStart) {
@@ -458,68 +471,198 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
       return
     }
 
-    const extractedEntities = await extractAcademicEntities({
-      text: ocrResult.text,
-      extractionSource: ocrResult.provider,
-      ocrBlocks: ocrResult.blocks,
+    const env = validateEnv(getRuntimeConfigSafe())
+
+    const segmentation = await resolveTextSegments({
+      fullText: ocrResult.text,
+      env,
+      forceSingle: Boolean(uploadWithOcrStart.nerForceSingleDocument),
       traceId,
       documentId: uploadedFileId,
     })
 
-    let productSpecificMetadata: Record<string, unknown> = {}
-
-    try {
-      productSpecificMetadata = await extractProductSpecificMetadata({
-        text: ocrResult.text,
-        productType: extractedEntities.productType,
-        commonExtraction: {
-          authors: extractedEntities.authors,
-          title: extractedEntities.title,
-          institution: extractedEntities.institution,
-          date: extractedEntities.date,
-          doi: extractedEntities.doi,
-          eventOrJournal: extractedEntities.eventOrJournal,
-        },
-        traceId,
-        documentId: uploadedFileId,
-      })
-    } catch (error) {
-      const classified = classifyPipelineError(error)
-
-      logPipelineEvent({
-        traceId,
-        documentId: uploadedFileId,
-        stage: 'ner',
-        event: 'product_specific_extraction_failed',
-        provider: extractedEntities.nerProvider,
-        modelId: extractedEntities.nerModel,
-        errorType: classified.errorType,
-        errorMessage: classified.errorMessage,
-        metadata: {
-          productType: extractedEntities.productType,
-          fallback: 'only_common_metadata',
-        },
-      })
+    if (segmentation.warning) {
+      processingWarnings.push(segmentation.warning)
     }
 
-    const validatedProductSpecific = validateProductSpecificMetadata({
-      productType: extractedEntities.productType,
-      metadata: productSpecificMetadata,
+    logPipelineEvent({
+      traceId,
+      documentId: uploadedFileId,
+      stage: 'processing',
+      event: 'segmentation_resolved',
+      metadata: {
+        segmentCount: segmentation.segments.length,
+        usedLlm: segmentation.usedLlm,
+        heuristicMultiple: segmentation.heuristicMultiple,
+      },
     })
 
-    if (validatedProductSpecific.droppedFields.length > 0) {
-      logPipelineEvent({
-        traceId,
+    await AcademicProduct.updateMany(
+      {
+        sourceFile: uploadedFile._id,
+        segmentIndex: { $gte: segmentation.segments.length },
+        isDeleted: false,
+      },
+      { $set: { isDeleted: true, deletedAt: new Date() } },
+    )
+
+    const classificationProfile = await classifyDocumentForNer(ocrResult.text)
+    const segmentCount = segmentation.segments.length
+
+    const aggregatedNerTrace: NerAttemptTraceEntry[] = []
+    let primaryNerProvider: NerProvider | null = null
+    let primaryNerModel: string | null = null
+    let primaryProductId: string | null = null
+    let anyLowConfidence = false
+    let anyLowEvidence = false
+
+    for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex++) {
+      const range = segmentation.segments[segmentIndex]!
+      const segmentText = ocrResult.text.slice(range.textStart, range.textEnd)
+      const segTraceId = `${traceId}:seg:${segmentIndex}`
+
+      const extractedEntities = await extractAcademicEntities({
+        text: segmentText,
+        extractionSource: ocrResult.provider,
+        ocrBlocks: segmentIndex === 0 ? ocrResult.blocks : [],
+        traceId: segTraceId,
         documentId: uploadedFileId,
-        stage: 'ner',
-        event: 'product_specific_validation_adjusted',
-        provider: extractedEntities.nerProvider,
-        modelId: extractedEntities.nerModel,
-        metadata: {
+        classificationProfile,
+        segmentMeta: { segmentIndex, segmentCount },
+      })
+
+      aggregatedNerTrace.push(...(extractedEntities.nerAttemptTrace ?? []))
+
+      if (segmentIndex === 0) {
+        primaryNerProvider = extractedEntities.nerProvider
+        primaryNerModel = extractedEntities.nerModel
+      }
+
+      if (extractedEntities.extractionConfidence < 0.35) {
+        anyLowConfidence = true
+      }
+      if (extractedEntities.evidenceCoverage < 0.25) {
+        anyLowEvidence = true
+      }
+
+      let productSpecificMetadata: Record<string, unknown> = {}
+
+      try {
+        productSpecificMetadata = await extractProductSpecificMetadata({
+          text: segmentText,
           productType: extractedEntities.productType,
-          droppedFields: validatedProductSpecific.droppedFields,
-          corrections: validatedProductSpecific.corrections,
+          commonExtraction: {
+            authors: extractedEntities.authors,
+            title: extractedEntities.title,
+            institution: extractedEntities.institution,
+            date: extractedEntities.date,
+            doi: extractedEntities.doi,
+            eventOrJournal: extractedEntities.eventOrJournal,
+          },
+          traceId: segTraceId,
+          documentId: uploadedFileId,
+        })
+      } catch (error) {
+        const classified = classifyPipelineError(error)
+
+        logPipelineEvent({
+          traceId,
+          documentId: uploadedFileId,
+          stage: 'ner',
+          event: 'product_specific_extraction_failed',
+          provider: extractedEntities.nerProvider,
+          modelId: extractedEntities.nerModel,
+          errorType: classified.errorType,
+          errorMessage: classified.errorMessage,
+          metadata: {
+            productType: extractedEntities.productType,
+            fallback: 'only_common_metadata',
+            segmentIndex,
+          },
+        })
+      }
+
+      const validatedProductSpecific = validateProductSpecificMetadata({
+        productType: extractedEntities.productType,
+        metadata: productSpecificMetadata,
+      })
+
+      if (validatedProductSpecific.droppedFields.length > 0) {
+        logPipelineEvent({
+          traceId,
+          documentId: uploadedFileId,
+          stage: 'ner',
+          event: 'product_specific_validation_adjusted',
+          provider: extractedEntities.nerProvider,
+          modelId: extractedEntities.nerModel,
+          metadata: {
+            productType: extractedEntities.productType,
+            droppedFields: validatedProductSpecific.droppedFields,
+            corrections: validatedProductSpecific.corrections,
+            segmentIndex,
+          },
+        })
+      }
+
+      const detectedProductType = extractedEntities.productType
+
+      const manualMetadata = {
+        title: extractedEntities.title?.value,
+        authors: extractedEntities.authors.map((a) => a.value),
+        institution: extractedEntities.institution?.value,
+        date: extractedEntities.date?.value,
+        doi: extractedEntities.doi?.value,
+        keywords: extractedEntities.keywords.map((a) => a.value),
+      }
+
+      const productPayload = {
+        productType: detectedProductType,
+        owner: uploadedFile.uploadedBy,
+        sourceFile: uploadedFile._id,
+        segmentIndex,
+        segmentLabel: range.label ?? undefined,
+        segmentBounds: {
+          textStart: range.textStart,
+          textEnd: range.textEnd,
         },
+        reviewStatus: 'draft' as const,
+        extractedEntities,
+        manualMetadata,
+        ...buildProductSpecificFields(
+          detectedProductType,
+          extractedEntities,
+          validatedProductSpecific.sanitized,
+        ),
+      }
+
+      const existingProduct = await AcademicProduct.findOne({
+        sourceFile: uploadedFile._id,
+        segmentIndex,
+        isDeleted: false,
+      })
+
+      const academicProduct = existingProduct
+        ? await AcademicProduct.findByIdAndUpdate(existingProduct._id, productPayload, {
+            returnDocument: 'after',
+            runValidators: true,
+          })
+        : await AcademicProduct.create(productPayload)
+
+      if (!academicProduct) {
+        throw new Error('No fue posible persistir el producto academico')
+      }
+
+      if (segmentIndex === 0) {
+        primaryProductId = academicProduct._id.toString()
+      }
+
+      await logSystemAudit({
+        userId: uploadedFile.uploadedBy,
+        userName: owner.fullName,
+        action: existingProduct ? 'update' : 'create',
+        resource: 'academic_product',
+        resourceId: academicProduct._id,
+        details: `Procesamiento automatico de ${uploadedFile.originalFilename} (obra ${segmentIndex + 1}/${segmentCount})`,
       })
     }
 
@@ -534,16 +677,17 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
           ocrProvider: ocrResult.provider,
           ocrModel: ocrResult.modelId ?? null,
           ocrConfidence: ocrResult.confidence ?? null,
-          nerProvider: extractedEntities.nerProvider,
-          nerModel: extractedEntities.nerModel,
-          nerAttemptTrace: extractedEntities.nerAttemptTrace ?? [],
-          documentClassification: extractedEntities.documentClassification,
-          documentClassificationSource: extractedEntities.classificationSource,
-          classificationConfidence: extractedEntities.classificationConfidence,
-          classificationRationale: extractedEntities.classificationRationale,
+          nerProvider: primaryNerProvider,
+          nerModel: primaryNerModel,
+          nerAttemptTrace: aggregatedNerTrace,
+          documentClassification: classificationProfile.documentClassification,
+          documentClassificationSource: classificationProfile.classificationSource,
+          classificationConfidence: classificationProfile.classificationConfidence,
+          classificationRationale: classificationProfile.classificationRationale,
+          sourceWorkCount: segmentCount,
         },
       },
-      { new: true },
+      { returnDocument: 'after' },
     )
 
     if (!uploadWithMetadata) {
@@ -556,9 +700,11 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
       return
     }
 
+    const detectedProductType = classificationProfile.productType
+
     if (
-      extractedEntities.documentClassification === 'non_academic' &&
-      extractedEntities.classificationConfidence >= 0.75
+      classificationProfile.documentClassification === 'non_academic' &&
+      classificationProfile.classificationConfidence >= 0.75
     ) {
       processingWarnings.push(
         'El documento fue clasificado como no academico con alta confianza; valida manualmente su pertinencia.',
@@ -570,14 +716,14 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
         stage: 'processing',
         event: 'classification_warning_non_academic',
         metadata: {
-          classification: extractedEntities.documentClassification,
-          confidence: extractedEntities.classificationConfidence,
+          classification: classificationProfile.documentClassification,
+          confidence: classificationProfile.classificationConfidence,
           action: 'continue_with_manual_review',
         },
       })
     }
 
-    if (extractedEntities.documentClassification === 'uncertain') {
+    if (classificationProfile.documentClassification === 'uncertain') {
       processingWarnings.push(
         'La clasificacion del documento es incierta; revisa manualmente los metadatos extraidos.',
       )
@@ -588,16 +734,16 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
         stage: 'processing',
         event: 'classification_warning_uncertain',
         metadata: {
-          classification: extractedEntities.documentClassification,
-          confidence: extractedEntities.classificationConfidence,
+          classification: classificationProfile.documentClassification,
+          confidence: classificationProfile.classificationConfidence,
           action: 'continue_with_manual_review',
         },
       })
     }
 
-    if (extractedEntities.extractionConfidence < 0.35) {
+    if (anyLowConfidence) {
       processingWarnings.push(
-        'La confianza de extraccion es baja; los metadatos pueden ser poco confiables. Revisa cada campo.',
+        'La confianza de extraccion es baja en al menos un fragmento; revisa cada borrador.',
       )
 
       logPipelineEvent({
@@ -606,16 +752,16 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
         stage: 'processing',
         event: 'extraction_low_confidence_warning',
         metadata: {
-          extractionConfidence: extractedEntities.extractionConfidence,
           threshold: 0.35,
           action: 'continue_with_manual_review',
+          multiSegment: segmentCount > 1,
         },
       })
     }
 
-    if (extractedEntities.evidenceCoverage < 0.25) {
+    if (anyLowEvidence) {
       processingWarnings.push(
-        'Solo se identificaron unos pocos campos criticos; es posible que el documento no contenga suficiente informacion. Verifica manualmente.',
+        'En al menos un fragmento faltan muchas evidencias de campos criticos; verifica manualmente.',
       )
 
       logPipelineEvent({
@@ -624,52 +770,17 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
         stage: 'processing',
         event: 'extraction_low_evidence_coverage_warning',
         metadata: {
-          evidenceCoverage: extractedEntities.evidenceCoverage,
           threshold: 0.25,
           action: 'continue_with_manual_review',
+          multiSegment: segmentCount > 1,
         },
       })
     }
 
-    const detectedProductType = extractedEntities.productType
-
-    const existingProduct = await AcademicProduct.findOne({
-      sourceFile: uploadedFile._id,
-      isDeleted: false,
-    })
-
-    const manualMetadata = {
-      title: extractedEntities.title?.value,
-      authors: extractedEntities.authors.map((a) => a.value),
-      institution: extractedEntities.institution?.value,
-      date: extractedEntities.date?.value,
-      doi: extractedEntities.doi?.value,
-      keywords: extractedEntities.keywords.map((a) => a.value),
-    }
-
-    const productPayload = {
-      productType: detectedProductType,
-      owner: uploadedFile.uploadedBy,
-      sourceFile: uploadedFile._id,
-      reviewStatus: 'draft' as const,
-      extractedEntities,
-      manualMetadata,
-      ...buildProductSpecificFields(
-        detectedProductType,
-        extractedEntities,
-        validatedProductSpecific.sanitized,
-      ),
-    }
-
-    const academicProduct = existingProduct
-      ? await AcademicProduct.findByIdAndUpdate(existingProduct._id, productPayload, {
-          new: true,
-          runValidators: true,
-        })
-      : await AcademicProduct.create(productPayload)
-
-    if (!academicProduct) {
-      throw new Error('No fue posible persistir el producto academico')
+    if (segmentCount > 1) {
+      processingWarnings.push(
+        `Se generaron ${segmentCount} borradores desde el mismo archivo (posible compendio). Revisa cada obra por separado.`,
+      )
     }
 
     const completedUpload = await UploadedFile.findOneAndUpdate(
@@ -685,7 +796,7 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
           processingCompletedAt: new Date(),
         },
       },
-      { new: true },
+      { returnDocument: 'after' },
     )
 
     if (!completedUpload) {
@@ -704,31 +815,25 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
       stage: 'processing',
       event: 'completed',
       durationMs: Date.now() - processStart,
-      provider: extractedEntities.nerProvider,
-      modelId: extractedEntities.nerModel,
+      provider: primaryNerProvider ?? undefined,
+      modelId: primaryNerModel ?? undefined,
       metadata: {
         ocrProvider: ocrResult.provider,
-        classification: extractedEntities.documentClassification,
+        classification: classificationProfile.documentClassification,
+        segmentCount,
       },
     })
 
-    await logSystemAudit({
-      userId: uploadedFile.uploadedBy,
-      userName: owner.fullName,
-      action: existingProduct ? 'update' : 'create',
-      resource: 'academic_product',
-      resourceId: academicProduct._id,
-      details: `Procesamiento automatico de ${uploadedFile.originalFilename}`,
-    })
-
-    await notifyDocumentProcessing({
-      recipientId: completedUpload.uploadedBy.toString(),
-      uploadedFileId: completedUpload._id.toString(),
-      academicProductId: academicProduct._id.toString(),
-      filename: completedUpload.originalFilename,
-      status: 'completed',
-      warningMessage: processingWarnings.length > 0 ? processingWarnings.join(' ') : undefined,
-    })
+    if (primaryProductId) {
+      await notifyDocumentProcessing({
+        recipientId: completedUpload.uploadedBy.toString(),
+        uploadedFileId: completedUpload._id.toString(),
+        academicProductId: primaryProductId,
+        filename: completedUpload.originalFilename,
+        status: 'completed',
+        warningMessage: processingWarnings.length > 0 ? processingWarnings.join(' ') : undefined,
+      })
+    }
   } catch (error) {
     const classified = classifyPipelineError(error)
 

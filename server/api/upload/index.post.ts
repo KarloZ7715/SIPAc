@@ -34,11 +34,15 @@ export default defineEventHandler(async (event) => {
     },
   })
 
+  const forceSingle =
+    metadata.nerForceSingleDocument === 'true' || metadata.nerForceSingleDocument === '1'
+
   const uploadedFile = await UploadedFile.create({
     uploadedBy: auth.sub,
     originalFilename: file.filename,
     gridfsFileId,
     ...(metadata.productType ? { productType: metadata.productType } : {}),
+    ...(forceSingle ? { nerForceSingleDocument: true } : {}),
     mimeType,
     fileSizeBytes: file.data.byteLength,
     processingStatus: 'pending',

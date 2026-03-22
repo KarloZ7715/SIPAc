@@ -1,21 +1,85 @@
 import type { LanguageModel } from 'ai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { validateEnv } from '~~/server/utils/env'
+import { validateEnv, type EnvConfig } from '~~/server/utils/env'
 
-export type StructuredLlmProvider = 'gemini' | 'cerebras' | 'groq'
+export type StructuredLlmProvider = 'gemini' | 'cerebras' | 'groq' | 'openrouter' | 'nvidia'
 
-const GEMINI_FLASH_MODEL_ID = 'gemini-2.5-flash'
-const GEMINI_FLASH_LITE_MODEL_ID = 'gemini-2.5-flash-lite'
 const GROQ_GPT_OSS_120B_MODEL_ID = 'openai/gpt-oss-120b'
 const GROQ_GPT_OSS_20B_MODEL_ID = 'openai/gpt-oss-20b'
 const CEREBRAS_QWEN_MODEL_ID = 'qwen-3-235b-a22b-instruct-2507'
 const CEREBRAS_GPT_OSS_MODEL_ID = 'gpt-oss-120b'
 
+const GEMINI_FLASH_PIPELINE_MODEL_IDS = [
+  'gemini-3.1-flash-lite-preview',
+  'gemini-3-flash-preview',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+] as const
+
+const GEMINI_PRO_PIPELINE_MODEL_IDS = ['gemini-2.5-pro', 'gemini-3.1-pro-preview'] as const
+
+function resolveGeminiPipelineModelIds(env: EnvConfig): string[] {
+  if (env.googleGeminiIncludeProModels) {
+    return [...GEMINI_FLASH_PIPELINE_MODEL_IDS, ...GEMINI_PRO_PIPELINE_MODEL_IDS]
+  }
+  return [...GEMINI_FLASH_PIPELINE_MODEL_IDS]
+}
+
+const NER_NVIDIA_MODEL_IDS_ORDERED = [
+  'z-ai/glm4.7',
+  'deepseek-ai/deepseek-v3.1-terminus',
+  'deepseek-ai/deepseek-v3.1',
+  'mistralai/mistral-large-3-675b-instruct-2512',
+  'deepseek-ai/deepseek-v3.2',
+] as const
+
+const NER_OPENROUTER_MODEL_IDS_ORDERED = [
+  'minimax/minimax-m2.5:free',
+  'openai/gpt-oss-120b:free',
+] as const
+
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
+
+export interface GoogleVisionModelCandidate {
+  modelId: string
+  model: LanguageModel
+}
+
 export interface StructuredModelCandidate {
   name: StructuredLlmProvider
   modelId: string
   model: LanguageModel
+}
+
+export function structuredModelCandidateKey(candidate: StructuredModelCandidate): string {
+  return `${candidate.name}:${candidate.modelId}`
+}
+
+/**
+ * Para la segunda pasada NER: prioriza modelos distintos al que ya acertó en la primera,
+ * dejando el ganador de la pasada 1 al final como último recurso.
+ */
+export function reorderCandidatesForSecondPass(
+  candidates: StructuredModelCandidate[],
+  firstPassWinningKey: string | null,
+): StructuredModelCandidate[] {
+  if (!firstPassWinningKey || candidates.length <= 1) {
+    return [...candidates]
+  }
+
+  const primary: StructuredModelCandidate[] = []
+  const deferred: StructuredModelCandidate[] = []
+
+  for (const candidate of candidates) {
+    if (structuredModelCandidateKey(candidate) === firstPassWinningKey) {
+      deferred.push(candidate)
+    } else {
+      primary.push(candidate)
+    }
+  }
+
+  return [...primary, ...deferred]
 }
 
 function getRuntimeConfigSafe(): Record<string, unknown> {
@@ -26,9 +90,26 @@ function getRuntimeConfigSafe(): Record<string, unknown> {
   }
 }
 
+function pushCandidate(
+  seen: Set<string>,
+  list: StructuredModelCandidate[],
+  candidate: StructuredModelCandidate,
+) {
+  const key = structuredModelCandidateKey(candidate)
+  if (seen.has(key)) {
+    return
+  }
+  seen.add(key)
+  list.push(candidate)
+}
+
+/**
+ * Cadena NER estructurado (clasificación + extracción JSON): más capaz → fallback más barato.
+ */
 export function getStructuredModelCandidates(): StructuredModelCandidate[] {
   const env = validateEnv(getRuntimeConfigSafe())
   const google = createGoogleGenerativeAI({ apiKey: env.googleApiKey })
+
   const groq =
     env.groqApiKey.length > 0
       ? createOpenAICompatible({
@@ -39,30 +120,72 @@ export function getStructuredModelCandidates(): StructuredModelCandidate[] {
         })
       : null
 
-  const candidates: StructuredModelCandidate[] = []
+  const nvidia =
+    env.nvidiaApiKey.length > 0
+      ? createOpenAICompatible({
+          name: 'nvidia',
+          apiKey: env.nvidiaApiKey,
+          baseURL: env.nvidiaApiBaseUrl,
+          supportsStructuredOutputs: true,
+        })
+      : null
 
-  candidates.push({
-    name: 'gemini',
-    modelId: GEMINI_FLASH_MODEL_ID,
-    model: google(GEMINI_FLASH_MODEL_ID),
-  })
+  const openrouterHeaders: Record<string, string> = {
+    'X-Title': 'SIPAc',
+  }
+  if (env.openrouterAppUrl.trim().length > 0) {
+    openrouterHeaders['HTTP-Referer'] = env.openrouterAppUrl.trim()
+  }
+
+  const openrouter =
+    env.openrouterApiKey.length > 0
+      ? createOpenAICompatible({
+          name: 'openrouter',
+          apiKey: env.openrouterApiKey,
+          baseURL: OPENROUTER_BASE_URL,
+          headers: openrouterHeaders,
+          supportsStructuredOutputs: true,
+        })
+      : null
+
+  const candidates: StructuredModelCandidate[] = []
+  const seen = new Set<string>()
+
+  for (const modelId of resolveGeminiPipelineModelIds(env)) {
+    pushCandidate(seen, candidates, {
+      name: 'gemini',
+      modelId,
+      model: google(modelId),
+    })
+  }
+
+  if (nvidia) {
+    for (const modelId of NER_NVIDIA_MODEL_IDS_ORDERED) {
+      pushCandidate(seen, candidates, {
+        name: 'nvidia',
+        modelId,
+        model: nvidia(modelId),
+      })
+    }
+  }
+
+  if (openrouter) {
+    for (const modelId of NER_OPENROUTER_MODEL_IDS_ORDERED) {
+      pushCandidate(seen, candidates, {
+        name: 'openrouter',
+        modelId,
+        model: openrouter(modelId),
+      })
+    }
+  }
 
   if (groq) {
-    candidates.push({
+    pushCandidate(seen, candidates, {
       name: 'groq',
       modelId: GROQ_GPT_OSS_120B_MODEL_ID,
       model: groq(GROQ_GPT_OSS_120B_MODEL_ID),
     })
-  }
-
-  candidates.push({
-    name: 'gemini',
-    modelId: GEMINI_FLASH_LITE_MODEL_ID,
-    model: google(GEMINI_FLASH_LITE_MODEL_ID),
-  })
-
-  if (groq) {
-    candidates.push({
+    pushCandidate(seen, candidates, {
       name: 'groq',
       modelId: GROQ_GPT_OSS_20B_MODEL_ID,
       model: groq(GROQ_GPT_OSS_20B_MODEL_ID),
@@ -97,8 +220,8 @@ export function getChatModelCandidates(): StructuredModelCandidate[] {
 
   candidates.push({
     name: 'gemini',
-    modelId: GEMINI_FLASH_MODEL_ID,
-    model: google(GEMINI_FLASH_MODEL_ID),
+    modelId: 'gemini-2.5-flash',
+    model: google('gemini-2.5-flash'),
   })
 
   if (cerebras) {
@@ -112,8 +235,27 @@ export function getChatModelCandidates(): StructuredModelCandidate[] {
   return candidates
 }
 
-export function getGoogleVisionModel() {
+export function getGoogleVisionModelCandidates(): GoogleVisionModelCandidate[] {
   const env = validateEnv(getRuntimeConfigSafe())
   const google = createGoogleGenerativeAI({ apiKey: env.googleApiKey })
-  return google(GEMINI_FLASH_MODEL_ID)
+  return resolveGeminiPipelineModelIds(env).map((modelId) => ({
+    modelId,
+    model: google(modelId),
+  }))
+}
+
+/** Primer modelo de la cadena OCR visión (compatibilidad). */
+export function getGoogleVisionModel(): LanguageModel {
+  const [first] = getGoogleVisionModelCandidates()
+  if (!first) {
+    const env = validateEnv(getRuntimeConfigSafe())
+    return createGoogleGenerativeAI({ apiKey: env.googleApiKey })('gemini-2.5-flash')
+  }
+  return first.model
+}
+
+/** Un modelo Gemini por id (p. ej. segmentación barata). */
+export function getGeminiModelById(modelId: string): LanguageModel {
+  const env = validateEnv(getRuntimeConfigSafe())
+  return createGoogleGenerativeAI({ apiKey: env.googleApiKey })(modelId)
 }

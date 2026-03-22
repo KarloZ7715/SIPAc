@@ -33,15 +33,35 @@ const envSchema = z.object({
   mongodbUri: mongodbUriSchema,
   jwtSecret: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
   googleApiKey: z.string().min(1, 'GOOGLE_API_KEY es requerido'),
+  googleGeminiIncludeProModels: z.boolean().default(false),
   groqApiKey: z.string().optional().default(''),
+  nvidiaApiKey: z.string().optional().default(''),
+  nvidiaApiBaseUrl: z.string().min(1).default('https://integrate.api.nvidia.com/v1'),
+  openrouterApiKey: z.string().optional().default(''),
+  openrouterAppUrl: z.string().optional().default(''),
   cerebrasApiKey: z.string().optional().default(''),
   mistralApiKey: z.string().optional().default(''),
   ocrProvider: z.enum(['gemini', 'mistral']).default('gemini'),
   llmProvider: z.enum(['gemini', 'cerebras']).default('cerebras'),
   ocrRequestTimeoutMs: z.coerce.number().int().positive().default(45_000),
+  ocrMaxGeminiVisionAttempts: z.coerce.number().int().positive().default(6),
   nerRequestTimeoutMs: z.coerce.number().int().positive().default(35_000),
   nerMaxCandidateAttempts: z.coerce.number().int().positive().default(4),
   nerConfidenceThreshold: z.coerce.number().min(0).max(1).default(0.7),
+  /** Si true, siempre se ejecuta la segunda pasada de extracción común en documentos academic (más coste API). */
+  nerAlwaysSecondPass: z.boolean().default(false),
+  /** Si true, se fusionan pasada 1 y 2 en lugar de elegir solo la de mayor score calibrado. */
+  nerMergeExtractionPasses: z.boolean().default(true),
+  /** Segunda llamada LLM para metadatos específicos cuando la primera deja muchos campos vacíos. */
+  nerProductSpecificFillPass: z.boolean().default(true),
+  /** Si la proporción de campos rellenados es menor a este umbral, se intenta la pasada de relleno. */
+  nerProductSpecificSparseThreshold: z.coerce.number().min(0).max(1).default(0.4),
+  /** Segmentación multi-obra (compendios): requiere heurística + opcional LLM barato. */
+  nerSegmentationEnabled: z.boolean().default(false),
+  nerSegmentationMaxSegments: z.coerce.number().int().min(1).max(20).default(6),
+  nerSegmentationInputMaxChars: z.coerce.number().int().min(2000).max(200_000).default(28_000),
+  nerSegmentationMinSegmentChars: z.coerce.number().int().min(50).max(10_000).default(400),
+  nerSegmentationModelId: z.string().trim().min(1).default('gemini-2.5-flash-lite'),
   rateLimitDocumentsPerHour: z.coerce.number().int().positive().default(15),
   resendApiKey: z.string().optional().default(''),
   resendFromEmail: z

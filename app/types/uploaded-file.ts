@@ -16,7 +16,7 @@ export type DocumentClassification = (typeof DOCUMENT_CLASSIFICATIONS)[number]
 export const DOCUMENT_CLASSIFICATION_SOURCES = ['heuristic', 'llm', 'hybrid'] as const
 export type DocumentClassificationSource = (typeof DOCUMENT_CLASSIFICATION_SOURCES)[number]
 
-export const NER_PROVIDERS = ['cerebras', 'gemini', 'groq'] as const
+export const NER_PROVIDERS = ['cerebras', 'gemini', 'groq', 'openrouter', 'nvidia'] as const
 export type NerProvider = (typeof NER_PROVIDERS)[number]
 
 export const NER_ATTEMPT_SCOPES = ['extraction_first_pass', 'extraction_second_pass'] as const
@@ -44,6 +44,8 @@ export interface IUploadedFile {
   originalFilename: string
   gridfsFileId: DatabaseId
   productType?: ProductType
+  nerForceSingleDocument?: boolean
+  sourceWorkCount?: number
   mimeType: AllowedMimeType
   fileSizeBytes: number
   processingStatus: ProcessingStatus
@@ -85,6 +87,7 @@ export interface UploadedFilePublic {
 
 export interface UploadMetadataDTO {
   productType?: ProductType
+  nerForceSingleDocument?: 'true' | 'false' | '1' | '0' | ''
 }
 
 export interface UploadedFileStatusDTO {
@@ -107,6 +110,9 @@ export interface UploadedFileStatusDTO {
   nerStartedAt?: string
   processingCompletedAt?: string
   academicProductId?: string
+  academicProductIds?: string[]
+  sourceWorkCount?: number
+  nerForceSingleDocument?: boolean
   reviewStatus?: ProductReviewStatus
 }
 

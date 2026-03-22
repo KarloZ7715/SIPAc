@@ -1,17 +1,57 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { processUploadedFile } from '~~/server/services/upload/process-uploaded-file'
 
+const integrationEnvFixture = {
+  mongodbUri: 'mongodb://localhost:27017/sipac',
+  jwtSecret: 'abcdefghijklmnopqrstuvwxyz123456',
+  googleApiKey: 'test-google-key',
+  googleGeminiIncludeProModels: false,
+  groqApiKey: '',
+  nvidiaApiKey: '',
+  nvidiaApiBaseUrl: 'https://integrate.api.nvidia.com/v1',
+  openrouterApiKey: '',
+  openrouterAppUrl: '',
+  cerebrasApiKey: '',
+  mistralApiKey: '',
+  ocrProvider: 'gemini' as const,
+  llmProvider: 'cerebras' as const,
+  ocrRequestTimeoutMs: 45_000,
+  ocrMaxGeminiVisionAttempts: 6,
+  nerRequestTimeoutMs: 35_000,
+  nerMaxCandidateAttempts: 4,
+  nerConfidenceThreshold: 0.7,
+  nerAlwaysSecondPass: false,
+  nerMergeExtractionPasses: true,
+  nerProductSpecificFillPass: true,
+  nerProductSpecificSparseThreshold: 0.4,
+  nerSegmentationEnabled: false,
+  nerSegmentationMaxSegments: 6,
+  nerSegmentationInputMaxChars: 28_000,
+  nerSegmentationMinSegmentChars: 400,
+  nerSegmentationModelId: 'gemini-2.5-flash-lite',
+  rateLimitDocumentsPerHour: 15,
+  resendApiKey: '',
+  resendFromEmail: '',
+}
+
+vi.mock('~~/server/utils/env', () => ({
+  validateEnv: vi.fn(() => integrationEnvFixture),
+}))
+
 const {
   mockUploadedFileFindById,
   mockUploadedFileFindOneAndUpdate,
   mockAcademicProductFindOne,
   mockAcademicProductFindByIdAndUpdate,
   mockAcademicProductCreate,
+  mockAcademicProductUpdateMany,
   mockUserFindById,
   mockReadGridFsFileToBuffer,
   mockExtractDocumentText,
   mockExtractAcademicEntities,
   mockExtractProductSpecificMetadata,
+  mockClassifyDocumentForNer,
+  mockResolveTextSegments,
   mockNotifyDocumentProcessing,
   mockLogSystemAudit,
   mockLogPipelineEvent,
@@ -22,11 +62,14 @@ const {
   mockAcademicProductFindOne: vi.fn(),
   mockAcademicProductFindByIdAndUpdate: vi.fn(),
   mockAcademicProductCreate: vi.fn(),
+  mockAcademicProductUpdateMany: vi.fn(),
   mockUserFindById: vi.fn(),
   mockReadGridFsFileToBuffer: vi.fn(),
   mockExtractDocumentText: vi.fn(),
   mockExtractAcademicEntities: vi.fn(),
   mockExtractProductSpecificMetadata: vi.fn(),
+  mockClassifyDocumentForNer: vi.fn(),
+  mockResolveTextSegments: vi.fn(),
   mockNotifyDocumentProcessing: vi.fn(),
   mockLogSystemAudit: vi.fn(),
   mockLogPipelineEvent: vi.fn(),
@@ -45,6 +88,7 @@ vi.mock('~~/server/models/AcademicProduct', () => ({
     findOne: mockAcademicProductFindOne,
     findByIdAndUpdate: mockAcademicProductFindByIdAndUpdate,
     create: mockAcademicProductCreate,
+    updateMany: mockAcademicProductUpdateMany,
   },
 }))
 
@@ -65,6 +109,11 @@ vi.mock('~~/server/services/ocr/extract-document-text', () => ({
 vi.mock('~~/server/services/ner/extract-academic-entities', () => ({
   extractAcademicEntities: mockExtractAcademicEntities,
   extractProductSpecificMetadata: mockExtractProductSpecificMetadata,
+  classifyDocumentForNer: mockClassifyDocumentForNer,
+}))
+
+vi.mock('~~/server/services/ner/document-segmentation', () => ({
+  resolveTextSegments: mockResolveTextSegments,
 }))
 
 vi.mock('~~/server/services/notifications/notify-document-processing', () => ({
@@ -169,6 +218,19 @@ describe('processUploadedFile integration', () => {
     })
     mockExtractProductSpecificMetadata.mockResolvedValue({})
     mockUploadedFileFindOneAndUpdate.mockReset()
+    mockAcademicProductUpdateMany.mockResolvedValue({ modifiedCount: 0, deletedCount: 0 })
+    mockResolveTextSegments.mockImplementation(async ({ fullText }: { fullText: string }) => ({
+      segments: [{ textStart: 0, textEnd: fullText.length }],
+      usedLlm: false,
+      heuristicMultiple: false,
+    }))
+    mockClassifyDocumentForNer.mockImplementation(async () => ({
+      productType: 'article' as const,
+      documentClassification: 'academic' as const,
+      classificationConfidence: 0.92,
+      classificationRationale: 'Documento academico',
+      classificationSource: 'llm' as const,
+    }))
   })
 
   it('completes full pipeline for academic PDF and creates product draft', async () => {
@@ -189,6 +251,7 @@ describe('processUploadedFile integration', () => {
       documentClassification: 'academic',
       classificationConfidence: 0.92,
       classificationRationale: 'Documento academico',
+      classificationSource: 'llm',
       authors: [{ value: 'Ada Lovelace', confidence: 0.9, anchors: [] }],
       title: { value: 'Articulo de Prueba', confidence: 0.93, anchors: [] },
       institution: { value: 'Universidad Demo', confidence: 0.88, anchors: [] },
@@ -198,8 +261,10 @@ describe('processUploadedFile integration', () => {
       eventOrJournal: { value: 'Revista Demo', confidence: 0.86, anchors: [] },
       extractionSource: 'pdfjs_native',
       extractionConfidence: 0.9,
+      evidenceCoverage: 0.55,
       nerProvider: 'cerebras',
       nerModel: 'gpt-oss-120b',
+      nerAttemptTrace: [],
       extractedAt: new Date('2026-03-13T01:00:00.000Z'),
     })
 
@@ -228,6 +293,7 @@ describe('processUploadedFile integration', () => {
     expect(mockAcademicProductCreate).toHaveBeenCalledTimes(1)
     expect(mockAcademicProductCreate).toHaveBeenCalledWith(
       expect.objectContaining({
+        segmentIndex: 0,
         journalName: 'Revista Internacional Demo',
         volume: '12',
         issue: '3',
@@ -271,11 +337,20 @@ describe('processUploadedFile integration', () => {
       blocks: [],
     })
 
+    mockClassifyDocumentForNer.mockResolvedValue({
+      productType: 'article',
+      documentClassification: 'non_academic',
+      classificationConfidence: 0.83,
+      classificationRationale: 'No academico',
+      classificationSource: 'llm',
+    })
+
     mockExtractAcademicEntities.mockResolvedValue({
       productType: 'article',
       documentClassification: 'non_academic',
       classificationConfidence: 0.83,
       classificationRationale: 'No academico',
+      classificationSource: 'llm',
       authors: [],
       title: undefined,
       institution: undefined,
@@ -285,8 +360,10 @@ describe('processUploadedFile integration', () => {
       eventOrJournal: undefined,
       extractionSource: 'pdfjs_native',
       extractionConfidence: 0.4,
+      evidenceCoverage: 0.3,
       nerProvider: 'gemini',
       nerModel: 'gemini-2.5-flash',
+      nerAttemptTrace: [],
       extractedAt: new Date('2026-03-13T01:00:00.000Z'),
     })
 
@@ -371,6 +448,7 @@ describe('processUploadedFile integration', () => {
       documentClassification: 'academic',
       classificationConfidence: 0.91,
       classificationRationale: 'Documento academico',
+      classificationSource: 'llm',
       authors: [{ value: 'Ada Lovelace', confidence: 0.9, anchors: [] }],
       title: { value: 'Articulo de Prueba', confidence: 0.93, anchors: [] },
       institution: { value: 'Universidad Demo', confidence: 0.88, anchors: [] },
@@ -380,8 +458,10 @@ describe('processUploadedFile integration', () => {
       eventOrJournal: { value: 'Revista Demo', confidence: 0.86, anchors: [] },
       extractionSource: 'pdfjs_native',
       extractionConfidence: 0.9,
+      evidenceCoverage: 0.55,
       nerProvider: 'cerebras',
       nerModel: 'gpt-oss-120b',
+      nerAttemptTrace: [],
       extractedAt: new Date('2026-03-13T01:00:00.000Z'),
     })
 
@@ -424,11 +504,20 @@ describe('processUploadedFile integration', () => {
         blocks: [],
       })
 
+    mockClassifyDocumentForNer.mockResolvedValue({
+      productType: 'article',
+      documentClassification: 'uncertain',
+      classificationConfidence: 0.52,
+      classificationRationale: 'Clasificacion incierta',
+      classificationSource: 'llm',
+    })
+
     mockExtractAcademicEntities.mockResolvedValue({
       productType: 'article',
       documentClassification: 'uncertain',
       classificationConfidence: 0.52,
       classificationRationale: 'Clasificacion incierta',
+      classificationSource: 'llm',
       authors: [{ value: 'Ada Lovelace', confidence: 0.9, anchors: [] }],
       title: { value: 'Articulo de Prueba', confidence: 0.93, anchors: [] },
       institution: undefined,
@@ -438,8 +527,10 @@ describe('processUploadedFile integration', () => {
       eventOrJournal: undefined,
       extractionSource: 'gemini_vision',
       extractionConfidence: 0.42,
+      evidenceCoverage: 0.35,
       nerProvider: 'gemini',
       nerModel: 'gemini-2.5-flash',
+      nerAttemptTrace: [],
       extractedAt: new Date('2026-03-13T01:00:00.000Z'),
     })
 
@@ -478,11 +569,20 @@ describe('processUploadedFile integration', () => {
       blocks: [],
     })
 
+    mockClassifyDocumentForNer.mockResolvedValue({
+      productType: 'patent',
+      documentClassification: 'academic',
+      classificationConfidence: 0.93,
+      classificationRationale: 'Patente academica',
+      classificationSource: 'llm',
+    })
+
     mockExtractAcademicEntities.mockResolvedValue({
       productType: 'patent',
       documentClassification: 'academic',
       classificationConfidence: 0.93,
       classificationRationale: 'Patente academica',
+      classificationSource: 'llm',
       authors: [{ value: 'Ada Lovelace', confidence: 0.9, anchors: [] }],
       title: { value: 'Patente Demo', confidence: 0.93, anchors: [] },
       institution: { value: 'Universidad Demo', confidence: 0.88, anchors: [] },
@@ -492,8 +592,10 @@ describe('processUploadedFile integration', () => {
       eventOrJournal: undefined,
       extractionSource: 'pdfjs_native',
       extractionConfidence: 0.9,
+      evidenceCoverage: 0.55,
       nerProvider: 'cerebras',
       nerModel: 'gpt-oss-120b',
+      nerAttemptTrace: [],
       extractedAt: new Date('2026-03-13T01:00:00.000Z'),
     })
 

@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
       $set: { isRead: true },
     },
     {
-      new: true,
+      returnDocument: 'after',
     },
   )
 

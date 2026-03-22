@@ -22,10 +22,15 @@ export default defineEventHandler(async (event) => {
     throw createAuthorizationError()
   }
 
-  const academicProduct = await AcademicProduct.findOne({
+  const academicProducts = await AcademicProduct.find({
     sourceFile: uploadedFile._id,
     isDeleted: false,
-  }).select('_id reviewStatus')
+  })
+    .sort({ segmentIndex: 1 })
+    .select('_id reviewStatus segmentIndex')
+    .lean()
+
+  const primary = academicProducts[0]
 
   return ok({
     processingStatus: uploadedFile.processingStatus,
@@ -38,6 +43,7 @@ export default defineEventHandler(async (event) => {
     nerModel: uploadedFile.nerModel ?? undefined,
     nerAttemptTrace: uploadedFile.nerAttemptTrace ?? [],
     documentClassification: uploadedFile.documentClassification ?? undefined,
+    documentClassificationSource: uploadedFile.documentClassificationSource ?? undefined,
     classificationConfidence: uploadedFile.classificationConfidence ?? undefined,
     classificationRationale: uploadedFile.classificationRationale ?? undefined,
     processingAttempt: uploadedFile.processingAttempt ?? 0,
@@ -45,7 +51,10 @@ export default defineEventHandler(async (event) => {
     ocrCompletedAt: uploadedFile.ocrCompletedAt?.toISOString(),
     nerStartedAt: uploadedFile.nerStartedAt?.toISOString(),
     processingCompletedAt: uploadedFile.processingCompletedAt?.toISOString(),
-    academicProductId: academicProduct?._id.toString(),
-    reviewStatus: academicProduct?.reviewStatus,
+    academicProductId: primary?._id.toString(),
+    academicProductIds: academicProducts.map((p) => p._id.toString()),
+    sourceWorkCount: uploadedFile.sourceWorkCount ?? academicProducts.length,
+    nerForceSingleDocument: uploadedFile.nerForceSingleDocument ?? false,
+    reviewStatus: primary?.reviewStatus,
   })
 })

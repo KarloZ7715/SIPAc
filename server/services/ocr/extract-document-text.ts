@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AllowedMimeType, OcrProvider, DocumentAnchor } from '~~/app/types'
-import { getGoogleVisionModel } from '~~/server/services/llm/provider'
+import { getGoogleVisionModelCandidates } from '~~/server/services/llm/provider'
 import { validateEnv } from '~~/server/utils/env'
 import {
   classifyPipelineError,
@@ -351,35 +351,93 @@ async function extractNativePdfText(
   }
 }
 
-async function extractWithGemini(buffer: Buffer, mimeType: AllowedMimeType): Promise<string> {
-  const env = validateEnv(getRuntimeConfigSafe())
+const GEMINI_VISION_OCR_PROMPT =
+  'Extrae todo el texto legible del documento en espanol si aplica. No resumas, no traduzcas y no inventes contenido. Devuelve solo el texto transcrito respetando el orden de lectura.'
 
-  const result = await withTimeout({
-    label: 'gemini_ocr_request',
-    timeoutMs: env.ocrRequestTimeoutMs,
-    run: () =>
-      generateText({
-        model: getGoogleVisionModel(),
-        messages: [
-          {
-            role: 'user',
-            content: [
+async function extractWithGeminiVisionChain(
+  buffer: Buffer,
+  mimeType: AllowedMimeType,
+  traceContext?: { traceId?: string; documentId?: string },
+): Promise<{ text: string; modelId: string }> {
+  const env = validateEnv(getRuntimeConfigSafe())
+  const candidates = getGoogleVisionModelCandidates()
+  const maxAttempts = Math.max(1, Math.min(candidates.length, env.ocrMaxGeminiVisionAttempts))
+  const slice = candidates.slice(0, maxAttempts)
+  let lastError: unknown = null
+
+  for (let i = 0; i < slice.length; i += 1) {
+    const { modelId, model } = slice[i]!
+    const attemptStart = Date.now()
+
+    try {
+      const result = await withTimeout({
+        label: `gemini_ocr_request_${modelId}`,
+        timeoutMs: env.ocrRequestTimeoutMs,
+        run: () =>
+          generateText({
+            model,
+            maxRetries: 0,
+            messages: [
               {
-                type: 'text',
-                text: 'Extrae todo el texto legible del documento en espanol si aplica. No resumas, no traduzcas y no inventes contenido. Devuelve solo el texto transcrito respetando el orden de lectura.',
-              },
-              {
-                type: 'file',
-                data: buffer,
-                mediaType: mimeType,
+                role: 'user',
+                content: [
+                  { type: 'text', text: GEMINI_VISION_OCR_PROMPT },
+                  { type: 'file', data: buffer, mediaType: mimeType },
+                ],
               },
             ],
-          },
-        ],
-      }),
+          }),
+      })
+
+      const text = normalizeExtractedText(result.text)
+
+      logPipelineEvent({
+        traceId: traceContext?.traceId,
+        documentId: traceContext?.documentId,
+        stage: 'ocr',
+        event: 'vision_gemini_candidate_succeeded',
+        provider: 'gemini_vision',
+        modelId,
+        attempt: i + 1,
+        durationMs: Date.now() - attemptStart,
+        metadata: {
+          chainIndex: i,
+          chainLength: slice.length,
+          textLength: text.length,
+        },
+      })
+
+      return { text, modelId }
+    } catch (error) {
+      lastError = error
+      const classified = classifyPipelineError(error)
+
+      logPipelineEvent({
+        traceId: traceContext?.traceId,
+        documentId: traceContext?.documentId,
+        stage: 'ocr',
+        event: 'vision_gemini_candidate_failed',
+        provider: 'gemini_vision',
+        modelId,
+        attempt: i + 1,
+        durationMs: Date.now() - attemptStart,
+        errorType: classified.errorType,
+        errorMessage: classified.errorMessage,
+        metadata: { chainIndex: i, chainLength: slice.length },
+      })
+    }
+  }
+
+  logPipelineEvent({
+    traceId: traceContext?.traceId,
+    documentId: traceContext?.documentId,
+    stage: 'ocr',
+    event: 'vision_gemini_chain_exhausted',
+    provider: 'gemini_vision',
+    metadata: { maxAttempts, availableCandidates: candidates.length },
   })
 
-  return normalizeExtractedText(result.text)
+  throw lastError instanceof Error ? lastError : new Error('OCR visión Gemini: cadena agotada')
 }
 
 export async function extractDocumentText(input: OcrExtractionInput): Promise<OcrExtractionResult> {
@@ -490,9 +548,15 @@ export async function extractDocumentText(input: OcrExtractionInput): Promise<Oc
   }
 
   let visionText = ''
+  let visionModelId = 'gemini-2.5-flash'
 
   try {
-    visionText = await extractWithGemini(input.buffer, input.mimeType)
+    const vision = await extractWithGeminiVisionChain(input.buffer, input.mimeType, {
+      traceId: input.traceId,
+      documentId: input.documentId,
+    })
+    visionText = vision.text
+    visionModelId = vision.modelId
   } catch (error) {
     if (!nativeExtractionSucceeded) {
       throw error
@@ -547,7 +611,7 @@ export async function extractDocumentText(input: OcrExtractionInput): Promise<Oc
     stage: 'ocr',
     event: 'completed',
     provider: 'gemini_vision',
-    modelId: 'gemini-2.5-flash',
+    modelId: visionModelId,
     durationMs: Date.now() - ocrStart,
     metadata: {
       confidence: estimateVisionConfidence(visionText),
@@ -558,7 +622,7 @@ export async function extractDocumentText(input: OcrExtractionInput): Promise<Oc
   return {
     text: visionText,
     provider: 'gemini_vision',
-    modelId: 'gemini-2.5-flash',
+    modelId: visionModelId,
     confidence: estimateVisionConfidence(visionText),
     blocks: [],
   }

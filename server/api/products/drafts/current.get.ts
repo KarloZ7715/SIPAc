@@ -27,7 +27,19 @@ export default defineEventHandler(async (event) => {
     return ok({ draft: null })
   }
 
+  const siblingProducts = await AcademicProduct.find({
+    sourceFile: product.sourceFile,
+    isDeleted: false,
+  })
+    .sort({ segmentIndex: 1 })
+    .select('_id')
+    .lean()
+
   return ok({
-    draft: buildProductWorkspaceDraft(product, uploadedFile),
+    draft: buildProductWorkspaceDraft(product, {
+      ...uploadedFile,
+      academicProductIds: siblingProducts.map((p) => p._id),
+      sourceWorkCount: uploadedFile.sourceWorkCount ?? siblingProducts.length,
+    }),
   })
 })

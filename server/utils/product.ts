@@ -14,6 +14,14 @@ interface ProductLike {
   productType: ProductType
   owner: IdLike
   sourceFile: IdLike
+  segmentIndex?: number
+  segmentLabel?: string
+  segmentBounds?: {
+    pageFrom?: number
+    pageTo?: number
+    textStart?: number
+    textEnd?: number
+  }
   reviewStatus: ProductReviewStatus
   reviewConfirmedAt?: unknown
   extractedEntities?: {
@@ -173,12 +181,20 @@ interface UploadedFileLike {
   ocrConfidence?: number | null
   nerProvider?: UploadedFileWorkspacePublic['nerProvider']
   nerModel?: string | null
+  nerAttemptTrace?: UploadedFileWorkspacePublic['nerAttemptTrace']
+  documentClassification?: UploadedFileWorkspacePublic['documentClassification']
+  documentClassificationSource?: UploadedFileWorkspacePublic['documentClassificationSource']
+  classificationConfidence?: number | null
+  classificationRationale?: string | null
   processingAttempt?: number | null
   processingStartedAt?: unknown
   ocrCompletedAt?: unknown
   nerStartedAt?: unknown
   processingCompletedAt?: unknown
   academicProductId?: IdLike
+  academicProductIds?: IdLike[]
+  sourceWorkCount?: number | null
+  nerForceSingleDocument?: boolean
   reviewStatus?: ProductReviewStatus
   createdAt?: unknown
 }
@@ -209,6 +225,9 @@ export function toAcademicProductPublic(product: ProductLike): AcademicProductPu
     productType: product.productType,
     owner: toId(product.owner),
     sourceFile: toId(product.sourceFile),
+    segmentIndex: product.segmentIndex ?? 0,
+    segmentLabel: product.segmentLabel,
+    segmentBounds: product.segmentBounds,
     reviewStatus: product.reviewStatus,
     reviewConfirmedAt: toOptionalIsoString(product.reviewConfirmedAt),
     extractedEntities: {
@@ -386,6 +405,13 @@ export function toUploadedFileWorkspacePublic(
     ocrConfidence: uploadedFile.ocrConfidence ?? undefined,
     nerProvider: uploadedFile.nerProvider ?? undefined,
     nerModel: uploadedFile.nerModel ?? undefined,
+    nerAttemptTrace: uploadedFile.nerAttemptTrace?.length
+      ? uploadedFile.nerAttemptTrace
+      : undefined,
+    documentClassification: uploadedFile.documentClassification ?? undefined,
+    documentClassificationSource: uploadedFile.documentClassificationSource ?? undefined,
+    classificationConfidence: uploadedFile.classificationConfidence ?? undefined,
+    classificationRationale: uploadedFile.classificationRationale ?? undefined,
     processingAttempt: uploadedFile.processingAttempt ?? 0,
     processingStartedAt: toOptionalIsoString(uploadedFile.processingStartedAt),
     ocrCompletedAt: toOptionalIsoString(uploadedFile.ocrCompletedAt),
@@ -394,6 +420,9 @@ export function toUploadedFileWorkspacePublic(
     academicProductId: uploadedFile.academicProductId
       ? toId(uploadedFile.academicProductId)
       : undefined,
+    academicProductIds: uploadedFile.academicProductIds?.map((id) => toId(id)),
+    sourceWorkCount: uploadedFile.sourceWorkCount ?? undefined,
+    nerForceSingleDocument: uploadedFile.nerForceSingleDocument ?? undefined,
     reviewStatus: uploadedFile.reviewStatus ?? undefined,
     createdAt: toOptionalIsoString(uploadedFile.createdAt) ?? new Date().toISOString(),
   }

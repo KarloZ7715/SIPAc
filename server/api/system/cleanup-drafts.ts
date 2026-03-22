@@ -19,10 +19,19 @@ export default defineEventHandler(async (_event) => {
 
   for (const draft of expiredDrafts) {
     try {
-      const sourceFile = await UploadedFileModel.findById(draft.sourceFile)
+      const sourceFileId = draft.sourceFile
 
       await AcademicProductModel.findByIdAndDelete(draft._id)
       deletedProductsCount++
+
+      const remainingProducts = await AcademicProductModel.countDocuments({
+        sourceFile: sourceFileId,
+      })
+      if (remainingProducts > 0) {
+        continue
+      }
+
+      const sourceFile = await UploadedFileModel.findById(sourceFileId)
 
       if (sourceFile) {
         if (sourceFile.gridfsFileId) {
@@ -48,16 +57,14 @@ export default defineEventHandler(async (_event) => {
 
   for (const file of expiredFiles) {
     try {
-      const attachedProduct = await AcademicProductModel.findOne({ sourceFile: file._id })
+      const hasConfirmed = await AcademicProductModel.exists({
+        sourceFile: file._id,
+        reviewStatus: 'confirmed',
+        isDeleted: false,
+      })
 
-      if (attachedProduct && attachedProduct.reviewStatus === 'confirmed') {
+      if (hasConfirmed) {
         continue
-      }
-
-      if (attachedProduct && attachedProduct.reviewStatus === 'draft') {
-        if (!attachedProduct.isDeleted) {
-          continue
-        }
       }
 
       if (file.gridfsFileId) {
@@ -68,13 +75,11 @@ export default defineEventHandler(async (_event) => {
         }
       }
 
+      const deleteResult = await AcademicProductModel.deleteMany({ sourceFile: file._id })
+      deletedProductsCount += deleteResult.deletedCount ?? 0
+
       await UploadedFileModel.findByIdAndDelete(file._id)
       deletedFilesCount++
-
-      if (attachedProduct && attachedProduct.reviewStatus === 'draft') {
-        await AcademicProductModel.findByIdAndDelete(attachedProduct._id)
-        deletedProductsCount++
-      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       errors.push(`Failed cleaning up file ${file._id}: ${err.message}`)

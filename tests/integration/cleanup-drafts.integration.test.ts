@@ -5,6 +5,9 @@ const {
   mockAcademicProductFind,
   mockAcademicProductFindByIdAndDelete,
   mockAcademicProductFindOne,
+  mockAcademicProductCountDocuments,
+  mockAcademicProductExists,
+  mockAcademicProductDeleteMany,
   mockUploadedFileFind,
   mockUploadedFileFindById,
   mockUploadedFileFindByIdAndDelete,
@@ -13,6 +16,9 @@ const {
   mockAcademicProductFind: vi.fn(),
   mockAcademicProductFindByIdAndDelete: vi.fn(),
   mockAcademicProductFindOne: vi.fn(),
+  mockAcademicProductCountDocuments: vi.fn(),
+  mockAcademicProductExists: vi.fn(),
+  mockAcademicProductDeleteMany: vi.fn(),
   mockUploadedFileFind: vi.fn(),
   mockUploadedFileFindById: vi.fn(),
   mockUploadedFileFindByIdAndDelete: vi.fn(),
@@ -24,6 +30,9 @@ vi.mock('../../server/models/AcademicProduct', () => ({
     find: mockAcademicProductFind,
     findByIdAndDelete: mockAcademicProductFindByIdAndDelete,
     findOne: mockAcademicProductFindOne,
+    countDocuments: mockAcademicProductCountDocuments,
+    exists: mockAcademicProductExists,
+    deleteMany: mockAcademicProductDeleteMany,
   },
 }))
 
@@ -42,6 +51,9 @@ vi.mock('../../server/services/storage/gridfs', () => ({
 describe('System Cleanup Endpoint', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockAcademicProductCountDocuments.mockResolvedValue(0)
+    mockAcademicProductExists.mockResolvedValue(null)
+    mockAcademicProductDeleteMany.mockResolvedValue({ deletedCount: 0 })
     vi.useFakeTimers()
     const now = new Date('2026-03-16T12:00:00.000Z')
     vi.setSystemTime(now)
@@ -88,12 +100,8 @@ describe('System Cleanup Endpoint', () => {
     // Pass 2: An expired file is found (maybe it was soft-deleted but belongs to a confirmed product)
     mockUploadedFileFind.mockResolvedValueOnce([{ _id: uploadedFileId, gridfsFileId: gridfsId }])
 
-    // Safety net check: The attached product is CONFIRMED
-    mockAcademicProductFindOne.mockResolvedValueOnce({
-      _id: 'confirmed123',
-      reviewStatus: 'confirmed',
-      isDeleted: true,
-    })
+    // Hay al menos un producto confirmado ligado al archivo
+    mockAcademicProductExists.mockResolvedValueOnce({ _id: 'confirmed123' })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await cleanupDraftsEndpoint({} as any)
@@ -101,7 +109,7 @@ describe('System Cleanup Endpoint', () => {
     // Should skip deletion
     expect(mockDeleteFileFromGridFs).not.toHaveBeenCalled()
     expect(mockUploadedFileFindByIdAndDelete).not.toHaveBeenCalled()
-    expect(mockAcademicProductFindByIdAndDelete).not.toHaveBeenCalled()
+    expect(mockAcademicProductDeleteMany).not.toHaveBeenCalled()
 
     expect(result.deletedProductsCount).toBe(0)
     expect(result.deletedFilesCount).toBe(0)
@@ -116,14 +124,14 @@ describe('System Cleanup Endpoint', () => {
     // Pass 2: Orphan file found
     mockUploadedFileFind.mockResolvedValueOnce([{ _id: uploadedFileId, gridfsFileId: gridfsId }])
 
-    // No Product attached to the file at all
-    mockAcademicProductFindOne.mockResolvedValueOnce(null)
+    mockAcademicProductExists.mockResolvedValueOnce(null)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await cleanupDraftsEndpoint({} as any)
 
     expect(mockDeleteFileFromGridFs).toHaveBeenCalledWith(gridfsId)
     expect(mockUploadedFileFindByIdAndDelete).toHaveBeenCalledWith(uploadedFileId)
+    expect(mockAcademicProductDeleteMany).toHaveBeenCalled()
 
     expect(result.deletedProductsCount).toBe(0)
     expect(result.deletedFilesCount).toBe(1)

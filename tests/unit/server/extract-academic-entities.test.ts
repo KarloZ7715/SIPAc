@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as LlmProviderModule from '../../../server/services/llm/provider'
 
 const {
   mockGenerateText,
@@ -19,9 +20,13 @@ vi.mock('ai', () => ({
   },
 }))
 
-vi.mock('~~/server/services/llm/provider', () => ({
-  getStructuredModelCandidates: mockGetStructuredModelCandidates,
-}))
+vi.mock('~~/server/services/llm/provider', async (importOriginal) => {
+  const actual = (await importOriginal()) as LlmProviderModule
+  return {
+    ...actual,
+    getStructuredModelCandidates: mockGetStructuredModelCandidates,
+  }
+})
 
 vi.mock('~~/server/utils/env', () => ({
   validateEnv: mockValidateEnv,
@@ -72,6 +77,14 @@ describe('extractAcademicEntities', () => {
       nerRequestTimeoutMs: 35_000,
       nerConfidenceThreshold: 0.7,
       nerMaxCandidateAttempts: 4,
+      nerAlwaysSecondPass: false,
+      nerMergeExtractionPasses: true,
+      nerProductSpecificFillPass: true,
+      nerProductSpecificSparseThreshold: 0.4,
+      nvidiaApiKey: '',
+      nvidiaApiBaseUrl: 'https://integrate.api.nvidia.com/v1',
+      openrouterApiKey: '',
+      openrouterAppUrl: '',
     })
 
     mockGetStructuredModelCandidates.mockReturnValue([
@@ -217,6 +230,87 @@ describe('extractAcademicEntities', () => {
     expect(result.extractionConfidence).toBeGreaterThan(0.8)
   })
 
+  it('fusiona autores de ambas pasadas cuando nerMergeExtractionPasses es true', async () => {
+    let extractionCallCount = 0
+
+    mockGenerateText.mockImplementation(async ({ prompt }: { prompt: string }) => {
+      if (prompt.includes('Clasifica el siguiente texto')) {
+        return {
+          output: {
+            documentClassification: 'academic',
+            classificationConfidence: 0.9,
+            classificationRationale: 'Clasificacion valida',
+            productType: 'article',
+            productTypeConfidence: 0.82,
+          },
+        }
+      }
+
+      extractionCallCount += 1
+
+      if (extractionCallCount === 1) {
+        return {
+          output: {
+            authors: ['Ana Perez'],
+            title: 'Articulo fusion',
+            institution: 'Universidad Demo',
+            date: '2026-01-20',
+            keywords: ['ia'],
+            doi: '10.1000/final',
+            eventOrJournal: 'Revista Final',
+            confidence: {
+              authors: 0.35,
+              title: 0.35,
+              institution: 0.35,
+              date: 0.35,
+              keywords: 0.35,
+              doi: 0.35,
+              eventOrJournal: 0.35,
+            },
+          },
+        }
+      }
+
+      return {
+        output: {
+          authors: ['Luis Gomez'],
+          title: 'Articulo fusion',
+          institution: 'Universidad Demo',
+          date: '2026-01-20',
+          keywords: ['ocr'],
+          doi: '10.1000/final',
+          eventOrJournal: 'Revista Final',
+          confidence: {
+            authors: 0.93,
+            title: 0.94,
+            institution: 0.9,
+            date: 0.88,
+            keywords: 0.9,
+            doi: 0.91,
+            eventOrJournal: 0.89,
+          },
+        },
+      }
+    })
+
+    const { extractAcademicEntities } =
+      await import('../../../server/services/ner/extract-academic-entities')
+
+    const result = await extractAcademicEntities({
+      text: 'Texto academico con metadatos variados',
+      extractionSource: 'pdfjs_native',
+      traceId: 'trace-ner-merge',
+      documentId: 'doc-ner-merge',
+    })
+
+    expect(extractionCallCount).toBe(2)
+    expect(result.authors.map((a) => a.value).sort()).toEqual(['Ana Perez', 'Luis Gomez'].sort())
+    expect(result.keywords.map((k) => k.value).sort()).toEqual(['ia', 'ocr'].sort())
+    expect(
+      mockLogPipelineEvent.mock.calls.some(([p]) => p?.event === 'extraction_passes_merged'),
+    ).toBe(true)
+  })
+
   it('keeps first pass result when second pass fails', async () => {
     let extractionCallCount = 0
 
@@ -224,7 +318,7 @@ describe('extractAcademicEntities', () => {
       if (prompt.includes('Clasifica el siguiente texto')) {
         return {
           output: {
-            documentClassification: 'non_academic',
+            documentClassification: 'academic',
             classificationConfidence: 0.86,
             classificationRationale: 'Clasificacion valida',
             productType: 'article',
@@ -466,8 +560,8 @@ describe('extractAcademicEntities', () => {
     ).rejects.toThrow()
   })
 
-  it('retries same candidate with strict schema hint after schema validation failure', async () => {
-    let extractionCallCount = 0
+  it('tras fallo de esquema en un modelo pasa al siguiente candidato sin reintentar el mismo', async () => {
+    let geminiFlashCalls = 0
 
     mockGenerateText.mockImplementation(
       async ({ prompt, model }: { prompt: string; model: string }) => {
@@ -484,35 +578,30 @@ describe('extractAcademicEntities', () => {
         }
 
         if (model === 'model-gemini-flash') {
-          extractionCallCount += 1
-
-          if (extractionCallCount === 1) {
-            throw new Error('schema validation failed for response payload')
-          }
-
-          return {
-            output: {
-              authors: ['Ada Lovelace'],
-              title: 'Articulo validado',
-              institution: 'Universidad Demo',
-              date: '2026-03-14',
-              keywords: ['ia'],
-              doi: '10.1000/demo.1',
-              eventOrJournal: 'Revista Demo',
-              confidence: {
-                authors: 0.92,
-                title: 0.91,
-                institution: 0.9,
-                date: 0.9,
-                keywords: 0.9,
-                doi: 0.9,
-                eventOrJournal: 0.9,
-              },
-            },
-          }
+          geminiFlashCalls += 1
+          throw new Error('schema validation failed for response payload')
         }
 
-        throw new Error('should not move to next candidate for schema_validation retry')
+        return {
+          output: {
+            authors: ['Ada Lovelace'],
+            title: 'Articulo en segundo candidato',
+            institution: 'Universidad Demo',
+            date: '2026-03-14',
+            keywords: ['ia'],
+            doi: '10.1000/demo.1',
+            eventOrJournal: 'Revista Demo',
+            confidence: {
+              authors: 0.92,
+              title: 0.91,
+              institution: 0.9,
+              date: 0.9,
+              keywords: 0.9,
+              doi: 0.9,
+              eventOrJournal: 0.9,
+            },
+          },
+        }
       },
     )
 
@@ -520,19 +609,20 @@ describe('extractAcademicEntities', () => {
       await import('../../../server/services/ner/extract-academic-entities')
 
     const result = await extractAcademicEntities({
-      text: 'Texto academico para probar retry de schema',
+      text: 'Texto academico para probar fallback tras schema',
       extractionSource: 'pdfjs_native',
       traceId: 'trace-ner-6',
       documentId: 'doc-ner-6',
     })
 
-    expect(result.nerProvider).toBe('gemini')
-    expect(result.nerModel).toBe('gemini-2.5-flash')
-    expect(extractionCallCount).toBe(2)
+    expect(geminiFlashCalls).toBe(1)
+    expect(result.nerProvider).toBe('groq')
+    expect(result.nerModel).toBe('openai/gpt-oss-120b')
+    expect(result.title?.value).toBe('Articulo en segundo candidato')
     expect(
       mockLogPipelineEvent.mock.calls.some(
         ([payload]) => payload?.event === 'candidate_retry_selected',
       ),
-    ).toBe(true)
+    ).toBe(false)
   })
 })
