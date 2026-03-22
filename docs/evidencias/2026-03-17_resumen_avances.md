@@ -2,7 +2,7 @@
 
 Este documento presenta un informe detallado sobre las implementaciones y avances técnicos más recientes en el Sistema Inteligente de Productividad Académica (SIPAc). El desarrollo ha contemplado desde la arquitectura de carga segura hasta la extracción semántica refinada, sentando una base sólida y auditable para la gestión documental.
 
-A continuación, se describen de manera pormenorizada los módulos trabajados:
+A continuación, se describen de manera detallada los módulos trabajados:
 
 ## 1. Módulo M2: Carga de Documentos (Puerta de Entrada)
 

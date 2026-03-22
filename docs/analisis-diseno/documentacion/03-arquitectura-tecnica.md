@@ -18,8 +18,9 @@
 | 1.7     | 2026-03-11 | Carlos A. Canabal Cordero | Alineación al estado implementado de M2/M8: NER estructurado con `generateText` + `Output.object`, selector real `LLM_PROVIDER`, y notificaciones por correo mediante Resend en modo best-effort                                                                                        |
 | 1.8     | 2026-03-13 | Carlos A. Canabal Cordero | Actualización del proveedor LLM a fallback por tarea implementado: NER `qwen -> gpt-oss -> gemini -> llama3.1`; Chat `gpt-oss -> gemini -> qwen`; documentación alineada a `getStructuredModelCandidates()` y `getChatModelCandidates()`                                                |
 | 1.9     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación final al hardening del pipeline OCR/NER: timeouts configurables, presupuesto de intentos por candidato y observabilidad por etapas (`ocr`, `ner`, `processing`)                                                                                                              |
-| 1.10    | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback real tras validaciones de compatibilidad: NER con Gemini + Groq (`gemini-2.5-flash` → `openai/gpt-oss-120b` → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b`), Chat con Cerebras + Gemini; y ajuste documental de `GROQ_API_KEY` y esquema estructurado estricto |
-| 1.11    | 2026-03-14 | Carlos A. Canabal Cordero | Alineación de arquitectura al estado funcional vigente: M5A parcial (borrador/revisión), M5B y M9 pendientes, estructura de directorios actualizada sin marcadores de "futuro"                                                                                                          |
+| 2.0     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback real tras validaciones de compatibilidad: NER con Gemini + Groq (`gemini-2.5-flash` → `openai/gpt-oss-120b` → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b`), Chat con Cerebras + Gemini; y ajuste documental de `GROQ_API_KEY` y esquema estructurado estricto |
+| 2.1     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación de arquitectura al estado funcional vigente: M5A parcial (borrador/revisión), M5B y M9 pendientes, estructura de directorios actualizada sin marcadores de "futuro"                                                                                                          |
+| 2.2     | 2026-03-20 | Carlos A. Canabal Cordero | Pipeline documental: tras OCR, etapa opcional de **segmentación** (heurística + LLM acotado por env) y **NER por segmento**, persistiendo N productos por `sourceFile` con `segmentIndex`                                                                                               |
 
 ---
 
@@ -315,6 +316,8 @@ flowchart TD
     style I fill:#795548,color:#fff
 ```
 
+**Ampliación (compendios, 20/03/2026):** entre el texto OCR completo y la cadena NER, el servicio `process-uploaded-file` puede **partir el texto en segmentos** (`server/services/ner/document-segmentation.ts`). Por defecto la llamada LLM de segmentación está **desactivada** (`NER_SEGMENTATION_ENABLED`); si está activa y la heurística sugiere varias obras, se usa un modelo Gemini barato con entrada acotada. Luego se ejecuta el flujo NER **una vez por segmento** y se persisten varios documentos en `academic_products` con el mismo `sourceFile` y `segmentIndex` distinto.
+
 ---
 
 ## 5. Estrategia de Proveedores OCR / LLM
@@ -483,6 +486,13 @@ OCR_REQUEST_TIMEOUT_MS=45000      # Timeout OCR visual por solicitud
 NER_REQUEST_TIMEOUT_MS=35000      # Timeout por intento de candidato NER
 NER_MAX_CANDIDATE_ATTEMPTS=4      # Presupuesto máximo de candidatos por extracción
 NER_CONFIDENCE_THRESHOLD=0.7      # Umbral para activar segunda pasada NER
+
+# Compendios (varias obras por PDF) — segmentación opcional
+NER_SEGMENTATION_ENABLED=false
+NER_SEGMENTATION_MAX_SEGMENTS=6
+NER_SEGMENTATION_INPUT_MAX_CHARS=28000
+NER_SEGMENTATION_MIN_SEGMENT_CHARS=400
+NER_SEGMENTATION_MODEL_ID=gemini-2.5-flash-lite
 
 # Solo si OCR_PROVIDER=mistral
 MISTRAL_API_KEY=...

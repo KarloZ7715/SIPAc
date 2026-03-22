@@ -21,7 +21,7 @@
 | 1.7     | 2026-03-13 | Carlos A. Canabal Cordero | Actualización de fallback LLM por tarea: NER con cadena `qwen -> gpt-oss -> gemini -> llama3.1`, y Chat planificado con cadena `gpt-oss -> gemini -> qwen`                                                                                                                                                     |
 | 1.8     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación de requisitos al hardening operativo del pipeline: timeouts OCR/NER, límite de intentos por candidato NER y trazabilidad por etapa para diagnóstico                                                                                                                                                 |
 | 1.9     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback NER vigente con Groq y Gemini, y compatibilidad de structured outputs con esquema estricto (campos requeridos y valores nulos explícitos cuando aplique)                                                                                                                                |
-| 1.10    | 2026-03-14 | Carlos A. Canabal Cordero | Alineación de estados RF con implementación real: carga sin `productType` obligatorio, M5A parcial con flujo de borrador/revisión, y actualización de notas de rate limiting y dependencias                                                                                                                    |
+| 2.0     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación de estados RF con implementación real: carga sin `productType` obligatorio, M5A parcial con flujo de borrador/revisión, y actualización de notas de rate limiting y dependencias                                                                                                                    |
 
 ---
 
@@ -245,18 +245,18 @@ mindmap
 | ID     | Descripción                                                                                                                                                              | Prioridad | Estado     |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ---------- |
 | RF-051 | El sistema debe almacenar cada producto académico con sus metadatos completos en la colección `academic_products` de MongoDB                                             | Alta      | Completado |
-| RF-052 | El sistema debe permitir consultar productos académicos filtrando por tipo de producto                                                                                   | Alta      | Pendiente  |
-| RF-053 | El sistema debe permitir consultar productos académicos filtrando por año de producción                                                                                  | Alta      | Pendiente  |
-| RF-054 | El sistema debe permitir consultar productos académicos filtrando por usuario propietario                                                                                | Alta      | Pendiente  |
-| RF-055 | El sistema debe permitir consultar productos académicos filtrando por institución                                                                                        | Media     | Pendiente  |
+| RF-052 | El sistema debe permitir consultar productos académicos filtrando por tipo de producto                                                                                   | Alta      | Parcial    |
+| RF-053 | El sistema debe permitir consultar productos académicos filtrando por año de producción                                                                                  | Alta      | Parcial    |
+| RF-054 | El sistema debe permitir consultar productos académicos filtrando por usuario propietario                                                                                | Alta      | Parcial    |
+| RF-055 | El sistema debe permitir consultar productos académicos filtrando por institución                                                                                        | Media     | Parcial    |
 | RF-056 | El sistema debe permitir al usuario editar manualmente los metadatos de sus propios productos académicos                                                                 | Alta      | Parcial    |
-| RF-057 | El sistema debe permitir al usuario eliminar sus propios productos académicos, solicitando confirmación explícita antes de ejecutar la acción                            | Media     | Pendiente  |
-| RF-058 | El sistema debe implementar búsqueda de texto completo sobre títulos, autores y palabras clave                                                                           | Media     | Pendiente  |
-| RF-059 | El sistema debe paginar los resultados de consultas con un mínimo de 10 y máximo de 50 registros por página                                                              | Media     | Pendiente  |
-| RF-060 | Cualquier usuario autenticado debe poder consultar y visualizar los productos académicos de todos los usuarios del sistema                                               | Alta      | Pendiente  |
-| RF-061 | Los usuarios solo pueden editar y eliminar sus propios productos académicos; la visualización del repositorio completo es irrestricta para cualquier usuario autenticado | Alta      | Pendiente  |
+| RF-057 | El sistema debe permitir al usuario eliminar sus propios productos académicos, solicitando confirmación explícita antes de ejecutar la acción                            | Media     | Parcial    |
+| RF-058 | El sistema debe implementar búsqueda de texto completo sobre títulos, autores y palabras clave                                                                           | Media     | Parcial    |
+| RF-059 | El sistema debe paginar los resultados de consultas con un mínimo de 10 y máximo de 50 registros por página                                                              | Media     | Parcial    |
+| RF-060 | Cualquier usuario autenticado debe poder consultar y visualizar los productos académicos de todos los usuarios del sistema                                               | Alta      | Parcial    |
+| RF-061 | Los usuarios solo pueden editar y eliminar sus propios productos académicos; la visualización del repositorio completo es irrestricta para cualquier usuario autenticado | Alta      | Parcial    |
 
-> **Nota M5A (estado actualizado al 14/03/2026):** El backend implementa flujo de borrador/revisión por documento (`GET /api/products/drafts/current`, `GET /api/products/:id`, `PATCH /api/products/:id`). El listado global (`GET /api/products`) y la eliminación (`DELETE /api/products/:id`) siguen pendientes.
+> **Nota M5A (estado actualizado al 19/03/2026):** El backend implementa flujo de borrador/revisión por documento (`GET /api/products/drafts/current`, `GET /api/products/:id`, `PATCH /api/products/:id`). El listado global (`GET /api/products`) con filtros, búsqueda y paginación está implementado. La eliminación (`DELETE /api/products/:id`) con confirmación y permisos está implementada. La interfaz de repositorio (`/repository`) permite explorar todos los productos con filtros por tipo, año, institución y búsqueda de texto completo.
 
 ---
 

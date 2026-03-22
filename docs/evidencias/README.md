@@ -1,4 +1,4 @@
-#### Desarrollado por Cursor - Modelo GPT-5.4
+#### _Desarrollado por Cursor - Modelo GPT-5.4_
 
 # Evidencias de Pasantía
 
@@ -45,6 +45,7 @@ Cada documento de evidencia debería contener, cuando aplique, las siguientes se
 | `2026-03-14_m5a-repositorio-borrador-revision.md`               | Estado parcial de repositorio: flujo de borrador, edición y confirmación manual            |
 | `2026-03-14_m8-notificaciones-dashboard-base.md`                | Notificaciones in-app y correo best-effort integradas al pipeline documental               |
 | `2026-03-15_refuerzo-ner-ocr-metadatos.md`                      | Hardening transversal OCR/NER: validación semántica, retry por error, quality gates y eval |
+| `2026-03-20_compendios-segmentacion-multi-obra.md`              | Compendios PDF: segmentación multi-obra + N productos por archivo, env, UX y migración     |
 
 ## 4. Evidencias complementarias recomendadas
 

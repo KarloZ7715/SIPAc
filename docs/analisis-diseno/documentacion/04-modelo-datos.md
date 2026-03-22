@@ -14,6 +14,7 @@
 | 1.3     | 2026-03-06 | Carlos A. Canabal Cordero | Alineación a los cambios de la arquitectura: `gridfsFileId` en `uploaded_files`, eliminación del flujo obsoleto de verificación/rechazo y su notificación asociada, implementación del hook pre-save de hash de contraseña                                             |
 | 1.4     | 2026-03-11 | Carlos A. Canabal Cordero | Alineación al pipeline implementado M2/M8: `productType` obligatorio en `uploaded_files`, índice único por `sourceFile` en `academic_products` y persistencia de notificaciones con referencia opcional al producto o archivo                                          |
 | 1.5     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación al estado real del modelo: `productType` opcional en `uploaded_files`, discriminadores extendidos a 10 tipos en `academic_products`, evidencia por entidad (`anchors`) y trazabilidad de intentos NER (`nerAttemptTrace`)                                   |
+| 1.6     | 2026-03-20 | Carlos A. Canabal Cordero | Compendios multi-obra: `segmentIndex`, `segmentLabel`, `segmentBounds` en `academic_products`; índice único parcial `ux_source_file_segment` `{ sourceFile, segmentIndex }`; `nerForceSingleDocument` y `sourceWorkCount` en `uploaded_files`                          |
 
 ---
 
@@ -34,14 +35,14 @@
 
 ### 2.1 Embedding vs. Referencing
 
-| Dato                                       | Estrategia                       | Justificación                                                                                                                        |
-| ------------------------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `extractedEntities` en `academic_products` | **Embed**                        | Son propiedad exclusiva del producto, se leen siempre junto a él, no se consultan independientemente y tienen tamaño acotado (~1 KB) |
-| `manualMetadata` en `academic_products`    | **Embed**                        | Mismo ciclo de vida que el producto; son la versión corregida por el usuario de las entidades extraídas                              |
-| `owner` en `academic_products`             | **Reference** → `users`          | Los usuarios existen independientemente y se actualizan sin afectar los productos                                                    |
-| `sourceFile` en `academic_products`        | **Reference** → `uploaded_files` | El archivo tiene su propio ciclo de vida y metadatos de procesamiento; puede referenciarse desde múltiples vistas                    |
-| `uploadedBy` en `uploaded_files`           | **Reference** → `users`          | Un usuario puede tener muchos archivos; el dato del usuario cambia independientemente                                                |
-| `userId` en `audit_logs`                   | **Reference** → `users`          | Los logs deben sobrevivir incluso si el usuario se desactiva                                                                         |
+| Dato                                       | Estrategia                       | Justificación                                                                                                                                                                       |
+| ------------------------------------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extractedEntities` en `academic_products` | **Embed**                        | Son propiedad exclusiva del producto, se leen siempre junto a él, no se consultan independientemente y tienen tamaño acotado (~1 KB)                                                |
+| `manualMetadata` en `academic_products`    | **Embed**                        | Mismo ciclo de vida que el producto; son la versión corregida por el usuario de las entidades extraídas                                                                             |
+| `owner` en `academic_products`             | **Reference** → `users`          | Los usuarios existen independientemente y se actualizan sin afectar los productos                                                                                                   |
+| `sourceFile` en `academic_products`        | **Reference** → `uploaded_files` | El archivo tiene su propio ciclo de vida y metadatos de procesamiento; **varios** productos activos pueden compartir el mismo archivo diferenciados por `segmentIndex` (compendios) |
+| `uploadedBy` en `uploaded_files`           | **Reference** → `users`          | Un usuario puede tener muchos archivos; el dato del usuario cambia independientemente                                                                                               |
+| `userId` en `audit_logs`                   | **Reference** → `users`          | Los logs deben sobrevivir incluso si el usuario se desactiva                                                                                                                        |
 
 ### 2.2 Normalización y Desnormalización
 
@@ -240,6 +241,8 @@ export interface IUploadedFile extends Document {
   ocrCompletedAt?: Date
   nerStartedAt?: Date
   processingCompletedAt?: Date
+  nerForceSingleDocument?: boolean
+  sourceWorkCount?: number | null
   isDeleted: boolean
   deletedAt?: Date
   createdAt: Date
@@ -287,6 +290,8 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
         message: 'El tipo de producto {VALUE} no es válido',
       },
     },
+    nerForceSingleDocument: { type: Boolean, default: false },
+    sourceWorkCount: { type: Number, min: 0, default: null },
     mimeType: {
       type: String,
       required: true,
@@ -492,6 +497,14 @@ export interface IAcademicProduct extends Document {
     | 'patent'
   owner: Types.ObjectId // ref: User
   sourceFile: Types.ObjectId // ref: UploadedFile
+  segmentIndex: number
+  segmentLabel?: string | null
+  segmentBounds?: {
+    pageFrom?: number | null
+    pageTo?: number | null
+    textStart?: number | null
+    textEnd?: number | null
+  } | null
   reviewStatus: 'draft' | 'confirmed'
   reviewConfirmedAt?: Date
 
@@ -613,6 +626,18 @@ const academicProductSchema = new Schema<IAcademicProduct>(
       type: Schema.Types.ObjectId,
       ref: 'UploadedFile',
       required: [true, 'El producto debe tener un archivo fuente'],
+    },
+    segmentIndex: { type: Number, required: true, min: 0, default: 0 },
+    segmentLabel: { type: String, trim: true, maxlength: 500, default: null },
+    segmentBounds: {
+      type: {
+        pageFrom: { type: Number, min: 1, default: null },
+        pageTo: { type: Number, min: 1, default: null },
+        textStart: { type: Number, min: 0, default: null },
+        textEnd: { type: Number, min: 0, default: null },
+      },
+      _id: false,
+      default: null,
     },
     reviewStatus: {
       type: String,
@@ -839,17 +864,26 @@ academicProductSchema.index(
   },
 )
 
-// Un archivo cargado solo puede originar un producto académico activo
-academicProductSchema.index({ sourceFile: 1 }, { unique: true, name: 'ux_source_file' })
+// Un archivo puede originar varios productos activos; unicidad por (sourceFile, segmentIndex)
+academicProductSchema.index(
+  { sourceFile: 1, segmentIndex: 1 },
+  {
+    unique: true,
+    name: 'ux_source_file_segment',
+    partialFilterExpression: { isDeleted: false },
+  },
+)
 ```
 
-| Índice                                          | Tipo                     | Soporta (RF)                                                          |
-| ----------------------------------------------- | ------------------------ | --------------------------------------------------------------------- |
-| `{ owner, productType, isDeleted, createdAt }`  | Compuesto                | RF-052/054: listar productos por tipo y usuario                       |
-| `{ owner, reviewStatus, isDeleted, createdAt }` | Compuesto                | Flujo de borrador/revisión: consulta rápida de borradores por usuario |
-| `{ manualMetadata.date, productType }`          | Compuesto                | RF-065/066: distribución temporal y filtro por rango                  |
-| Text index con pesos                            | Texto completo (español) | RF-058: búsqueda full-text priorizada por título > autores > keywords |
-| `{ sourceFile: 1 }`                             | Único                    | RF-051: evita duplicar productos para un mismo archivo procesado      |
+| Índice                                                            | Tipo                     | Soporta (RF)                                                                    |
+| ----------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------- |
+| `{ owner, productType, isDeleted, createdAt }`                    | Compuesto                | RF-052/054: listar productos por tipo y usuario                                 |
+| `{ owner, reviewStatus, isDeleted, createdAt }`                   | Compuesto                | Flujo de borrador/revisión: consulta rápida de borradores por usuario           |
+| `{ manualMetadata.date, productType }`                            | Compuesto                | RF-065/066: distribución temporal y filtro por rango                            |
+| Text index con pesos                                              | Texto completo (español) | RF-058: búsqueda full-text priorizada por título > autores > keywords           |
+| `{ sourceFile: 1, segmentIndex: 1 }` (parcial `isDeleted: false`) | Único parcial            | Compendios: un segmento activo por índice; permite varios productos por archivo |
+
+> **Migración:** índice anterior `ux_source_file` sustituido por `ux_source_file_segment`. Script: `scripts/migrate-academic-product-segments.mjs`.
 
 ---
 
@@ -1096,7 +1130,7 @@ erDiagram
     USERS ||--o{ ACADEMIC_PRODUCTS : "owner"
     USERS ||--o{ AUDIT_LOGS : "userId"
     USERS ||--o{ NOTIFICATIONS : "recipientId"
-    UPLOADED_FILES ||--o| ACADEMIC_PRODUCTS : "sourceFile"
+    UPLOADED_FILES ||--o{ ACADEMIC_PRODUCTS : "sourceFile + segmentIndex"
 ```
 
 > `chat_conversations` no se incluye en el ER operativo actual porque M9 está pendiente de implementación.
