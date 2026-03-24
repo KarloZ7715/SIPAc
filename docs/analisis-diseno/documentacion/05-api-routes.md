@@ -17,6 +17,7 @@
 | 1.6     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación al estado real de endpoints: previsualización autenticada de upload implementada y módulo M5A marcado como parcial (draft por ID sí, listado global aún pendiente)                                                                                            |
 | 1.7     | 2026-03-20 | Carlos A. Canabal Cordero | Compendios multi-obra: `POST /api/upload` con `nerForceSingleDocument`; `GET /api/upload/:id/status` con `academicProductIds`, `sourceWorkCount`, `nerForceSingleDocument`; `DELETE /api/upload/:id` afecta todos los productos del archivo.                             |
 | 1.8     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación a endpoints implementados en sesión: `GET /api/products`, `DELETE /api/products/:id`, `GET /api/profile` con agregados, `GET /api/dashboard`, `GET /api/audit-logs`, `GET /api/notifications` con `unreadCount` y rate limiting específico en `auth`          |
+| 1.9     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado de M9: endpoints `/api/chat/*`, catálogo de proveedores/modelos, historial persistido, stream grounded y rate limiting específico en chat                                                                                               |
 
 ---
 
@@ -131,14 +132,15 @@
 
 ## 10. M9 — Chat Inteligente (`/api/chat/`)
 
-| Método | Ruta                          | Rol requerido | Request Body / Query           | Respuesta                   | Errores posibles | RF asociados    | Estado    |
-| ------ | ----------------------------- | ------------- | ------------------------------ | --------------------------- | ---------------- | --------------- | --------- |
-| POST   | `/api/chat`                   | Autenticado   | `{ message, conversationId? }` | `ReadableStream` (SSE)      | 400, 401, 500    | RF-090 a RF-099 | Pendiente |
-| GET    | `/api/chat/conversations`     | Autenticado   | Query: `limit?, cursor?`       | `{ conversations[], meta }` | 401              | RF-100          | Pendiente |
-| GET    | `/api/chat/conversations/:id` | Autenticado   | —                              | `{ conversation }`          | 401, 404         | RF-100          | Pendiente |
-| DELETE | `/api/chat/conversations/:id` | Autenticado   | —                              | `{ message }`               | 401, 404         | RF-100          | Pendiente |
+| Método | Ruta                          | Rol requerido | Request Body / Query                                        | Respuesta                                                         | Errores posibles   | RF asociados    | Estado       |
+| ------ | ----------------------------- | ------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- | ------------------ | --------------- | ------------ |
+| POST   | `/api/chat`                   | Autenticado   | `{ id, messages[], trigger?, messageId?, selectedModel? }` | `UIMessageStream` grounded con metadata de modelo y tool outputs | 400, 401, 429, 500 | RF-090 a RF-099 | Implementado |
+| GET    | `/api/chat/providers`         | Autenticado   | —                                                           | `{ defaultChain[], manualOptions[], disabledOptions[] }`         | 401                | RF-090          | Implementado |
+| GET    | `/api/chat/conversations`     | Autenticado   | —                                                           | `{ conversations[] }`                                            | 401                | RF-100          | Implementado |
+| GET    | `/api/chat/conversations/:id` | Autenticado   | —                                                           | `{ conversation }`                                               | 401, 404           | RF-099, RF-100  | Implementado |
+| DELETE | `/api/chat/conversations/:id` | Autenticado   | —                                                           | `{ deleted: true }`                                              | 401, 404           | RF-100          | Implementado |
 
-> **Nota técnica (diseño previsto):** El endpoint `POST /api/chat` utilizará `streamText` del Vercel AI SDK con tool calling. La respuesta será un stream SSE que el frontend consumirá mediante el hook `useChat` de `@ai-sdk/vue`. El fallback planificado para modelos de chat es: `gpt-oss-120b` → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507`.
+> **Nota técnica:** `POST /api/chat` usa `streamText` del Vercel AI SDK con tool calling, saneamiento previo de historial, sondeo de arranque del stream y fallback automático por candidato. El tool `searchRepositoryProducts` concentra la recuperación grounded híbrida sobre productos `confirmed`, con búsqueda estructurada exacta, ampliación diagnóstica y recuperación por texto OCR/nativo cuando aplica. La cadena automática vigente del chat es `qwen-3-235b-a22b-instruct-2507` (Cerebras) → candidatos NVIDIA → candidatos OpenRouter → candidatos Groq; `Gemini` queda expuesto solo como opción deshabilitada por política grounded vigente.
 
 ---
 
@@ -175,5 +177,5 @@
 | Global por IP             | 150 tokens / 5 min      | Todos los endpoints                     | RNF-009                                     | Implementado (`nuxt-security`)                                     |
 | Tamaño de request         | 2 MB body / 8 MB upload | Todos los endpoints                     | RF-023                                      | Implementado (`nuxt-security`)                                     |
 | Autenticación por IP      | 10 req/min              | `/api/auth/register`, `/api/auth/login` | RF-082                                      | Implementado (`server/utils/auth-rate-limit.ts`)                   |
-| Procesamiento por usuario | 15 documentos/hora      | `/api/upload, /api/chat`                | Cuota proveedores IA (Gemini/Groq/Cerebras) | Pendiente (configurado en runtimeConfig, sin enforcement granular) |
-| Chat por usuario          | 30 req/hora             | `/api/chat`                             | Cuota proveedores IA (Gemini/Cerebras)      | Pendiente                                                          |
+| Procesamiento por usuario | 15 documentos/hora      | `/api/upload`                           | Cuota proveedores IA del pipeline documental | Pendiente (configurado en runtimeConfig, sin enforcement granular) |
+| Chat por usuario          | 30 req/hora             | `/api/chat`                             | Cuota proveedores IA multi-proveedor         | Implementado (`server/utils/chat-rate-limit.ts`)                   |

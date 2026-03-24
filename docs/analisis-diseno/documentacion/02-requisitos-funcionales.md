@@ -23,6 +23,7 @@
 | 1.9     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback NER vigente con Groq y Gemini, y compatibilidad de structured outputs con esquema estricto (campos requeridos y valores nulos explícitos cuando aplique)                                                                                                                                |
 | 2.0     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación de estados RF con implementación real: carga sin `productType` obligatorio, M5A parcial con flujo de borrador/revisión, y actualización de notas de rate limiting y dependencias                                                                                                                    |
 | 2.1     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado en sesión: cierre de M2, M5A, M6, M7 y M8; activación de M5B base con dashboard operativo; perfil con agregados; auditoría admin-only; rate limiting específico en `/api/auth/*`; notificaciones por polling con conteo no leído                                             |
+| 2.2     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado de M9: chat grounded en `/chat`, recuperación híbrida (filtros + diagnóstico + OCR/nativo), historial persistido, enlaces autenticados a documentos, selector manual temporal para docentes y rate limiting específico en `/api/chat`                                         |
 
 ---
 
@@ -52,7 +53,7 @@ El sistema está orientado a la **Maestría en Innovación Educativa con Tecnolo
 | **Structured outputs**   | Estrategia del Vercel AI SDK para obtener salidas validadas contra un esquema Zod mediante `generateText` + `Output.object`                                                                           |
 | **Zod**                  | Librería TypeScript de validación de esquemas; define la forma exacta de los datos estructurados que el pipeline debe retornar                                                                        |
 | **pdfjs-dist**           | Librería npm oficial de Mozilla para extraer texto de PDFs nativos (con texto seleccionable) sin necesidad de OCR ni LLM                                                                              |
-| **Gemini 2.5 Flash**     | Modelo de Google usado actualmente como proveedor multimodal OCR y como fallback intermedio del pipeline NER; en Chat queda previsto como segundo intento tras `gpt-oss-120b`                         |
+| **Gemini 2.5 Flash**     | Modelo de Google usado actualmente como proveedor multimodal OCR y como candidato del pipeline NER; en Chat queda fuera de la cadena automática normal y solo se conserva como referencia deshabilitada |
 | **Mistral OCR 3**        | Motor OCR de alta precisión de Mistral AI (99,54 % en español); proveedor opcional activable vía variable de entorno; plan de pago ($0,002/página)                                                    |
 | **MVP**                  | Minimum Viable Product (Producto Mínimo Viable) — versión más básica pero funcional del sistema que ya cumple su propósito principal y puede ser entregada; agrupa los requisitos de prioridad `Alta` |
 
@@ -134,8 +135,8 @@ mindmap
       Alertas en interfaz
     M9 Chat Inteligente
       Interfaz conversacional
-      Búsqueda por metadatos
-      Tool calling con fallback gpt-oss -> gemini -> qwen
+      Recuperación grounded híbrida
+      Tool calling con cadena cerebras -> nvidia/openrouter -> groq
       Historial de conversaciones
       Enlaces a documentos
 ```
@@ -334,18 +335,20 @@ mindmap
 
 | ID     | Descripción                                                                                                                                                                           | Prioridad | Estado    |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
-| RF-090 | El sistema debe proveer una interfaz de chat conversacional donde el usuario pueda formular consultas en lenguaje natural sobre los documentos académicos almacenados en el sistema   | Alta      | Pendiente |
-| RF-091 | El sistema debe permitir, a través del chat, buscar documentos académicos por rango de fechas de publicación                                                                          | Alta      | Pendiente |
-| RF-092 | El sistema debe permitir, a través del chat, buscar documentos académicos por autor o autores                                                                                         | Alta      | Pendiente |
-| RF-093 | El sistema debe permitir, a través del chat, buscar documentos académicos por tema o palabras clave                                                                                   | Alta      | Pendiente |
-| RF-094 | El sistema debe permitir, a través del chat, buscar documentos académicos por título (coincidencia parcial o completa)                                                                | Alta      | Pendiente |
-| RF-095 | El sistema debe permitir, a través del chat, buscar documentos académicos por tipo de producto académico (`article`, `conference_paper`, `thesis`, `certificate`, `research_project`) | Alta      | Pendiente |
-| RF-096 | El sistema debe permitir, a través del chat, buscar documentos académicos por institución                                                                                             | Alta      | Pendiente |
-| RF-097 | El sistema debe permitir consultas combinadas a través del chat, aplicando múltiples criterios de búsqueda de forma simultánea en una sola pregunta                                   | Alta      | Pendiente |
-| RF-098 | El sistema debe presentar los resultados de búsqueda del chat de forma organizada, incluyendo una explicación breve generada por IA para cada documento encontrado                    | Alta      | Pendiente |
-| RF-099 | El sistema debe mantener contexto conversacional dentro de una sesión de chat, permitiendo preguntas de seguimiento relacionadas con consultas anteriores                             | Alta      | Pendiente |
-| RF-100 | El sistema debe almacenar el historial de conversaciones del chat en la base de datos, permitiendo al usuario consultar y retomar conversaciones previas                              | Media     | Pendiente |
-| RF-101 | Los resultados del chat deben incluir enlaces directos para visualizar (visor embebido) o descargar el documento original asociado a cada producto encontrado                         | Alta      | Pendiente |
+| RF-090 | El sistema debe proveer una interfaz de chat conversacional donde el usuario pueda formular consultas en lenguaje natural sobre los documentos académicos almacenados en el sistema   | Alta      | Completado |
+| RF-091 | El sistema debe permitir, a través del chat, buscar documentos académicos por rango de fechas de publicación                                                                          | Alta      | Completado |
+| RF-092 | El sistema debe permitir, a través del chat, buscar documentos académicos por autor o autores                                                                                         | Alta      | Completado |
+| RF-093 | El sistema debe permitir, a través del chat, buscar documentos académicos por tema o palabras clave                                                                                   | Alta      | Completado |
+| RF-094 | El sistema debe permitir, a través del chat, buscar documentos académicos por título (coincidencia parcial o completa)                                                                | Alta      | Completado |
+| RF-095 | El sistema debe permitir, a través del chat, buscar documentos académicos por tipo de producto académico (`article`, `conference_paper`, `thesis`, `certificate`, `research_project`) | Alta      | Completado |
+| RF-096 | El sistema debe permitir, a través del chat, buscar documentos académicos por institución                                                                                             | Alta      | Completado |
+| RF-097 | El sistema debe permitir consultas combinadas a través del chat, aplicando múltiples criterios de búsqueda de forma simultánea en una sola pregunta                                   | Alta      | Completado |
+| RF-098 | El sistema debe presentar los resultados de búsqueda del chat de forma organizada, incluyendo una explicación breve generada por IA para cada documento encontrado                    | Alta      | Completado |
+| RF-099 | El sistema debe mantener contexto conversacional dentro de una sesión de chat, permitiendo preguntas de seguimiento relacionadas con consultas anteriores                             | Alta      | Completado |
+| RF-100 | El sistema debe almacenar el historial de conversaciones del chat en la base de datos, permitiendo al usuario consultar y retomar conversaciones previas                              | Media     | Completado |
+| RF-101 | Los resultados del chat deben incluir enlaces directos para visualizar (visor embebido) o descargar el documento original asociado a cada producto encontrado                         | Alta      | Completado |
+
+> **Nota M9 (actualizado al 23/03/2026):** El módulo está operativo en `/chat` como repositorio conversacional grounded. La recuperación combina filtros estructurados, ampliación diagnóstica y búsqueda sobre texto OCR/nativo del archivo, siempre limitada a productos `confirmed` y no eliminados. El chat persiste conversaciones en base de datos, mantiene contexto por sesión, expone enlaces autenticados de visualización/descarga y permite selección manual temporal de proveedor/modelo para cuentas docentes. La cadena automática vigente excluye Gemini del flujo normal del chat.
 
 ---
 
@@ -366,7 +369,7 @@ mindmap
 | RNF-011 | El sistema debe estar disponible un mínimo del 95% del tiempo durante el horario laboral (7:00–19:00, lunes a viernes)                                             | Disponibilidad | Medido durante el período de pruebas de la semana 9                                                               |
 | RNF-012 | La base de datos debe contar con un mecanismo de respaldo (backup) al menos cada 24 horas                                                                          | Confiabilidad  | Verificado mediante la existencia y ejecución del script de backup                                                |
 | RNF-013 | Los módulos de autenticación y procesamiento de documentos deben contar con pruebas de integración que cubran los flujos principales                               | Mantenibilidad | Evidenciado por la existencia de archivos de prueba y su ejecución exitosa                                        |
-| RNF-014 | El tiempo de respuesta del chat de IA no debe superar los 15 segundos por consulta bajo condiciones normales de uso                                                | Rendimiento    | Medido con consultas típicas en entorno de desarrollo con conexión estable a la API de Gemini                     |
+| RNF-014 | El tiempo de respuesta del chat de IA no debe superar los 15 segundos por consulta bajo condiciones normales de uso                                                | Rendimiento    | Medido con consultas típicas grounded en entorno de desarrollo con un proveedor LLM habilitado y streaming estable |
 | RNF-015 | El sistema debe soportar el almacenamiento de archivos de hasta 20 MB directamente en MongoDB GridFS sin degradación perceptible en los tiempos de carga de página | Rendimiento    | Medido con archivos de 20 MB: tiempo de upload < 10 s y tiempo de descarga/preview < 5 s en entorno de desarrollo |
 
 ---

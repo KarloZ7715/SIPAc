@@ -16,6 +16,7 @@
 | 1.5     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación al estado real del modelo: `productType` opcional en `uploaded_files`, discriminadores extendidos a 10 tipos en `academic_products`, evidencia por entidad (`anchors`) y trazabilidad de intentos NER (`nerAttemptTrace`)                                   |
 | 1.6     | 2026-03-20 | Carlos A. Canabal Cordero | Compendios multi-obra: `segmentIndex`, `segmentLabel`, `segmentBounds` en `academic_products`; índice único parcial `ux_source_file_segment` `{ sourceFile, segmentIndex }`; `nerForceSingleDocument` y `sourceWorkCount` en `uploaded_files`                          |
 | 1.7     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación a consultas operativas vigentes: repositorio global sobre productos `confirmed`, agregados de dashboard excluyendo borradores y nota de `unreadCount` derivado en notificaciones                                                                            |
+| 1.8     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado de M9: colección `chat_conversations` operativa, índices de actividad/TTL y persistencia de mensajes tipados del chat grounded                                                                                                                  |
 
 ---
 
@@ -1069,7 +1070,86 @@ notificationSchema.index(
 
 ### 3.6 `chat_conversations` — Historial de conversaciones del chat (M9)
 
-> **Estado actual (14/03/2026):** La colección `chat_conversations` está definida a nivel de diseño para M9, pero no existe todavía un modelo Mongoose ni endpoints `/api/chat/*` implementados en el código fuente. Su implementación queda pendiente para la fase de Chat Inteligente.
+#### Interfaz TypeScript
+
+```typescript
+export interface IChatConversation {
+  _id: Types.ObjectId
+  chatId: string
+  userId: Types.ObjectId
+  title: string
+  messages: ChatUiMessage[]
+  isActive: boolean
+  lastAccessedAt: Date
+  createdAt: Date
+  updatedAt: Date
+}
+```
+
+#### Esquema Mongoose
+
+```typescript
+const chatConversationSchema = new Schema<IChatConversation>(
+  {
+    chatId: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      maxlength: 120,
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 120,
+    },
+    messages: {
+      type: [Schema.Types.Mixed],
+      default: [],
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    lastAccessedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    timestamps: true,
+  },
+)
+```
+
+#### Índices
+
+```typescript
+chatConversationSchema.index({ userId: 1, updatedAt: -1 }, { name: 'idx_user_updated' })
+chatConversationSchema.index(
+  { lastAccessedAt: 1 },
+  {
+    expireAfterSeconds: 15_552_000,
+    partialFilterExpression: { isActive: true },
+    name: 'idx_chat_ttl',
+  },
+)
+```
+
+| Índice                            | Tipo                  | Soporta (RF)                                                                  |
+| --------------------------------- | --------------------- | ----------------------------------------------------------------------------- |
+| `{ chatId: 1 }`                   | Único                 | Recuperación estable de la conversación por id lógico compartido con la UI    |
+| `{ userId: 1, updatedAt: -1 }`    | Compuesto             | RF-100: listado de conversaciones del usuario ordenadas por actividad          |
+| `{ lastAccessedAt: 1 }` + parcial | TTL (180 días aprox.) | Limpieza automática de conversaciones activas inactivas sin intervención manual |
+
+> **Nota operativa:** `messages` persiste mensajes UI del chat, incluyendo metadata del modelo seleccionado, tool outputs grounded y trazabilidad de estrategia de recuperación. Antes de guardar y antes de procesar, el servicio sanea mensajes vacíos o inválidos para evitar historiales corruptos.
 
 ---
 
@@ -1129,14 +1209,23 @@ erDiagram
         boolean emailSent
     }
 
+    CHAT_CONVERSATIONS {
+        ObjectId _id PK
+        string chatId UK
+        ObjectId userId FK
+        string title
+        array messages
+        boolean isActive
+        Date lastAccessedAt
+    }
+
     USERS ||--o{ UPLOADED_FILES : "uploadedBy"
     USERS ||--o{ ACADEMIC_PRODUCTS : "owner"
     USERS ||--o{ AUDIT_LOGS : "userId"
     USERS ||--o{ NOTIFICATIONS : "recipientId"
+    USERS ||--o{ CHAT_CONVERSATIONS : "userId"
     UPLOADED_FILES ||--o{ ACADEMIC_PRODUCTS : "sourceFile + segmentIndex"
 ```
-
-> `chat_conversations` no se incluye en el ER operativo actual porque M9 está pendiente de implementación.
 
 ---
 
@@ -1551,7 +1640,7 @@ await AcademicProduct.find({ isDeleted: true })
 | `academic_products`  | Centenas (~500-2000)          | 3 (incluye texto completo) | Listado por owner+tipo, búsqueda full-text, aggregation para dashboard |
 | `audit_logs`         | Miles (crecimiento ilimitado) | 2                          | Consulta por recurso/acción, timeline por usuario                      |
 | `notifications`      | Centenas (TTL auto-limpia)    | 2 (incluye TTL)            | No leídas por usuario, limpieza automática a 90 días                   |
-| `chat_conversations` | 0 (pendiente M9)              | 0                          | Colección planificada; sin modelo ni índices en estado actual          |
+| `chat_conversations` | Decenas a centenas (TTL)      | 3 (incluye TTL parcial)    | Historial por usuario, recuperación por `chatId`, limpieza por inactividad |
 
 ---
 
@@ -1560,7 +1649,7 @@ await AcademicProduct.find({ isDeleted: true })
 - **Discriminator pattern extensible:** Agregar nuevos tipos de productos (`book_chapter`, `patent`, `software`) requiere solo crear un nuevo discriminador, sin migración de datos.
 - **Índice de texto completo en español:** Configurado con `default_language: 'spanish'` y pesos diferenciados, permite búsqueda semántica básica sin motores externos.
 - **TTL en notificaciones:** La limpieza automática evita crecimiento descontrolado de la colección de notificaciones.
-- **TTL en conversaciones del chat:** Queda planificado para M9; aún no aplica en el estado actual al no existir la colección en producción.
+- **TTL en conversaciones del chat:** Implementado con índice parcial sobre `lastAccessedAt`; elimina conversaciones activas inactivas después de ~180 días para controlar crecimiento.
 - **Paginación del repositorio:** En diseño se consideran estrategias de paginación para escalar consultas; en endpoints actualmente implementados predomina `page/limit`.
 - **Soft delete + pre-find hooks:** Los documentos eliminados lógicamente no aparecen en consultas normales pero se preservan para auditoría y recuperación.
 - **Lean queries en lecturas:** Todas las consultas de lectura usan `.lean()` para evitar la hidratación completa de Mongoose y reducir la huella de memoria.

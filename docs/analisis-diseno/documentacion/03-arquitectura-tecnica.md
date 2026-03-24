@@ -22,6 +22,7 @@
 | 2.1     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación de arquitectura al estado funcional vigente: M5A parcial (borrador/revisión), M5B y M9 pendientes, estructura de directorios actualizada sin marcadores de "futuro"                                                                                                          |
 | 2.2     | 2026-03-20 | Carlos A. Canabal Cordero | Pipeline documental: tras OCR, etapa opcional de **segmentación** (heurística + LLM acotado por env) y **NER por segmento**, persistiendo N productos por `sourceFile` con `segmentIndex`                                                                                               |
 | 2.3     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación a la sesión actual: dashboard analítico operativo, consulta admin-only de auditoría, perfil con agregados, polling endurecido de notificaciones y rate limiting específico en autenticación                                                                                  |
+| 2.4     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado de M9: chat grounded híbrido, colección `chat_conversations`, selector manual docente, cadena automática multi-proveedor sin Gemini en el flujo normal y pipeline E2E con Mongo local en CI                                                          |
 
 ---
 
@@ -57,9 +58,11 @@ flowchart TB
 
   subgraph LLMProviders["☁ LLM"]
     direction TB
-    Gemini["Gemini Flash / Flash-Lite<br/>NER"]
+    Gemini["Gemini Flash / Flash-Lite<br/>OCR + NER"]
     Groq["Groq OpenAI-compatible<br/>openai/gpt-oss-120b · openai/gpt-oss-20b"]
-    Cerebras["Cerebras OpenAI-compatible<br/>gpt-oss-120b · qwen-3-235b-a22b-instruct-2507"]
+    Cerebras["Cerebras OpenAI-compatible<br/>qwen-3-235b-a22b-instruct-2507"]
+    Nvidia["NVIDIA OpenAI-compatible<br/>z-ai/glm4.7 · deepseek · mistral-large"]
+    OpenRouter["OpenRouter OpenAI-compatible<br/>minimax-m2.5 · gpt-oss-120b:free"]
   end
 
   subgraph Data["🗄 Datos"]
@@ -84,8 +87,10 @@ flowchart TB
 
   NER -->|1ro y 3ro| Gemini
   NER -->|2do y 4to| Groq
-  Chat -->|1ro y 3ro| Cerebras
-  Chat -.->|2do| Gemini
+  Chat -->|1ro| Cerebras
+  Chat -->|2do| Nvidia
+  Chat -->|3ro| OpenRouter
+  Chat -->|4to| Groq
   Chat --> ODM
 
   ODM --> MongoDB
@@ -98,7 +103,7 @@ flowchart TB
 
   class Browser browserNode
   class UI,API,OCR,NER,Chat,Storage,ODM appNode
-  class Pdfjs,GeminiVision,Mistral,Cerebras,Gemini providerNode
+  class Pdfjs,GeminiVision,Mistral,Cerebras,Gemini,Groq,Nvidia,OpenRouter providerNode
   class MongoDB,GridFS dbNode
 ```
 
@@ -144,14 +149,17 @@ flowchart TB
 | ----------------------------------------------- | -------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **pdfjs-dist**                                  | latest                           | Extracción de texto de PDFs nativos (digitales)     | Corre en Node.js sin API externa; extrae texto estructurado sin OCR cuando el PDF contiene texto incrustado                                                                      |
 | **Vercel AI SDK** (`ai`)                        | 6.x                              | Capa unificada de acceso a modelos LLM/multimodal   | Abstrae proveedores (Google vía `@ai-sdk/google`, Cerebras vía `@ai-sdk/openai-compatible`, Mistral); API uniforme `generateText` / `streamText` con structured outputs          |
-| `**@ai-sdk/google`\*\*                          | latest                           | Proveedor Google Gemini para el AI SDK              | Acceso a Gemini 2.5 Flash para OCR multimodal y como candidato de fallback en NER/Chat                                                                                           |
+| `**@ai-sdk/google`\*\*                          | latest                           | Proveedor Google Gemini para el AI SDK              | Acceso a Gemini 2.5 Flash para OCR multimodal y fallback en NER; en Chat queda fuera del flujo automático normal                                                                |
 | `**@ai-sdk/openai-compatible**`                 | latest                           | Proveedor OpenAI-compatible genérico para el AI SDK | Conecta el Vercel AI SDK a APIs con interfaz OpenAI, incluyendo Cerebras (`https://api.cerebras.ai/v1`) y Groq (`https://api.groq.com/openai/v1`); sin paquete propietario extra |
-| **Gemini 2.5 Flash**                            | `gemini-2.5-flash`               | OCR multimodal para PDFs escaneados e imágenes      | Proveedor OCR visual actual; en LLM participa como candidato intermedio de fallback en NER y Chat                                                                                |
+| **Gemini 2.5 Flash**                            | `gemini-2.5-flash`               | OCR multimodal para PDFs escaneados e imágenes      | Proveedor OCR visual actual; en LLM participa en NER y queda excluido de la cadena automática normal del chat                                                                   |
 | **Gemini 2.5 Flash-Lite**                       | `gemini-2.5-flash-lite`          | 3er candidato en NER                                | Variante de menor costo/latencia para degradación controlada antes de último fallback                                                                                            |
 | **Groq GPT-OSS 120B**                           | `openai/gpt-oss-120b`            | 2do candidato en NER                                | Compatible con interfaz OpenAI; validado para structured outputs con esquema estricto                                                                                            |
 | **Groq GPT-OSS 20B**                            | `openai/gpt-oss-20b`             | 4to candidato en NER                                | Último recurso en NER; se prioriza al final por mayor variabilidad de cumplimiento de esquema                                                                                    |
-| **Cerebras GPT-OSS 120B**                       | `gpt-oss-120b`                   | 1er candidato en Chat                               | Modelo de producción para flujo conversacional (M9) con tool calling planificado                                                                                                 |
-| **Cerebras Qwen 3 235B**                        | `qwen-3-235b-a22b-instruct-2507` | 3er candidato en Chat                               | Respaldo adicional en flujo de chat                                                                                                                                              |
+| **Cerebras Qwen 3 235B**                        | `qwen-3-235b-a22b-instruct-2507` | 1er candidato en Chat                               | Primer candidato automático actual del chat grounded; compatible con streaming y tool calling                                                                                    |
+| **NVIDIA GLM 4.7**                              | `z-ai/glm4.7`                    | 2do candidato en Chat                               | Respaldo automático orientado a grounding y streaming estable                                                                                                                    |
+| **OpenRouter MiniMax M2.5**                     | `minimax/minimax-m2.5:free`      | 3er candidato en Chat                               | Candidato automático adicional cuando Cerebras/NVIDIA no están disponibles                                                                                                       |
+| **OpenRouter GPT OSS 120B**                     | `openai/gpt-oss-120b:free`       | 4to candidato en Chat                               | Respaldo automático adicional en entornos con OpenRouter configurado                                                                                                             |
+| **Groq GPT-OSS 120B / 20B**                     | `openai/gpt-oss-120b`, `openai/gpt-oss-20b` | Últimos candidatos en Chat                | Fallback final del flujo conversacional cuando fallan candidatos previos                                                                                                         |
 | **Zod**                                         | 4.x                              | Esquemas de validación y contrato NER               | Tipado en compilación y ejecución; combinado con `Output.object` permite structured outputs válidos independientemente del proveedor activo                                      |
 | **Resend**                                      | latest                           | Envío de correo transaccional para M8               | Proveedor simple para notificaciones por correo cuando el procesamiento completa o falla                                                                                         |
 | **Mistral OCR 3** _(opcional)_                  | `v25.12`                         | OCR de alta precisión para documentos complejos     | 99,54% de precisión en español; activable vía `OCR_PROVIDER=mistral` en `.env`; costo: $0,002/pág                                                                                |
@@ -253,11 +261,11 @@ flowchart TB
 
 ---
 
-### ADR-08 — Function Calling vs. RAG para el Chat Inteligente (M9)
+### ADR-08 — Function Calling grounded híbrido vs. RAG para el Chat Inteligente (M9)
 
-**Decisión:** El módulo de chat utiliza **function calling** (tool use) del Vercel AI SDK y queda previsto para operar con fallback ordenado `gpt-oss-120b` → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507` al traducir preguntas en lenguaje natural a queries MongoDB sobre metadatos estructurados.
+**Decisión:** El módulo de chat utiliza **function calling** (tool use) del Vercel AI SDK con un único tool de recuperación grounded (`searchRepositoryProducts`) respaldado por un orquestador híbrido: búsqueda estructurada exacta, ampliación diagnóstica controlada y recuperación por texto OCR/nativo cuando la evidencia lo exige.
 
-**Justificación técnica:** Los documentos académicos de SIPAc tienen metadatos estructurados bien definidos (autores, título, fecha, tipo, institución, DOI, palabras clave) almacenados en campos tipados de MongoDB. Este escenario favorece el enfoque de function calling sobre RAG (Retrieval Augmented Generation) porque: (a) no se requiere búsqueda semántica sobre texto libre — las consultas operan sobre campos discretos y filtros combinables; (b) function calling permite al LLM invocar herramientas de búsqueda tipadas con esquemas Zod, garantizando queries válidas; (c) no se necesitan embeddings vectoriales ni infraestructura adicional de vector search; (d) el LLM puede encadenar múltiples herramientas en una sola respuesta para queries complejas. La arquitectura define un conjunto de herramientas (`searchByDateRange`, `searchByAuthor`, `searchByKeywords`, `searchByTitle`, `searchByProductType`, `searchByInstitution`, `searchCombined`) que el LLM invoca según la intención del usuario.
+**Justificación técnica:** Los documentos académicos de SIPAc tienen metadatos estructurados bien definidos (autores, título, fecha, tipo, institución, DOI, palabras clave) pero una parte relevante de la evidencia útil también vive en campos específicos por subtipo y en el texto OCR/nativo del archivo. Este escenario favorece un enfoque grounded híbrido sobre RAG (Retrieval Augmented Generation) porque: (a) la primera vía de recuperación sigue siendo determinista sobre campos discretos y filtros combinables; (b) el tool calling impone esquemas Zod válidos para la consulta; (c) la ampliación diagnóstica evita falsos negativos cuando el filtro exacto no encuentra coincidencias; (d) el texto OCR/nativo se usa como segunda capa de evidencia sin introducir embeddings ni vector search. La arquitectura concentra esta lógica en un orquestador reutilizable, reduciendo la dependencia del modelo para construir filtros correctos.
 
 **Alternativa descartada:** RAG con MongoDB Atlas Vector Search. Se descartó porque requiere generar y almacenar embeddings para cada documento, un modelo de embeddings adicional, y un índice vectorial en Atlas (no disponible en M0 free tier). La complejidad y el costo no se justifican cuando la búsqueda es sobre metadatos estructurados y no sobre contenido semántico del texto completo.
 
@@ -265,7 +273,7 @@ flowchart TB
 
 ### ADR-09 — Estrategia multi-proveedor LLM con fallback por tarea (M4 y M9)
 
-**Decisión:** El NER implementado utiliza structured outputs del AI SDK (`generateText` + `Output.object`) con la cadena fija `gemini-2.5-flash` → `openai/gpt-oss-120b` (Groq) → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` (Groq). Para Chat IA (M9) se define la cadena `gpt-oss-120b` (Cerebras) → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507` (Cerebras).
+**Decisión:** El NER implementado utiliza structured outputs del AI SDK (`generateText` + `Output.object`) con la cadena fija `gemini-2.5-flash` → `openai/gpt-oss-120b` (Groq) → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` (Groq). El Chat IA (M9) opera con una cadena automática multi-proveedor `qwen-3-235b-a22b-instruct-2507` (Cerebras) → `z-ai/glm4.7` / candidatos NVIDIA → candidatos OpenRouter → `openai/gpt-oss-120b` / `openai/gpt-oss-20b` (Groq), dejando `gemini-2.5-flash` fuera del flujo automático normal y del catálogo manual habilitado.
 
 **Justificación técnica:** Un único proveedor LLM para NER y Chat representa un punto de falla en un sistema multiusuario académico. El fallback por tarea reduce ese riesgo y permite optimizar por compatibilidad de salida estructurada y disponibilidad:
 
@@ -273,11 +281,13 @@ flowchart TB
 - `openai/gpt-oss-120b` (Groq): segundo intento NER, validado con structured outputs bajo esquema estricto.
 - `gemini-2.5-flash-lite`: tercer intento NER para degradación de costo/latencia.
 - `openai/gpt-oss-20b` (Groq): último recurso NER.
-- `gpt-oss-120b` y `qwen-3-235b-a22b-instruct-2507` (Cerebras): primer y tercer intento para Chat.
+- `qwen-3-235b-a22b-instruct-2507` (Cerebras): primer intento automático actual para Chat.
+- `z-ai/glm4.7` y candidatos NVIDIA: respaldo prioritario del chat cuando están habilitados.
+- candidatos OpenRouter y Groq: degradación automática adicional para el flujo conversacional grounded.
 
 La integración se realiza mediante `@ai-sdk/openai-compatible` (paquete oficial del Vercel AI SDK para APIs con interfaz OpenAI), usando `https://api.groq.com/openai/v1` para Groq y `https://api.cerebras.ai/v1` para Cerebras.
 
-**Variables de entorno:** `GROQ_API_KEY` habilita candidatos Groq para NER. `CEREBRAS_API_KEY` habilita candidatos Cerebras para Chat. `LLM_PROVIDER` se mantiene por compatibilidad de configuración, pero el orden efectivo se define explícitamente en el proveedor LLM.
+**Variables de entorno:** `GROQ_API_KEY` habilita candidatos Groq para NER y Chat; `CEREBRAS_API_KEY` habilita el candidato primario actual de Chat; `NVIDIA_API_KEY` y `OPENROUTER_API_KEY` amplían la cadena automática y el catálogo manual del chat; `LLM_PROVIDER` se mantiene por compatibilidad de configuración, pero el orden efectivo se define explícitamente en el proveedor LLM.
 
 **Alternativa descartada:** Mantener un único proveedor LLM. Se descartó por ausencia de resiliencia y por incompatibilidades puntuales de structured outputs según proveedor/modelo.
 
@@ -380,7 +390,7 @@ export interface LLMProvider {
 
 La implementación actual expone dos selecciones ordenadas: una para NER estructurado y otra para Chat.
 
-> **Estado funcional (14/03/2026):** la selección NER está en uso en el pipeline M2-M4. La selección de Chat (`getChatModelCandidates()`) está definida a nivel de proveedor, pero los endpoints de M9 (`/api/chat/*`) aún no están implementados.
+> **Estado funcional (23/03/2026):** la selección NER está en uso en el pipeline M2-M4 y la selección de Chat alimenta ya el módulo M9 implementado (`/api/chat/*`). La política actual distingue cadena automática, catálogo manual habilitado y catálogo deshabilitado por política grounded.
 
 ```typescript
 // server/services/llm/provider.ts
@@ -440,31 +450,32 @@ export function getChatModelCandidates() {
 
 #### Tabla de proveedores LLM
 
-| Flujo    | Orden de fallback implementado                                                                            | Observación operativa                                                      |
-| -------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **NER**  | `gemini-2.5-flash` → `openai/gpt-oss-120b` (Groq) → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` (Groq) | Si no hay `GROQ_API_KEY`, la cadena queda en candidatos Gemini disponibles |
-| **Chat** | `gpt-oss-120b` (Cerebras) → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507` (Cerebras)              | Definido en proveedor LLM para el módulo M9                                |
+| Flujo    | Orden de fallback implementado                                                                                                                                 | Observación operativa                                                                 |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **NER**  | `gemini-2.5-flash` → `openai/gpt-oss-120b` (Groq) → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` (Groq)                                                  | Si no hay `GROQ_API_KEY`, la cadena queda en candidatos Gemini disponibles            |
+| **Chat** | `qwen-3-235b-a22b-instruct-2507` (Cerebras) → candidatos NVIDIA (`z-ai/glm4.7`, `deepseek-*`, `mistral-large-*`) → candidatos OpenRouter → candidatos Groq | Gemini queda solo como candidato deshabilitado para diagnóstico futuro, no uso normal |
 
 #### Estado actual de modelos LLM (2026-03)
 
-| Proveedor | Nombre comercial      | Model ID                         | Uso en SIPAc (fallback) |
-| --------- | --------------------- | -------------------------------- | ----------------------- |
-| Google    | Gemini 2.5 Flash      | `gemini-2.5-flash`               | 1ro en NER, 2do en Chat |
-| Google    | Gemini 2.5 Flash-Lite | `gemini-2.5-flash-lite`          | 3ro en NER              |
-| Groq      | OpenAI GPT OSS 120B   | `openai/gpt-oss-120b`            | 2do en NER              |
-| Groq      | OpenAI GPT OSS 20B    | `openai/gpt-oss-20b`             | 4to en NER              |
-| Cerebras  | OpenAI GPT OSS 120B   | `gpt-oss-120b`                   | 1ro en Chat             |
-| Cerebras  | Qwen 3 235B Instruct  | `qwen-3-235b-a22b-instruct-2507` | 3ro en Chat             |
+| Proveedor  | Nombre comercial     | Model ID                         | Uso en SIPAc (fallback)                                  |
+| ---------- | -------------------- | -------------------------------- | -------------------------------------------------------- |
+| Google     | Gemini 2.5 Flash     | `gemini-2.5-flash`               | 1ro en NER; deshabilitado en el flujo normal del chat    |
+| Google     | Gemini 2.5 Flash-Lite| `gemini-2.5-flash-lite`          | 3ro en NER                                               |
+| Groq       | OpenAI GPT OSS 120B  | `openai/gpt-oss-120b`            | 2do en NER; fallback final del chat                      |
+| Groq       | OpenAI GPT OSS 20B   | `openai/gpt-oss-20b`             | 4to en NER; último recurso del chat                      |
+| Cerebras   | Qwen 3 235B Instruct | `qwen-3-235b-a22b-instruct-2507` | 1ro en Chat                                              |
+| NVIDIA     | GLM 4.7              | `z-ai/glm4.7`                    | Candidato prioritario en Chat cuando el API key existe   |
+| OpenRouter | MiniMax M2.5         | `minimax/minimax-m2.5:free`      | Respaldo del chat en cadena automática y selector manual |
 
 ---
 
 ### 5.3 Plan de costos y variables de entorno
 
-| Fase                      | OCR (`OCR_PROVIDER`)   | NER estructurado (orden actual)                                                             | Chat (`M9`, orden previsto)                                                       |
-| ------------------------- | ---------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Desarrollo / Pasantía** | `gemini` (default)     | `gemini-2.5-flash` → `openai/gpt-oss-120b` → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` | `gpt-oss-120b` (Cerebras) → `gemini-2.5-flash` → `qwen-3-235b-a22b-instruct-2507` |
-| **Producción inicial**    | `gemini` (default)     | Misma cadena; degradación automática al siguiente candidato ante error de proveedor         | Misma cadena; definida para implementación del endpoint `/api/chat`               |
-| **Documentos complejos**  | `mistral` ($0,002/pág) | Sin cambio                                                                                  | Sin cambio                                                                        |
+| Fase                      | OCR (`OCR_PROVIDER`)   | NER estructurado (orden actual)                                                             | Chat (`M9`, orden actual)                                                              |
+| ------------------------- | ---------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Desarrollo / Pasantía** | `gemini` (default)     | `gemini-2.5-flash` → `openai/gpt-oss-120b` → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b` | `qwen-3-235b-a22b-instruct-2507` → NVIDIA → OpenRouter → Groq                         |
+| **Producción inicial**    | `gemini` (default)     | Misma cadena; degradación automática al siguiente candidato ante error de proveedor         | Misma cadena automática; el catálogo manual expone solo modelos habilitados al usuario |
+| **Documentos complejos**  | `mistral` ($0,002/pág) | Sin cambio                                                                                  | Sin cambio                                                                             |
 
 **Lógica de fallback:** El servicio recorre candidatos en orden y usa el primer modelo que responda correctamente. Ante error del candidato activo (rate limit, disponibilidad u otro error de proveedor), reintenta automáticamente con el siguiente.
 
@@ -477,6 +488,9 @@ export function getChatModelCandidates() {
 GOOGLE_API_KEY=...           # Google AI Studio — OCR siempre + LLM fallback
 GROQ_API_KEY=...             # Groq Cloud — candidatos NER openai/gpt-oss-120b y openai/gpt-oss-20b
 CEREBRAS_API_KEY=...         # Cerebras Cloud — candidatos del flujo Chat
+NVIDIA_API_KEY=...           # NVIDIA Inference — respaldo chat grounded
+OPENROUTER_API_KEY=...       # OpenRouter — catálogo manual y fallback adicional
+OPENROUTER_APP_URL=...       # Referer para OpenRouter
 
 # Selección de proveedores — valores por defecto indicados
 OCR_PROVIDER=gemini          # gemini | mistral
@@ -512,6 +526,7 @@ RESEND_FROM_EMAIL=notificaciones@sipac.example
 | **Autenticación**         | JWT firmado con `jose` (HS256), almacenado en cookie httpOnly `sipac_session` con `sameSite: 'strict'` y `secure: true` en producción; expiración de 8 horas                                |
 | **Autorización**          | Middleware de servidor Nuxt por rol — `admin` y `docente`; utilidades `requireAuth` y `requireRole` en `server/utils/authorize.ts`                                                          |
 | **Rate limiting auth**    | Protección específica en `server/utils/auth-rate-limit.ts`: 10 req/min por IP para `POST /api/auth/login` y `POST /api/auth/register`, adicional al rate limiting global de `nuxt-security` |
+| **Rate limiting chat**    | Protección específica en `server/utils/chat-rate-limit.ts`: 30 req/hora por usuario autenticado para `POST /api/chat`, con headers `X-RateLimit-*` y `Retry-After` cuando aplica              |
 | **Contraseñas**           | bcrypt con mínimo 10 salt rounds; nunca se almacena la contraseña en texto plano                                                                                                            |
 | **Archivos cargados**     | Validación de MIME type + extensión antes de procesar; archivos almacenados en MongoDB GridFS, accesibles solo mediante autenticación                                                       |
 | **API keys (Gemini)**     | `GOOGLE_API_KEY` definida en `.env`; nunca expuesta al cliente; solo accesible en `server/` de Nuxt                                                                                         |
@@ -527,9 +542,10 @@ RESEND_FROM_EMAIL=notificaciones@sipac.example
 ```
 sipac/
 ├── app/
-│   ├── pages/                      ← login, register, profile, repository, dashboard, workspace-documents, admin/users, admin/audit-logs, index
-│   ├── stores/                     ← auth, users, documents, notifications
+│   ├── pages/                      ← login, register, profile, repository, dashboard, workspace-documents, chat, admin/users, admin/audit-logs, index
+│   ├── stores/                     ← auth, users, documents, notifications, chat
 │   ├── components/dashboard/       ← workspace documental, inbox de notificaciones, preview con highlights
+│   ├── components/chat/            ← renderer markdown seguro y bloques de evidencia
 │   ├── middleware/                 ← auth.global, admin
 │   └── types/                      ← contratos compartidos (productos, archivos, notificaciones, API)
 ├── server/
@@ -539,6 +555,7 @@ sipac/
 │   │   ├── profile/                ← perfil y cambio de contraseña
 │   │   ├── dashboard/              ← agregados analíticos por producto, usuario y año
 │   │   ├── audit-logs/             ← consulta admin-only de auditoría
+│   │   ├── chat/                   ← stream conversacional, proveedores, historial y borrado de conversaciones
 │   │   ├── upload/                 ← carga, estado, archivo autenticado, eliminación
 │   │   ├── products/               ← listado global, draft actual, lectura/edición/eliminación por id
 │   │   └── notifications/          ← listado y marcado como leído
@@ -547,15 +564,18 @@ sipac/
 │   │   ├── ocr/extract-document-text.ts     ← pdfjs nativo + Gemini Vision
 │   │   ├── ner/extract-academic-entities.ts ← extracción estructurada con fallback
 │   │   ├── llm/provider.ts                 ← candidatos de modelos para NER/Chat
+│   │   ├── chat/                          ← recuperación grounded, selección de modelos, tool calling y persistencia
+│   │   ├── products/confirmed-repository-search.ts ← búsqueda confirmada compartida entre repositorio y chat
 │   │   ├── storage/gridfs.ts               ← acceso a GridFS
 │   │   └── notifications/notify-document-processing.ts
-│   ├── models/                    ← User, UploadedFile, AcademicProduct, Notification, AuditLog
+│   ├── models/                    ← User, UploadedFile, AcademicProduct, Notification, AuditLog, ChatConversation
 │   ├── middleware/auth.ts
 │   ├── plugins/                   ← 01.mongodb, 02.admin-seed
-│   └── utils/                     ← authz, jwt, env, audit, auth-rate-limit, response, errors, schemas, observability
+│   └── utils/                     ← authz, jwt, env, audit, auth-rate-limit, chat-rate-limit, response, errors, schemas, observability
 ├── tests/
 │   ├── unit/server/               ← OCR, NER, provider, observabilidad y esquema de productos
-│   └── integration/               ← pipeline de procesamiento de archivo
+│   ├── integration/               ← pipeline de procesamiento de archivo
+│   └── e2e/                       ← Playwright (flujo docente del chat grounded)
 └── docs/
   ├── analisis-diseno/documentacion/
   ├── analisis-diseno/diagramas/
@@ -571,11 +591,14 @@ sipac/
 | **pnpm**                      | Gestor de paquetes — más eficiente que npm; usado en todo el proyecto                   |
 | **VS Code**                   | IDE principal con extensiones Vue, TypeScript, Mermaid y PlantUML                       |
 | **Git + GitHub**              | Control de versiones y repositorio del proyecto de pasantía                             |
-| **MongoDB Atlas**             | Cluster cloud gratuito (M0); sin instalación local de MongoDB                           |
+| **MongoDB Atlas**             | Cluster cloud principal para desarrollo funcional                                        |
+| **Playwright**                | Pruebas E2E del flujo docente del chat y regresiones UI                                 |
 | **Vercel AI SDK**             | Integración con Gemini, Cerebras y Mistral; structured outputs y `streamText` con Zod   |
 | **@ai-sdk/openai-compatible** | Conecta el Vercel AI SDK a Cerebras y Groq (APIs OpenAI-compatible) sin SDK propietario |
 | **Groq API**                  | Modelos NER: `openai/gpt-oss-120b`, `openai/gpt-oss-20b`                                |
-| **Cerebras Inference API**    | Modelos chat: `gpt-oss-120b`, `qwen-3-235b-a22b-instruct-2507`                          |
+| **Cerebras Inference API**    | Modelo primario del chat: `qwen-3-235b-a22b-instruct-2507`                              |
+| **NVIDIA Inference API**      | Respaldo prioritario del chat grounded (`z-ai/glm4.7` y candidatos afines)              |
+| **OpenRouter API**            | Catálogo manual y fallback adicional del chat                                            |
 | **Zod**                       | Validación de esquemas en tiempo de ejecución y tipado TypeScript                       |
 | **PlantUML**                  | Diagramas UML formales en archivos `.puml` de la carpeta `docs/`                        |
 | **Mermaid**                   | Diagramas inline en Markdown (extensión VS Code instalada)                              |
@@ -591,4 +614,4 @@ sipac/
 | **Almacenamiento de archivos cargados**                | MongoDB GridFS para todos los archivos (ver ADR-07). Los archivos se almacenan en las colecciones `uploads.files` y `uploads.chunks`, accesibles mediante streaming a través de `GridFSBucket`                                                                |
 | **Estrategia de despliegue en producción**             | Vercel como plataforma principal (capa gratuita, CI/CD integrado con GitHub). Al usar GridFS en vez de filesystem local, no se requiere persistencia de disco en el servidor                                                                                  |
 | **Umbral de score para retry NER**                     | Configurable vía `runtimeConfig.nerConfidenceThreshold` (default 0.70). Se ajustará durante pruebas con documentos reales sin necesidad de redespliegue                                                                                                       |
-| **Gestión de rate limit — estrategia multi-proveedor** | NER usa fallback encadenado `gemini flash -> groq 120b -> gemini flash-lite -> groq 20b`. Chat define `gpt-oss (cerebras) -> gemini -> qwen (cerebras)`. Rate limit por usuario: 15 docs/hora. OCR de imágenes sigue usando Gemini como proveedor multimodal. |
+| **Gestión de rate limit — estrategia multi-proveedor** | NER usa fallback encadenado `gemini flash -> groq 120b -> gemini flash-lite -> groq 20b`. Chat usa `qwen (cerebras) -> nvidia -> openrouter -> groq`, con rate limit específico de 30 req/hora por usuario. OCR de imágenes sigue usando Gemini como proveedor multimodal. |
