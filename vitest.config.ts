@@ -5,6 +5,7 @@ export default defineVitestConfig({
     environment: 'happy-dom',
     globals: true,
     include: ['tests/**/*.{test,spec}.ts'],
+    exclude: ['tests/e2e/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
