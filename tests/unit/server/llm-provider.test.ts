@@ -180,17 +180,37 @@ describe('LLM provider candidates', () => {
     ])
   })
 
-  it('chat: cerebras + gemini + cerebras qwen', async () => {
+  it('chat: usa una cadena inteligente multi-proveedor y excluye Gemini del flujo automático', async () => {
     mockValidateEnv.mockReturnValue(baseEnv)
 
     const { getChatModelCandidates } = await import('../../../server/services/llm/provider')
 
     const chat = getChatModelCandidates()
-    expect(chat.map((candidate) => candidate.name)).toEqual(['cerebras', 'gemini', 'cerebras'])
+    expect(chat.map((candidate) => candidate.name)).toEqual(['cerebras', 'groq', 'groq'])
     expect(chat.map((candidate) => candidate.modelId)).toEqual([
-      'gpt-oss-120b',
-      'gemini-2.5-flash',
       'qwen-3-235b-a22b-instruct-2507',
+      'openai/gpt-oss-120b',
+      'openai/gpt-oss-20b',
     ])
+  })
+
+  it('chat experimental: expone proveedores adicionales cuando hay credenciales', async () => {
+    mockValidateEnv.mockReturnValue({
+      ...baseEnv,
+      nvidiaApiKey: 'nv-key',
+      openrouterApiKey: 'or-key',
+      openrouterAppUrl: 'https://example.com',
+    })
+
+    const { getExperimentalChatModelCandidates } =
+      await import('../../../server/services/llm/provider')
+
+    const experimental = getExperimentalChatModelCandidates()
+
+    expect(experimental.some((candidate) => candidate.name === 'cerebras')).toBe(true)
+    expect(experimental.some((candidate) => candidate.name === 'groq')).toBe(true)
+    expect(experimental.some((candidate) => candidate.name === 'nvidia')).toBe(true)
+    expect(experimental.some((candidate) => candidate.name === 'openrouter')).toBe(true)
+    expect(experimental.some((candidate) => candidate.name === 'gemini')).toBe(true)
   })
 })

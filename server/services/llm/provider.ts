@@ -8,7 +8,7 @@ export type StructuredLlmProvider = 'gemini' | 'cerebras' | 'groq' | 'openrouter
 const GROQ_GPT_OSS_120B_MODEL_ID = 'openai/gpt-oss-120b'
 const GROQ_GPT_OSS_20B_MODEL_ID = 'openai/gpt-oss-20b'
 const CEREBRAS_QWEN_MODEL_ID = 'qwen-3-235b-a22b-instruct-2507'
-const CEREBRAS_GPT_OSS_MODEL_ID = 'gpt-oss-120b'
+const GEMINI_CHAT_MODEL_ID = 'gemini-2.5-flash'
 
 const GEMINI_FLASH_PIPELINE_MODEL_IDS = [
   'gemini-3.1-flash-lite-preview',
@@ -38,6 +38,9 @@ const NER_OPENROUTER_MODEL_IDS_ORDERED = [
   'minimax/minimax-m2.5:free',
   'openai/gpt-oss-120b:free',
 ] as const
+const CHAT_OPENROUTER_MODEL_IDS_ORDERED = [...NER_OPENROUTER_MODEL_IDS_ORDERED] as const
+const CHAT_NVIDIA_MODEL_IDS_ORDERED = [...NER_NVIDIA_MODEL_IDS_ORDERED] as const
+const CHAT_GROQ_MODEL_IDS_ORDERED = [GROQ_GPT_OSS_120B_MODEL_ID, GROQ_GPT_OSS_20B_MODEL_ID] as const
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 
@@ -197,7 +200,106 @@ export function getStructuredModelCandidates(): StructuredModelCandidate[] {
 
 export function getChatModelCandidates(): StructuredModelCandidate[] {
   const env = validateEnv(getRuntimeConfigSafe())
+  const cerebras =
+    env.cerebrasApiKey.length > 0
+      ? createOpenAICompatible({
+          name: 'cerebras',
+          apiKey: env.cerebrasApiKey,
+          baseURL: 'https://api.cerebras.ai/v1',
+          supportsStructuredOutputs: true,
+        })
+      : null
+  const groq =
+    env.groqApiKey.length > 0
+      ? createOpenAICompatible({
+          name: 'groq',
+          apiKey: env.groqApiKey,
+          baseURL: 'https://api.groq.com/openai/v1',
+          supportsStructuredOutputs: true,
+        })
+      : null
+  const nvidia =
+    env.nvidiaApiKey.length > 0
+      ? createOpenAICompatible({
+          name: 'nvidia',
+          apiKey: env.nvidiaApiKey,
+          baseURL: env.nvidiaApiBaseUrl,
+          supportsStructuredOutputs: true,
+        })
+      : null
+  const openrouterHeaders: Record<string, string> = {
+    'X-Title': 'SIPAc',
+  }
+  if (env.openrouterAppUrl.trim().length > 0) {
+    openrouterHeaders['HTTP-Referer'] = env.openrouterAppUrl.trim()
+  }
+  const openrouter =
+    env.openrouterApiKey.length > 0
+      ? createOpenAICompatible({
+          name: 'openrouter',
+          apiKey: env.openrouterApiKey,
+          baseURL: OPENROUTER_BASE_URL,
+          headers: openrouterHeaders,
+          supportsStructuredOutputs: true,
+        })
+      : null
+
+  const candidates: StructuredModelCandidate[] = []
+  const seen = new Set<string>()
+
+  if (cerebras) {
+    pushCandidate(seen, candidates, {
+      name: 'cerebras',
+      modelId: CEREBRAS_QWEN_MODEL_ID,
+      model: cerebras(CEREBRAS_QWEN_MODEL_ID),
+    })
+  }
+
+  if (nvidia) {
+    for (const modelId of CHAT_NVIDIA_MODEL_IDS_ORDERED) {
+      pushCandidate(seen, candidates, {
+        name: 'nvidia',
+        modelId,
+        model: nvidia(modelId),
+      })
+    }
+  }
+
+  if (openrouter) {
+    for (const modelId of CHAT_OPENROUTER_MODEL_IDS_ORDERED) {
+      pushCandidate(seen, candidates, {
+        name: 'openrouter',
+        modelId,
+        model: openrouter(modelId),
+      })
+    }
+  }
+
+  if (groq) {
+    pushCandidate(seen, candidates, {
+      name: 'groq',
+      modelId: GROQ_GPT_OSS_120B_MODEL_ID,
+      model: groq(GROQ_GPT_OSS_120B_MODEL_ID),
+    })
+  }
+
+  if (groq) {
+    pushCandidate(seen, candidates, {
+      name: 'groq',
+      modelId: GROQ_GPT_OSS_20B_MODEL_ID,
+      model: groq(GROQ_GPT_OSS_20B_MODEL_ID),
+    })
+  }
+
+  return candidates
+}
+
+export function getExperimentalChatModelCandidates(): StructuredModelCandidate[] {
+  const env = validateEnv(getRuntimeConfigSafe())
   const google = createGoogleGenerativeAI({ apiKey: env.googleApiKey })
+  const candidates: StructuredModelCandidate[] = []
+  const seen = new Set<string>()
+
   const cerebras =
     env.cerebrasApiKey.length > 0
       ? createOpenAICompatible({
@@ -208,29 +310,89 @@ export function getChatModelCandidates(): StructuredModelCandidate[] {
         })
       : null
 
-  const candidates: StructuredModelCandidate[] = []
+  const groq =
+    env.groqApiKey.length > 0
+      ? createOpenAICompatible({
+          name: 'groq',
+          apiKey: env.groqApiKey,
+          baseURL: 'https://api.groq.com/openai/v1',
+          supportsStructuredOutputs: true,
+        })
+      : null
 
-  if (cerebras) {
-    candidates.push({
-      name: 'cerebras',
-      modelId: CEREBRAS_GPT_OSS_MODEL_ID,
-      model: cerebras(CEREBRAS_GPT_OSS_MODEL_ID),
-    })
+  const nvidia =
+    env.nvidiaApiKey.length > 0
+      ? createOpenAICompatible({
+          name: 'nvidia',
+          apiKey: env.nvidiaApiKey,
+          baseURL: env.nvidiaApiBaseUrl,
+          supportsStructuredOutputs: true,
+        })
+      : null
+
+  const openrouterHeaders: Record<string, string> = {
+    'X-Title': 'SIPAc',
+  }
+  if (env.openrouterAppUrl.trim().length > 0) {
+    openrouterHeaders['HTTP-Referer'] = env.openrouterAppUrl.trim()
   }
 
-  candidates.push({
-    name: 'gemini',
-    modelId: 'gemini-2.5-flash',
-    model: google('gemini-2.5-flash'),
-  })
+  const openrouter =
+    env.openrouterApiKey.length > 0
+      ? createOpenAICompatible({
+          name: 'openrouter',
+          apiKey: env.openrouterApiKey,
+          baseURL: OPENROUTER_BASE_URL,
+          headers: openrouterHeaders,
+          supportsStructuredOutputs: true,
+        })
+      : null
 
   if (cerebras) {
-    candidates.push({
+    pushCandidate(seen, candidates, {
       name: 'cerebras',
       modelId: CEREBRAS_QWEN_MODEL_ID,
       model: cerebras(CEREBRAS_QWEN_MODEL_ID),
     })
   }
+
+  if (groq) {
+    for (const modelId of CHAT_GROQ_MODEL_IDS_ORDERED) {
+      pushCandidate(seen, candidates, {
+        name: 'groq',
+        modelId,
+        model: groq(modelId),
+      })
+    }
+  }
+
+  if (nvidia) {
+    for (const modelId of CHAT_NVIDIA_MODEL_IDS_ORDERED) {
+      pushCandidate(seen, candidates, {
+        name: 'nvidia',
+        modelId,
+        model: nvidia(modelId),
+      })
+    }
+  }
+
+  if (openrouter) {
+    for (const modelId of CHAT_OPENROUTER_MODEL_IDS_ORDERED) {
+      pushCandidate(seen, candidates, {
+        name: 'openrouter',
+        modelId,
+        model: openrouter(modelId),
+      })
+    }
+  }
+
+  // Gemini queda fuera de la política normal del chat. Se deja disponible solo
+  // como candidato excepcional para diagnóstico futuro si se decide exponerlo.
+  pushCandidate(seen, candidates, {
+    name: 'gemini',
+    modelId: GEMINI_CHAT_MODEL_ID,
+    model: google(GEMINI_CHAT_MODEL_ID),
+  })
 
   return candidates
 }
