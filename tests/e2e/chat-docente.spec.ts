@@ -11,6 +11,8 @@ const docenteEmail = `${testRunId}@correo.unicordoba.edu.co`
 const docentePassword = 'Docente12345!'
 const docenteFullName = 'Docente E2E Chat'
 const seededTitle = `Memorias E2E ${testRunId}`
+const seededDbCiOptIn = /^(1|true)$/i.test(process.env.PLAYWRIGHT_E2E_SEEDED_DB ?? '')
+const shouldRunSeededChatE2E = process.env.CI !== 'true' || seededDbCiOptIn
 
 function readEnvValue(name: string) {
   const directValue = process.env[name]
@@ -27,6 +29,12 @@ function readEnvValue(name: string) {
 async function connectMongo() {
   const mongodbUri = readEnvValue('MONGODB_URI')
 
+  if (!mongodbUri) {
+    throw new Error(
+      'El E2E de chat requiere MONGODB_URI para sembrar datos del repositorio confirmado',
+    )
+  }
+
   if (mongoose.connection.readyState !== 1) {
     await mongoose.connect(mongodbUri, {
       maxPoolSize: 5,
@@ -38,6 +46,10 @@ async function connectMongo() {
 test.describe('Chat IA docente', () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
+  test.skip(
+    !shouldRunSeededChatE2E,
+    'Este E2E siembra MongoDB para el repositorio confirmado. En CI se ejecuta solo con PLAYWRIGHT_E2E_SEEDED_DB=1',
+  )
 
   test.beforeAll(async () => {
     await connectMongo()
@@ -188,14 +200,25 @@ test.describe('Chat IA docente', () => {
     const modelSelector = page.getByRole('combobox')
     await modelSelector.click()
 
-    const cerebrasOption = page.getByText('Cerebras · qwen-3-235b-a22b-instruct-2507')
-    const nvidiaOption = page.getByText('NVIDIA · z-ai/glm4.7')
+    const preferredOptions = [
+      page.getByText('Cerebras · qwen-3-235b-a22b-instruct-2507'),
+      page.getByText('NVIDIA · z-ai/glm4.7'),
+      page.getByText('Groq · openai/gpt-oss-120b'),
+      page.getByText('Groq · openai/gpt-oss-20b'),
+      page.getByText('OpenRouter · minimax/minimax-m2.5:free'),
+      page.getByText('OpenRouter · openai/gpt-oss-120b:free'),
+    ]
 
-    if (await cerebrasOption.isVisible().catch(() => false)) {
-      await cerebrasOption.click()
-    } else if (await nvidiaOption.isVisible().catch(() => false)) {
-      await nvidiaOption.click()
-    } else {
+    let selectedOption = false
+    for (const option of preferredOptions) {
+      if (await option.isVisible().catch(() => false)) {
+        await option.click()
+        selectedOption = true
+        break
+      }
+    }
+
+    if (!selectedOption) {
       throw new Error('No se encontró un modelo manual estable esperado para el flujo E2E docente')
     }
 

@@ -1,5 +1,12 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const projects = process.env.CI
+  ? [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
+  : [
+      { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+      { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    ]
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -12,10 +19,7 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
-  projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-  ],
+  projects,
   webServer: {
     command: 'pnpm dev',
     url: 'http://localhost:3000',

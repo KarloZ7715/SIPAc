@@ -58,6 +58,16 @@ jobs:
     name: E2E
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval \"db.adminCommand({ ping: 1 })\""
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -81,5 +91,12 @@ jobs:
         run: pnpm test:e2e
         env:
           CI: true
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          PLAYWRIGHT_E2E_SEEDED_DB: 1
+          MONGODB_URI: mongodb://127.0.0.1:27017/sipac_e2e
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_APP_URL: ${{ secrets.OPENROUTER_APP_URL }}
