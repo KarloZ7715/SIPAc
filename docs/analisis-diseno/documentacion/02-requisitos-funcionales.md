@@ -22,6 +22,7 @@
 | 1.8     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación de requisitos al hardening operativo del pipeline: timeouts OCR/NER, límite de intentos por candidato NER y trazabilidad por etapa para diagnóstico                                                                                                                                                 |
 | 1.9     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback NER vigente con Groq y Gemini, y compatibilidad de structured outputs con esquema estricto (campos requeridos y valores nulos explícitos cuando aplique)                                                                                                                                |
 | 2.0     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación de estados RF con implementación real: carga sin `productType` obligatorio, M5A parcial con flujo de borrador/revisión, y actualización de notas de rate limiting y dependencias                                                                                                                    |
+| 2.1     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado en sesión: cierre de M2, M5A, M6, M7 y M8; activación de M5B base con dashboard operativo; perfil con agregados; auditoría admin-only; rate limiting específico en `/api/auth/*`; notificaciones por polling con conteo no leído                                             |
 
 ---
 
@@ -187,13 +188,13 @@ mindmap
 | RF-023 | El sistema debe rechazar archivos cuyo tamaño supere los 20 MB, mostrando un mensaje de error descriptivo                                                                    | Alta      | Completado |
 | RF-024 | El sistema debe asociar cada documento cargado al usuario que lo subió                                                                                                       | Alta      | Completado |
 | RF-025 | El sistema debe registrar la fecha y hora exacta en que el documento fue cargado                                                                                             | Alta      | Completado |
-| RF-026 | El sistema debe permitir definir el tipo de producto académico en el flujo de revisión del documento (manual o detectado por el pipeline)                                    | Alta      | Parcial    |
+| RF-026 | El sistema debe permitir definir el tipo de producto académico en el flujo de revisión del documento (manual o detectado por el pipeline)                                    | Alta      | Completado |
 | RF-027 | El sistema debe permitir cargar múltiples documentos de forma simultánea en una misma sesión                                                                                 | Media     | Pendiente  |
-| RF-028 | El sistema debe mostrar en tiempo real el estado de procesamiento de cada documento cargado (`pendiente`, `procesando`, `completado`, `error`)                               | Alta      | Parcial    |
-| RF-029 | El sistema debe permitir al usuario eliminar sus documentos propios, solicitando confirmación explícita antes de ejecutar la acción                                          | Media     | Parcial    |
+| RF-028 | El sistema debe mostrar en tiempo real el estado de procesamiento de cada documento cargado (`pendiente`, `procesando`, `completado`, `error`)                               | Alta      | Completado |
+| RF-029 | El sistema debe permitir al usuario eliminar sus documentos propios, solicitando confirmación explícita antes de ejecutar la acción                                          | Media     | Completado |
 | RF-030 | El sistema debe almacenar los archivos cargados directamente en la base de datos mediante MongoDB GridFS, garantizando que no sean accesibles públicamente sin autenticación | Alta      | Completado |
 
-> **Nota M2:** El pipeline de carga ya opera de extremo a extremo para un documento por envío y puede detectar automáticamente el tipo de producto durante el procesamiento. El seguimiento del estado se expone en la interfaz mediante polling periódico y la eliminación backend ya existe, pero la confirmación explícita previa en UI y la carga múltiple en una sola operación siguen pendientes.
+> **Nota M2 (actualizado al 23/03/2026):** El workspace documental ya permite seleccionar o ajustar explícitamente `productType` durante la revisión, refleja de forma consistente el estado del documento en store y vista, y exige confirmación UI antes de cancelar o eliminar. El seguimiento visible del procesamiento se resuelve mediante polling periódico endurecido; la carga múltiple en una sola operación sigue pendiente.
 
 ---
 
@@ -242,21 +243,21 @@ mindmap
 
 > Semana 6 del cronograma · 16 Mar 2026 (adelantado — implementado junto con M4 NER Avanzado)
 
-| ID     | Descripción                                                                                                                                                              | Prioridad | Estado     |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ---------- |
-| RF-051 | El sistema debe almacenar cada producto académico con sus metadatos completos en la colección `academic_products` de MongoDB                                             | Alta      | Completado |
-| RF-052 | El sistema debe permitir consultar productos académicos filtrando por tipo de producto                                                                                   | Alta      | Parcial    |
-| RF-053 | El sistema debe permitir consultar productos académicos filtrando por año de producción                                                                                  | Alta      | Parcial    |
-| RF-054 | El sistema debe permitir consultar productos académicos filtrando por usuario propietario                                                                                | Alta      | Parcial    |
-| RF-055 | El sistema debe permitir consultar productos académicos filtrando por institución                                                                                        | Media     | Parcial    |
-| RF-056 | El sistema debe permitir al usuario editar manualmente los metadatos de sus propios productos académicos                                                                 | Alta      | Parcial    |
-| RF-057 | El sistema debe permitir al usuario eliminar sus propios productos académicos, solicitando confirmación explícita antes de ejecutar la acción                            | Media     | Parcial    |
-| RF-058 | El sistema debe implementar búsqueda de texto completo sobre títulos, autores y palabras clave                                                                           | Media     | Parcial    |
-| RF-059 | El sistema debe paginar los resultados de consultas con un mínimo de 10 y máximo de 50 registros por página                                                              | Media     | Parcial    |
-| RF-060 | Cualquier usuario autenticado debe poder consultar y visualizar los productos académicos de todos los usuarios del sistema                                               | Alta      | Parcial    |
-| RF-061 | Los usuarios solo pueden editar y eliminar sus propios productos académicos; la visualización del repositorio completo es irrestricta para cualquier usuario autenticado | Alta      | Parcial    |
+| ID     | Descripción                                                                                                                                                                                                                         | Prioridad | Estado     |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
+| RF-051 | El sistema debe almacenar cada producto académico con sus metadatos completos en la colección `academic_products` de MongoDB                                                                                                        | Alta      | Completado |
+| RF-052 | El sistema debe permitir consultar productos académicos filtrando por tipo de producto                                                                                                                                              | Alta      | Completado |
+| RF-053 | El sistema debe permitir consultar productos académicos filtrando por año de producción                                                                                                                                             | Alta      | Completado |
+| RF-054 | El sistema debe permitir consultar productos académicos filtrando por usuario propietario                                                                                                                                           | Alta      | Completado |
+| RF-055 | El sistema debe permitir consultar productos académicos filtrando por institución                                                                                                                                                   | Media     | Completado |
+| RF-056 | El sistema debe permitir al usuario editar manualmente los metadatos de sus propios productos académicos                                                                                                                            | Alta      | Completado |
+| RF-057 | El sistema debe permitir al usuario eliminar sus propios productos académicos, solicitando confirmación explícita antes de ejecutar la acción                                                                                       | Media     | Completado |
+| RF-058 | El sistema debe implementar búsqueda de texto completo sobre títulos, autores y palabras clave                                                                                                                                      | Media     | Completado |
+| RF-059 | El sistema debe paginar los resultados de consultas con un mínimo de 10 y máximo de 50 registros por página                                                                                                                         | Media     | Completado |
+| RF-060 | Cualquier usuario autenticado debe poder consultar y visualizar los productos académicos de todos los usuarios del sistema                                                                                                          | Alta      | Completado |
+| RF-061 | Los usuarios solo pueden editar y eliminar sus propios productos académicos, excepto el `admin`, que conserva capacidad administrativa; la visualización del repositorio completo es irrestricta para cualquier usuario autenticado | Alta      | Completado |
 
-> **Nota M5A (estado actualizado al 19/03/2026):** El backend implementa flujo de borrador/revisión por documento (`GET /api/products/drafts/current`, `GET /api/products/:id`, `PATCH /api/products/:id`). El listado global (`GET /api/products`) con filtros, búsqueda y paginación está implementado. La eliminación (`DELETE /api/products/:id`) con confirmación y permisos está implementada. La interfaz de repositorio (`/repository`) permite explorar todos los productos con filtros por tipo, año, institución y búsqueda de texto completo.
+> **Nota M5A (actualizado al 23/03/2026):** El repositorio opera sobre productos `confirmed` y no eliminados lógicamente. `GET /api/products` expone filtros por tipo, año, institución, propietario, búsqueda de texto completo y paginación; `GET /api/products/:id` permite ver confirmados a cualquier autenticado y borradores a propietario o `admin`; `PATCH` y `DELETE` permiten edición/eliminación a propietario o `admin`. La interfaz `/repository` ya refleja estas reglas y oculta acciones destructivas cuando el usuario no tiene permiso.
 
 ---
 
@@ -264,19 +265,21 @@ mindmap
 
 > Semana 7 del cronograma · 23 Mar 2026
 
-| ID     | Descripción                                                                                                          | Prioridad | Estado    |
-| ------ | -------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
-| RF-062 | El dashboard debe mostrar el número total de productos académicos registrados en el sistema                          | Alta      | Pendiente |
-| RF-063 | El dashboard debe mostrar el número de productos por tipo (artículo, ponencia, tesis, certificado, etc.)             | Alta      | Pendiente |
-| RF-064 | El dashboard debe mostrar el número de productos registrados por cada usuario activo                                 | Alta      | Pendiente |
-| RF-065 | El dashboard debe mostrar la distribución temporal de publicaciones agrupadas por año                                | Alta      | Pendiente |
-| RF-066 | El dashboard debe permitir filtrar todos sus indicadores por rango de fechas                                         | Media     | Pendiente |
-| RF-067 | El dashboard debe permitir filtrar todos sus indicadores por tipo de producto                                        | Media     | Pendiente |
-| RF-068 | El dashboard debe permitir filtrar todos sus indicadores por usuario                                                 | Media     | Pendiente |
-| RF-069 | El dashboard debe mostrar gráficas de barras, líneas y torta de los principales indicadores de productividad         | Alta      | Pendiente |
-| RF-070 | El sistema debe permitir exportar un reporte consolidado de indicadores en formato PDF                               | Media     | Pendiente |
-| RF-071 | El sistema debe permitir exportar los datos del repositorio en formato Excel/CSV                                     | Media     | Pendiente |
-| RF-072 | El dashboard con indicadores de todos los usuarios debe ser accesible para cualquier usuario autenticado del sistema | Alta      | Pendiente |
+| ID     | Descripción                                                                                                          | Prioridad | Estado     |
+| ------ | -------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
+| RF-062 | El dashboard debe mostrar el número total de productos académicos registrados en el sistema                          | Alta      | Completado |
+| RF-063 | El dashboard debe mostrar el número de productos por tipo (artículo, ponencia, tesis, certificado, etc.)             | Alta      | Completado |
+| RF-064 | El dashboard debe mostrar el número de productos registrados por cada usuario activo                                 | Alta      | Completado |
+| RF-065 | El dashboard debe mostrar la distribución temporal de publicaciones agrupadas por año                                | Alta      | Completado |
+| RF-066 | El dashboard debe permitir filtrar todos sus indicadores por rango de fechas                                         | Media     | Completado |
+| RF-067 | El dashboard debe permitir filtrar todos sus indicadores por tipo de producto                                        | Media     | Completado |
+| RF-068 | El dashboard debe permitir filtrar todos sus indicadores por usuario                                                 | Media     | Completado |
+| RF-069 | El dashboard debe mostrar gráficas de barras, líneas y torta de los principales indicadores de productividad         | Alta      | Completado |
+| RF-070 | El sistema debe permitir exportar un reporte consolidado de indicadores en formato PDF                               | Media     | Pendiente  |
+| RF-071 | El sistema debe permitir exportar los datos del repositorio en formato Excel/CSV                                     | Media     | Pendiente  |
+| RF-072 | El dashboard con indicadores de todos los usuarios debe ser accesible para cualquier usuario autenticado del sistema | Alta      | Completado |
+
+> **Nota M5B (actualizado al 23/03/2026):** El dashboard base ya está implementado con KPIs y visualizaciones alimentadas por agregaciones MongoDB sobre productos `confirmed` y no eliminados. Los filtros por rango, tipo y propietario están activos. Las exportaciones PDF y CSV/Excel siguen pendientes.
 
 ---
 
@@ -289,7 +292,7 @@ mindmap
 | RF-073 | El sistema debe permitir a cualquier usuario autenticado consultar su propio perfil (nombre, correo, rol, fecha de registro)                 | Alta      | Completado |
 | RF-074 | El sistema debe permitir a cualquier usuario autenticado editar su nombre completo                                                           | Media     | Completado |
 | RF-075 | El sistema debe permitir a cualquier usuario autenticado cambiar su contraseña, requiriendo la contraseña actual para confirmar la operación | Alta      | Completado |
-| RF-076 | El sistema debe mostrar en el perfil un resumen de la cantidad de productos académicos propios registrados por tipo                          | Media     | Pendiente  |
+| RF-076 | El sistema debe mostrar en el perfil un resumen de la cantidad de productos académicos propios registrados por tipo                          | Media     | Completado |
 
 ---
 
@@ -303,11 +306,11 @@ mindmap
 | RF-078 | El sistema debe sanitizar todas las entradas de usuario para prevenir ataques de inyección de código                             | Alta      | Completado |
 | RF-079 | El sistema debe registrar en un log de auditoría cada operación crítica: creación, edición y eliminación de productos académicos | Alta      | Completado |
 | RF-080 | El log de auditoría debe registrar para cada evento: usuario que lo ejecutó, tipo de acción, timestamp y dirección IP            | Alta      | Completado |
-| RF-081 | El log de auditoría debe ser de solo lectura para todos los usuarios; solo el `admin` puede consultarlo                          | Alta      | Pendiente  |
-| RF-082 | El sistema debe implementar rate limiting en los endpoints de autenticación: máximo 10 peticiones por minuto por IP              | Alta      | Parcial    |
+| RF-081 | El log de auditoría debe ser de solo lectura para todos los usuarios; solo el `admin` puede consultarlo                          | Alta      | Completado |
+| RF-082 | El sistema debe implementar rate limiting en los endpoints de autenticación: máximo 10 peticiones por minuto por IP              | Alta      | Completado |
 | RF-083 | El sistema debe rechazar cualquier archivo cuya extensión real no corresponda a los formatos permitidos (PDF, JPG, JPEG, PNG)    | Alta      | Completado |
 
-> **Nota RF-082:** La implementación actual utiliza `nuxt-security` con rate limiting **global** de 150 tokens por intervalo de 5 minutos (30 req/min), no específico para endpoints de autenticación a 10 req/min. Cubre el objetivo de protección base pero no la granularidad descrita para `/api/auth/*`.
+> **Nota RF-082 (actualizado al 23/03/2026):** La protección actual combina el rate limiting global de `nuxt-security` (150 tokens por 5 minutos) con un rate limiting específico en `server/api/auth/*` de **10 solicitudes por minuto por IP**, incluyendo encabezados `X-RateLimit-Limit`, `X-RateLimit-Remaining` y `Retry-After` cuando aplica.
 
 ---
 
@@ -315,13 +318,13 @@ mindmap
 
 > Implementado a partir del Módulo M2
 
-| ID     | Descripción                                                                                                                                            | Prioridad | Estado  |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ------- |
-| RF-084 | El sistema debe enviar una notificación por correo electrónico al usuario cuando el procesamiento de un documento se complete exitosamente             | Media     | Parcial |
-| RF-085 | El sistema debe enviar una notificación por correo electrónico al usuario cuando el procesamiento de un documento falle, indicando el motivo del error | Media     | Parcial |
-| RF-086 | El sistema debe mostrar en la interfaz notificaciones en tiempo real sobre el cambio de estado de procesamiento de cada documento                      | Alta      | Parcial |
+| ID     | Descripción                                                                                                                                            | Prioridad | Estado     |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ---------- |
+| RF-084 | El sistema debe enviar una notificación por correo electrónico al usuario cuando el procesamiento de un documento se complete exitosamente             | Media     | Completado |
+| RF-085 | El sistema debe enviar una notificación por correo electrónico al usuario cuando el procesamiento de un documento falle, indicando el motivo del error | Media     | Completado |
+| RF-086 | El sistema debe mostrar en la interfaz notificaciones en tiempo real sobre el cambio de estado de procesamiento de cada documento                      | Alta      | Completado |
 
-> **Nota M8:** La persistencia de notificaciones y la bandeja en interfaz ya están implementadas. El correo usa Resend en modo best-effort cuando `RESEND_API_KEY` y `RESEND_FROM_EMAIL` están configuradas, y la actualización visible en UI se resuelve actualmente con polling periódico en lugar de SSE/WebSocket.
+> **Nota M8 (actualizado al 23/03/2026):** La persistencia de notificaciones, la bandeja en interfaz, el conteo de no leídas y el marcado como leído están implementados. El correo usa Resend en modo best-effort cuando `RESEND_API_KEY` y `RESEND_FROM_EMAIL` están configuradas, y la actualización visible en UI se resuelve mediante polling periódico endurecido en lugar de SSE/WebSocket.
 
 ---
 

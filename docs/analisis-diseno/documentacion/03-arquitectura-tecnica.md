@@ -21,6 +21,7 @@
 | 2.0     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback real tras validaciones de compatibilidad: NER con Gemini + Groq (`gemini-2.5-flash` → `openai/gpt-oss-120b` → `gemini-2.5-flash-lite` → `openai/gpt-oss-20b`), Chat con Cerebras + Gemini; y ajuste documental de `GROQ_API_KEY` y esquema estructurado estricto |
 | 2.1     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación de arquitectura al estado funcional vigente: M5A parcial (borrador/revisión), M5B y M9 pendientes, estructura de directorios actualizada sin marcadores de "futuro"                                                                                                          |
 | 2.2     | 2026-03-20 | Carlos A. Canabal Cordero | Pipeline documental: tras OCR, etapa opcional de **segmentación** (heurística + LLM acotado por env) y **NER por segmento**, persistiendo N productos por `sourceFile` con `segmentIndex`                                                                                               |
+| 2.3     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación a la sesión actual: dashboard analítico operativo, consulta admin-only de auditoría, perfil con agregados, polling endurecido de notificaciones y rate limiting específico en autenticación                                                                                  |
 
 ---
 
@@ -506,17 +507,18 @@ RESEND_FROM_EMAIL=notificaciones@sipac.example
 
 ## 6. Seguridad
 
-| Aspecto                   | Implementación                                                                                                                                               |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Autenticación**         | JWT firmado con `jose` (HS256), almacenado en cookie httpOnly `sipac_session` con `sameSite: 'strict'` y `secure: true` en producción; expiración de 8 horas |
-| **Autorización**          | Middleware de servidor Nuxt por rol — `admin` y `docente`; utilidades `requireAuth` y `requireRole` en `server/utils/authorize.ts`                           |
-| **Contraseñas**           | bcrypt con mínimo 10 salt rounds; nunca se almacena la contraseña en texto plano                                                                             |
-| **Archivos cargados**     | Validación de MIME type + extensión antes de procesar; archivos almacenados en MongoDB GridFS, accesibles solo mediante autenticación                        |
-| **API keys (Gemini)**     | `GOOGLE_API_KEY` definida en `.env`; nunca expuesta al cliente; solo accesible en `server/` de Nuxt                                                          |
-| **API keys (Mistral)**    | `MISTRAL_API_KEY` definida en `.env`; idem anterior; solo se lee si `OCR_PROVIDER=mistral`                                                                   |
-| **JWT secret**            | `JWT_SECRET` en `.env`; cadena de al menos 32 caracteres aleatorios; excluida de Git con `.gitignore`                                                        |
-| **Secretos en cliente**   | Nuxt 4 garantiza que las variables sin prefijo `NUXT_PUBLIC_` no se incluyen en el bundle del cliente                                                        |
-| **Cadena de conexión BD** | `MONGODB_URI` en `.env`; nunca hardcodeada; incluye usuario y contraseña de MongoDB en producción                                                            |
+| Aspecto                   | Implementación                                                                                                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Autenticación**         | JWT firmado con `jose` (HS256), almacenado en cookie httpOnly `sipac_session` con `sameSite: 'strict'` y `secure: true` en producción; expiración de 8 horas                                |
+| **Autorización**          | Middleware de servidor Nuxt por rol — `admin` y `docente`; utilidades `requireAuth` y `requireRole` en `server/utils/authorize.ts`                                                          |
+| **Rate limiting auth**    | Protección específica en `server/utils/auth-rate-limit.ts`: 10 req/min por IP para `POST /api/auth/login` y `POST /api/auth/register`, adicional al rate limiting global de `nuxt-security` |
+| **Contraseñas**           | bcrypt con mínimo 10 salt rounds; nunca se almacena la contraseña en texto plano                                                                                                            |
+| **Archivos cargados**     | Validación de MIME type + extensión antes de procesar; archivos almacenados en MongoDB GridFS, accesibles solo mediante autenticación                                                       |
+| **API keys (Gemini)**     | `GOOGLE_API_KEY` definida en `.env`; nunca expuesta al cliente; solo accesible en `server/` de Nuxt                                                                                         |
+| **API keys (Mistral)**    | `MISTRAL_API_KEY` definida en `.env`; idem anterior; solo se lee si `OCR_PROVIDER=mistral`                                                                                                  |
+| **JWT secret**            | `JWT_SECRET` en `.env`; cadena de al menos 32 caracteres aleatorios; excluida de Git con `.gitignore`                                                                                       |
+| **Secretos en cliente**   | Nuxt 4 garantiza que las variables sin prefijo `NUXT_PUBLIC_` no se incluyen en el bundle del cliente                                                                                       |
+| **Cadena de conexión BD** | `MONGODB_URI` en `.env`; nunca hardcodeada; incluye usuario y contraseña de MongoDB en producción                                                                                           |
 
 ---
 
@@ -525,7 +527,7 @@ RESEND_FROM_EMAIL=notificaciones@sipac.example
 ```
 sipac/
 ├── app/
-│   ├── pages/                      ← login, register, profile, workspace-documents, admin/users, index
+│   ├── pages/                      ← login, register, profile, repository, dashboard, workspace-documents, admin/users, admin/audit-logs, index
 │   ├── stores/                     ← auth, users, documents, notifications
 │   ├── components/dashboard/       ← workspace documental, inbox de notificaciones, preview con highlights
 │   ├── middleware/                 ← auth.global, admin
@@ -535,8 +537,10 @@ sipac/
 │   │   ├── auth/                   ← login, register, me, logout
 │   │   ├── users/                  ← CRUD administrativo
 │   │   ├── profile/                ← perfil y cambio de contraseña
+│   │   ├── dashboard/              ← agregados analíticos por producto, usuario y año
+│   │   ├── audit-logs/             ← consulta admin-only de auditoría
 │   │   ├── upload/                 ← carga, estado, archivo autenticado, eliminación
-│   │   ├── products/               ← draft actual + lectura/edición por id
+│   │   ├── products/               ← listado global, draft actual, lectura/edición/eliminación por id
 │   │   └── notifications/          ← listado y marcado como leído
 │   ├── services/
 │   │   ├── upload/process-uploaded-file.ts  ← orquestación OCR + NER + persistencia + notificación
@@ -548,7 +552,7 @@ sipac/
 │   ├── models/                    ← User, UploadedFile, AcademicProduct, Notification, AuditLog
 │   ├── middleware/auth.ts
 │   ├── plugins/                   ← 01.mongodb, 02.admin-seed
-│   └── utils/                     ← authz, jwt, env, audit, response, errors, schemas, observability
+│   └── utils/                     ← authz, jwt, env, audit, auth-rate-limit, response, errors, schemas, observability
 ├── tests/
 │   ├── unit/server/               ← OCR, NER, provider, observabilidad y esquema de productos
 │   └── integration/               ← pipeline de procesamiento de archivo

@@ -16,6 +16,7 @@
 | 1.5     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación de respuestas de estado de carga (`/api/upload/:id/status`) para incluir trazabilidad NER (`nerAttemptTrace`) y actualización de notas operativas de cuota multi-proveedor                                                                                    |
 | 1.6     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación al estado real de endpoints: previsualización autenticada de upload implementada y módulo M5A marcado como parcial (draft por ID sí, listado global aún pendiente)                                                                                            |
 | 1.7     | 2026-03-20 | Carlos A. Canabal Cordero | Compendios multi-obra: `POST /api/upload` con `nerForceSingleDocument`; `GET /api/upload/:id/status` con `academicProductIds`, `sourceWorkCount`, `nerForceSingleDocument`; `DELETE /api/upload/:id` afecta todos los productos del archivo.                             |
+| 1.8     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación a endpoints implementados en sesión: `GET /api/products`, `DELETE /api/products/:id`, `GET /api/profile` con agregados, `GET /api/dashboard`, `GET /api/audit-logs`, `GET /api/notifications` con `unreadCount` y rate limiting específico en `auth`          |
 
 ---
 
@@ -31,12 +32,14 @@
 
 ## 2. M1 — Autenticación (`/api/auth/`)
 
-| Método | Ruta                 | Rol requerido | Request Body                              | Respuesta (200/201)           | Errores posibles | RF asociados    | Estado       |
-| ------ | -------------------- | ------------- | ----------------------------------------- | ----------------------------- | ---------------- | --------------- | ------------ |
-| POST   | `/api/auth/register` | Público       | `{ fullName, email, password, program? }` | `{ token, user: UserPublic }` | 400, 409         | RF-001 a RF-003 | Implementado |
-| POST   | `/api/auth/login`    | Público       | `{ email, password }`                     | `{ token, user: UserPublic }` | 400, 401, 403    | RF-004, RF-012  | Implementado |
-| GET    | `/api/auth/me`       | Autenticado   | —                                         | `{ user: UserPublic }`        | 401, 404         | RF-006          | Implementado |
-| POST   | `/api/auth/logout`   | Autenticado   | —                                         | `{ message }`                 | 401              | RF-011          | Implementado |
+| Método | Ruta                 | Rol requerido | Request Body                              | Respuesta (200/201)           | Errores posibles   | RF asociados            | Estado       |
+| ------ | -------------------- | ------------- | ----------------------------------------- | ----------------------------- | ------------------ | ----------------------- | ------------ |
+| POST   | `/api/auth/register` | Público       | `{ fullName, email, password, program? }` | `{ token, user: UserPublic }` | 400, 409, 429      | RF-001 a RF-003, RF-082 | Implementado |
+| POST   | `/api/auth/login`    | Público       | `{ email, password }`                     | `{ token, user: UserPublic }` | 400, 401, 403, 429 | RF-004, RF-012, RF-082  | Implementado |
+| GET    | `/api/auth/me`       | Autenticado   | —                                         | `{ user: UserPublic }`        | 401, 404           | RF-006                  | Implementado |
+| POST   | `/api/auth/logout`   | Autenticado   | —                                         | `{ message }`                 | 401                | RF-011                  | Implementado |
+
+> **Nota:** `POST /api/auth/register` y `POST /api/auth/login` aplican un rate limit específico de **10 req/min por IP** además del rate limiting global, y responden con encabezados `X-RateLimit-Limit`, `X-RateLimit-Remaining` y `Retry-After` cuando corresponde.
 
 > **Endpoints planificados (no implementados aún):**
 >
@@ -60,25 +63,27 @@
 
 ## 4. M5A — Productos Académicos (`/api/products/`)
 
-| Método | Ruta                           | Rol requerido        | Request Body / Query                                      | Respuesta              | Errores posibles   | RF asociados    | Estado       |
-| ------ | ------------------------------ | -------------------- | --------------------------------------------------------- | ---------------------- | ------------------ | --------------- | ------------ |
-| GET    | `/api/products`                | Autenticado          | Query planificada: `productType?, search?, page?, limit?` | `{ products[], meta }` | 401                | RF-052 a RF-061 | Pendiente    |
-| GET    | `/api/products/drafts/current` | Autenticado          | —                                                         | `{ draft o null }`     | 401                | RF-052, RF-056  | Implementado |
-| GET    | `/api/products/:id`            | Autenticado          | —                                                         | `{ draft }`            | 401, 403, 404      | RF-052, RF-056  | Implementado |
-| PATCH  | `/api/products/:id`            | Autenticado (propio) | `{ manualMetadata?, action?, productType?, ... }`         | `{ draft }`            | 400, 401, 403, 404 | RF-056          | Implementado |
-| DELETE | `/api/products/:id`            | Autenticado (propio) | —                                                         | `{ message }`          | 401, 403, 404      | RF-057          | Pendiente    |
+| Método | Ruta                           | Rol requerido                | Request Body / Query                                                       | Respuesta              | Errores posibles   | RF asociados           | Estado       |
+| ------ | ------------------------------ | ---------------------------- | -------------------------------------------------------------------------- | ---------------------- | ------------------ | ---------------------- | ------------ |
+| GET    | `/api/products`                | Autenticado                  | Query: `productType?, search?, institution?, owner?, year?, page?, limit?` | `{ products[], meta }` | 401                | RF-052 a RF-061        | Implementado |
+| GET    | `/api/products/drafts/current` | Autenticado                  | —                                                                          | `{ draft o null }`     | 401                | RF-052, RF-056         | Implementado |
+| GET    | `/api/products/:id`            | Autenticado                  | —                                                                          | `{ draft }`            | 401, 403, 404      | RF-052, RF-056, RF-060 | Implementado |
+| PATCH  | `/api/products/:id`            | Autenticado (propio o admin) | `{ manualMetadata?, action?, productType?, ... }`                          | `{ draft }`            | 400, 401, 403, 404 | RF-056, RF-061         | Implementado |
+| DELETE | `/api/products/:id`            | Autenticado (propio o admin) | —                                                                          | `{ deleted: true }`    | 401, 403, 404      | RF-057, RF-061         | Implementado |
 
-> **Nota M5A (estado parcial, 14/03/2026):** Están implementados `GET /api/products/drafts/current`, `GET /api/products/:id` y `PATCH /api/products/:id`. Aún falta `GET /api/products` (listado global con filtros) y `DELETE /api/products/:id`.
+> **Nota M5A (actualizado al 23/03/2026):** `GET /api/products` lista únicamente productos `confirmed` y no eliminados, con filtros, búsqueda y paginación. `GET /api/products/:id` permite consultar productos confirmados a cualquier autenticado y restringe borradores a propietario o `admin`. `PATCH` y `DELETE` permiten edición/eliminación a propietario o `admin`.
 
 ---
 
 ## 5. M5B — Dashboard (`/api/dashboard/`)
 
-| Método | Ruta                        | Rol requerido | Query                                       | Respuesta            | Errores posibles | RF asociados    | Estado    |
-| ------ | --------------------------- | ------------- | ------------------------------------------- | -------------------- | ---------------- | --------------- | --------- |
-| GET    | `/api/dashboard/summary`    | Autenticado   | `dateFrom?, dateTo?, productType?, userId?` | `{ summary }`        | 401, 403         | RF-062 a RF-069 | Pendiente |
-| GET    | `/api/dashboard/export/pdf` | Autenticado   | `dateFrom?, dateTo?`                        | Archivo PDF (stream) | 401, 403         | RF-070          | Pendiente |
-| GET    | `/api/dashboard/export/csv` | Autenticado   | `dateFrom?, dateTo?`                        | Archivo CSV (stream) | 401, 403         | RF-071          | Pendiente |
+| Método | Ruta                        | Rol requerido | Query                              | Respuesta                                                                           | Errores posibles | RF asociados            | Estado       |
+| ------ | --------------------------- | ------------- | ---------------------------------- | ----------------------------------------------------------------------------------- | ---------------- | ----------------------- | ------------ |
+| GET    | `/api/dashboard`            | Autenticado   | `from?, to?, productType?, owner?` | `{ totalConfirmedProducts, totalOwners, dateRange, byType[], byOwner[], byYear[] }` | 401              | RF-062 a RF-069, RF-072 | Implementado |
+| GET    | `/api/dashboard/export/pdf` | Autenticado   | `dateFrom?, dateTo?`               | Archivo PDF (stream)                                                                | 401, 403         | RF-070                  | Pendiente    |
+| GET    | `/api/dashboard/export/csv` | Autenticado   | `dateFrom?, dateTo?`               | Archivo CSV (stream)                                                                | 401, 403         | RF-071                  | Pendiente    |
+
+> **Nota M5B:** El dashboard implementado agrega exclusivamente productos `confirmed` y no eliminados lógicamente. La base analítica ya está operativa; las exportaciones siguen pendientes.
 
 ---
 
@@ -95,26 +100,36 @@
 
 ## 7. M6 — Perfil (`/api/profile/`)
 
-| Método | Ruta                           | Rol requerido | Request Body                       | Respuesta     | Errores posibles | RF asociados | Estado       |
-| ------ | ------------------------------ | ------------- | ---------------------------------- | ------------- | ---------------- | ------------ | ------------ |
-| GET    | `/api/profile`                 | Autenticado   | —                                  | `{ user }`    | 401, 404         | RF-073       | Implementado |
-| PATCH  | `/api/profile`                 | Autenticado   | `{ fullName? }`                    | `{ user }`    | 400, 401         | RF-074       | Implementado |
-| POST   | `/api/profile/change-password` | Autenticado   | `{ currentPassword, newPassword }` | `{ message }` | 400, 401         | RF-075       | Implementado |
+| Método | Ruta                           | Rol requerido | Request Body                       | Respuesta                                                            | Errores posibles | RF asociados   | Estado       |
+| ------ | ------------------------------ | ------------- | ---------------------------------- | -------------------------------------------------------------------- | ---------------- | -------------- | ------------ |
+| GET    | `/api/profile`                 | Autenticado   | —                                  | `{ user, totalOwnProducts, productSummaryByType[], latestDrafts[] }` | 401, 404         | RF-073, RF-076 | Implementado |
+| PATCH  | `/api/profile`                 | Autenticado   | `{ fullName? }`                    | `{ user }`                                                           | 400, 401         | RF-074         | Implementado |
+| POST   | `/api/profile/change-password` | Autenticado   | `{ currentPassword, newPassword }` | `{ message }`                                                        | 400, 401         | RF-075         | Implementado |
 
-> **Nota:** El campo `productsSummary` (RF-076) aún no se incluye en la respuesta de `GET /api/profile`. Se agregará cuando el módulo M5A esté implementado.
-
----
-
-## 8. M8 — Notificaciones (`/api/notifications/`)
-
-| Método | Ruta                          | Rol requerido | Request Body         | Respuesta             | Errores posibles | RF asociados | Estado       |
-| ------ | ----------------------------- | ------------- | -------------------- | --------------------- | ---------------- | ------------ | ------------ |
-| GET    | `/api/notifications`          | Autenticado   | Query: `unreadOnly?` | `{ notifications[] }` | 401              | RF-086       | Implementado |
-| PATCH  | `/api/notifications/:id/read` | Autenticado   | —                    | `{ notification }`    | 401, 404         | RF-086       | Implementado |
+> **Nota:** `GET /api/profile` devuelve agregados calculados sobre productos propios `confirmed` (`totalOwnProducts`, `productSummaryByType`) y hasta 3 borradores recientes (`latestDrafts`) para reutilización en la UI de perfil.
 
 ---
 
-## 9. M9 — Chat Inteligente (`/api/chat/`)
+## 8. M7 — Auditoría (`/api/audit-logs/`)
+
+| Método | Ruta              | Rol requerido | Request Body / Query                                            | Respuesta          | Errores posibles | RF asociados    | Estado       |
+| ------ | ----------------- | ------------- | --------------------------------------------------------------- | ------------------ | ---------------- | --------------- | ------------ |
+| GET    | `/api/audit-logs` | admin         | Query: `resource?, action?, userId?, from?, to?, page?, limit?` | `{ logs[], meta }` | 401, 403         | RF-079 a RF-081 | Implementado |
+
+> **Nota:** El endpoint de auditoría es de solo lectura y está restringido al rol `admin`. Soporta filtros por recurso, acción, usuario y rango de fechas.
+
+---
+
+## 9. M8 — Notificaciones (`/api/notifications/`)
+
+| Método | Ruta                          | Rol requerido | Request Body         | Respuesta                          | Errores posibles | RF asociados | Estado       |
+| ------ | ----------------------------- | ------------- | -------------------- | ---------------------------------- | ---------------- | ------------ | ------------ |
+| GET    | `/api/notifications`          | Autenticado   | Query: `unreadOnly?` | `{ notifications[], unreadCount }` | 401              | RF-086       | Implementado |
+| PATCH  | `/api/notifications/:id/read` | Autenticado   | —                    | `{ notification }`                 | 401, 404         | RF-086       | Implementado |
+
+---
+
+## 10. M9 — Chat Inteligente (`/api/chat/`)
 
 | Método | Ruta                          | Rol requerido | Request Body / Query           | Respuesta                   | Errores posibles | RF asociados    | Estado    |
 | ------ | ----------------------------- | ------------- | ------------------------------ | --------------------------- | ---------------- | --------------- | --------- |
@@ -127,7 +142,7 @@
 
 ---
 
-## 10. Archivos — Descarga y Previsualización
+## 11. Archivos — Descarga y Previsualización
 
 | Método | Ruta                   | Rol requerido        | Request Body / Query | Respuesta                                              | Errores posibles | RF asociados | Estado       |
 | ------ | ---------------------- | -------------------- | -------------------- | ------------------------------------------------------ | ---------------- | ------------ | ------------ |
@@ -137,7 +152,7 @@
 
 ---
 
-## 11. Códigos de Error Estándar
+## 12. Códigos de Error Estándar
 
 | Código HTTP | Código interno         | Descripción                                 |
 | ----------- | ---------------------- | ------------------------------------------- |
@@ -153,12 +168,12 @@
 
 ---
 
-## 12. Rate Limiting
+## 13. Rate Limiting
 
-| Scope                     | Límite                  | Aplica a                 | RF/RNF asociado                             | Estado                                                             |
-| ------------------------- | ----------------------- | ------------------------ | ------------------------------------------- | ------------------------------------------------------------------ |
-| Global por IP             | 150 tokens / 5 min      | Todos los endpoints      | RNF-009                                     | Implementado (`nuxt-security`)                                     |
-| Tamaño de request         | 2 MB body / 8 MB upload | Todos los endpoints      | RF-023                                      | Implementado (`nuxt-security`)                                     |
-| Autenticación por IP      | 10 req/min              | `/api/auth/*`            | RF-082                                      | Pendiente (rate limiting granular)                                 |
-| Procesamiento por usuario | 15 documentos/hora      | `/api/upload, /api/chat` | Cuota proveedores IA (Gemini/Groq/Cerebras) | Pendiente (configurado en runtimeConfig, sin enforcement granular) |
-| Chat por usuario          | 30 req/hora             | `/api/chat`              | Cuota proveedores IA (Gemini/Cerebras)      | Pendiente                                                          |
+| Scope                     | Límite                  | Aplica a                                | RF/RNF asociado                             | Estado                                                             |
+| ------------------------- | ----------------------- | --------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
+| Global por IP             | 150 tokens / 5 min      | Todos los endpoints                     | RNF-009                                     | Implementado (`nuxt-security`)                                     |
+| Tamaño de request         | 2 MB body / 8 MB upload | Todos los endpoints                     | RF-023                                      | Implementado (`nuxt-security`)                                     |
+| Autenticación por IP      | 10 req/min              | `/api/auth/register`, `/api/auth/login` | RF-082                                      | Implementado (`server/utils/auth-rate-limit.ts`)                   |
+| Procesamiento por usuario | 15 documentos/hora      | `/api/upload, /api/chat`                | Cuota proveedores IA (Gemini/Groq/Cerebras) | Pendiente (configurado en runtimeConfig, sin enforcement granular) |
+| Chat por usuario          | 30 req/hora             | `/api/chat`                             | Cuota proveedores IA (Gemini/Cerebras)      | Pendiente                                                          |

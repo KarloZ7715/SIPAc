@@ -15,6 +15,7 @@
 | 1.4     | 2026-03-11 | Carlos A. Canabal Cordero | Alineación al pipeline implementado M2/M8: `productType` obligatorio en `uploaded_files`, índice único por `sourceFile` en `academic_products` y persistencia de notificaciones con referencia opcional al producto o archivo                                          |
 | 1.5     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación al estado real del modelo: `productType` opcional en `uploaded_files`, discriminadores extendidos a 10 tipos en `academic_products`, evidencia por entidad (`anchors`) y trazabilidad de intentos NER (`nerAttemptTrace`)                                   |
 | 1.6     | 2026-03-20 | Carlos A. Canabal Cordero | Compendios multi-obra: `segmentIndex`, `segmentLabel`, `segmentBounds` en `academic_products`; índice único parcial `ux_source_file_segment` `{ sourceFile, segmentIndex }`; `nerForceSingleDocument` y `sourceWorkCount` en `uploaded_files`                          |
+| 1.7     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación a consultas operativas vigentes: repositorio global sobre productos `confirmed`, agregados de dashboard excluyendo borradores y nota de `unreadCount` derivado en notificaciones                                                                            |
 
 ---
 
@@ -1062,6 +1063,8 @@ notificationSchema.index(
 | `{ recipientId, isRead, createdAt }` | Compuesto | RF-086: listar notificaciones no leídas del usuario, ordenadas por fecha         |
 | `{ createdAt }` TTL 90 días          | TTL       | Limpieza automática: notificaciones antiguas se eliminan sin intervención manual |
 
+> **Nota operativa:** El endpoint `GET /api/notifications` calcula `unreadCount` con `countDocuments()` en tiempo de consulta. Ese valor no se persiste dentro del documento `notifications`.
+
 ---
 
 ### 3.6 `chat_conversations` — Historial de conversaciones del chat (M9)
@@ -1211,22 +1214,27 @@ userSchema.methods.resetLoginAttempts = async function () {
 
 ## 6. Patrones de Consulta Principales
 
-### 6.1 Repositorio — Listar productos por usuario con paginación (RF-052 a RF-061)
+### 6.1 Repositorio — Listar productos confirmados con paginación (RF-052 a RF-061)
 
 ```typescript
-// Paginación cursor-based — más eficiente que skip/limit
-async function getProductsByUser(
-  userId: string,
+// El repositorio global visible para usuarios autenticados expone solo productos confirmados.
+async function getRepositoryProducts(
   productType?: string,
-  cursor?: string,
+  owner?: string,
+  page: number = 1,
   limit: number = 20,
 ) {
-  const filter: Record<string, unknown> = { owner: userId }
+  const filter: Record<string, unknown> = {
+    isDeleted: { $ne: true },
+    reviewStatus: 'confirmed',
+  }
   if (productType) filter.productType = productType
-  if (cursor) filter._id = { $lt: new Types.ObjectId(cursor) }
+  if (owner) filter.owner = owner
+  const skip = (page - 1) * limit
 
   return AcademicProduct.find(filter)
-    .sort({ _id: -1 })
+    .sort({ 'manualMetadata.date': -1, createdAt: -1 })
+    .skip(skip)
     .limit(limit)
     .populate('sourceFile', 'originalFilename mimeType processingStatus')
     .lean()
@@ -1239,6 +1247,8 @@ async function getProductsByUser(
 async function searchProducts(query: string, userId?: string) {
   const filter: Record<string, unknown> = {
     $text: { $search: query },
+    isDeleted: { $ne: true },
+    reviewStatus: 'confirmed',
   }
   if (userId) filter.owner = userId
 
@@ -1254,7 +1264,7 @@ async function searchProducts(query: string, userId?: string) {
 ```typescript
 async function countByProductType() {
   return AcademicProduct.aggregate([
-    { $match: { isDeleted: { $ne: true } } },
+    { $match: { isDeleted: { $ne: true }, reviewStatus: 'confirmed' } },
     {
       $group: {
         _id: '$productType',
@@ -1271,23 +1281,50 @@ async function countByProductType() {
 
 ```typescript
 async function productsByYear(dateFrom?: Date, dateTo?: Date) {
-  const matchStage: Record<string, unknown> = { isDeleted: { $ne: true } }
+  const matchStage: Record<string, unknown> = {
+    isDeleted: { $ne: true },
+    reviewStatus: 'confirmed',
+  }
 
   if (dateFrom || dateTo) {
-    matchStage['manualMetadata.date'] = {}
-    if (dateFrom) (matchStage['manualMetadata.date'] as any).$gte = dateFrom
-    if (dateTo) (matchStage['manualMetadata.date'] as any).$lte = dateTo
+    matchStage.$expr = {
+      $and: [
+        ...(dateFrom
+          ? [
+              {
+                $gte: [
+                  { $ifNull: ['$manualMetadata.date', '$extractedEntities.date.value'] },
+                  dateFrom,
+                ],
+              },
+            ]
+          : []),
+        ...(dateTo
+          ? [
+              {
+                $lte: [
+                  { $ifNull: ['$manualMetadata.date', '$extractedEntities.date.value'] },
+                  dateTo,
+                ],
+              },
+            ]
+          : []),
+      ],
+    }
   }
 
   return AcademicProduct.aggregate([
     { $match: matchStage },
     {
+      $addFields: {
+        effectiveDate: { $ifNull: ['$manualMetadata.date', '$extractedEntities.date.value'] },
+      },
+    },
+    { $match: { effectiveDate: { $type: 'date' } } },
+    {
       $group: {
-        _id: { $year: '$manualMetadata.date' },
+        _id: { $year: '$effectiveDate' },
         total: { $sum: 1 },
-        byType: {
-          $push: '$productType',
-        },
       },
     },
     { $sort: { _id: -1 } },
@@ -1300,7 +1337,7 @@ async function productsByYear(dateFrom?: Date, dateTo?: Date) {
 ```typescript
 async function productivityByUser() {
   return AcademicProduct.aggregate([
-    { $match: { isDeleted: { $ne: true } } },
+    { $match: { isDeleted: { $ne: true }, reviewStatus: 'confirmed' } },
     {
       $group: {
         _id: '$owner',
@@ -1336,10 +1373,10 @@ async function productivityByUser() {
 
 SIPAc implementa dos estrategias de paginación según el contexto:
 
-| Estrategia                           | Cuándo usar                                                        | Justificación                                                                                                        |
-| ------------------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| **Cursor-based** (`_id` como cursor) | Listados de productos del repositorio (M5A), listados de archivos  | Rendimiento constante independientemente de la profundidad de página; no sufre el problema de `skip(N)` con N grande |
-| **Offset-based** (`skip/limit`)      | Dashboard con paginación numérica, resultados de búsqueda de texto | Permite saltar a una página específica; el volumen de datos del dashboard es acotado                                 |
+| Estrategia                           | Cuándo usar                                                         | Justificación                                                                                                        |
+| ------------------------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Cursor-based** (`_id` como cursor) | Listados de archivos y flujos internos de procesamiento             | Rendimiento constante independientemente de la profundidad de página; no sufre el problema de `skip(N)` con N grande |
+| **Offset-based** (`skip/limit`)      | Repositorio implementado actualmente, dashboard y búsqueda de texto | Permite saltar a una página específica; coincide con los endpoints `page/limit` vigentes                             |
 
 Ambas estrategias respetan RF-059: mínimo 10, máximo 50 registros por página.
 
