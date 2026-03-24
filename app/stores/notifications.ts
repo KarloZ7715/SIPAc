@@ -1,16 +1,13 @@
-import type { ApiSuccessResponse, NotificationPublic } from '~~/app/types'
+import type { ApiSuccessResponse, NotificationsListDTO, NotificationPublic } from '~~/app/types'
 
-type NotificationsResponse = ApiSuccessResponse<{ notifications: NotificationPublic[] }>
+type NotificationsResponse = ApiSuccessResponse<NotificationsListDTO>
 type NotificationResponse = ApiSuccessResponse<{ notification: NotificationPublic }>
 
 export const useNotificationsStore = defineStore('notifications', () => {
   const notifications = ref<NotificationPublic[]>([])
   const loading = ref(false)
+  const unreadCount = ref(0)
   let pollTimer: ReturnType<typeof setInterval> | null = null
-
-  const unreadCount = computed(
-    () => notifications.value.filter((notification) => !notification.isRead).length,
-  )
 
   async function fetchNotifications(unreadOnly = false) {
     loading.value = true
@@ -21,6 +18,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
       })
 
       notifications.value = response.data.notifications
+      unreadCount.value = response.data.unreadCount
     } finally {
       loading.value = false
     }
@@ -37,6 +35,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     notifications.value = notifications.value.map((notification) =>
       notification._id === notificationId ? response.data.notification : notification,
     )
+    unreadCount.value = notifications.value.filter((notification) => !notification.isRead).length
   }
 
   function startPolling(intervalMs = 15000) {
@@ -48,6 +47,19 @@ export const useNotificationsStore = defineStore('notifications', () => {
     pollTimer = setInterval(() => {
       void fetchNotifications()
     }, intervalMs)
+  }
+
+  function refreshOnFocus() {
+    if (!import.meta.client) {
+      return
+    }
+
+    const handleFocus = () => {
+      void fetchNotifications()
+    }
+
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
   }
 
   function stopPolling() {
@@ -64,6 +76,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     fetchNotifications,
     markAsRead,
     startPolling,
+    refreshOnFocus,
     stopPolling,
   }
 })

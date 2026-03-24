@@ -27,10 +27,17 @@ export default defineEventHandler(async (event) => {
   product.deletedAt = new Date()
   await product.save()
 
-  await UploadedFile.findByIdAndUpdate(product.sourceFile, {
-    isDeleted: true,
-    deletedAt: new Date(),
+  const remainingProducts = await AcademicProduct.countDocuments({
+    sourceFile: product.sourceFile,
+    isDeleted: false,
   })
+
+  if (remainingProducts === 0) {
+    await UploadedFile.findByIdAndUpdate(product.sourceFile, {
+      isDeleted: true,
+      deletedAt: new Date(),
+    })
+  }
 
   await logAudit(event, {
     userId: auth.sub,

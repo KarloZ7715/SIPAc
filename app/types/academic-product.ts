@@ -370,6 +370,46 @@ export interface AcademicProductPublic {
   patentClassification?: string
 }
 
+export interface ProductSummaryByTypeItem {
+  productType: ProductType
+  total: number
+}
+
+export interface ProductDashboardSummary {
+  totalConfirmedProducts: number
+  totalOwners: number
+  dateRange?: {
+    from?: string
+    to?: string
+  }
+  byType: Array<{
+    productType: ProductType
+    total: number
+  }>
+  byOwner: Array<{
+    ownerId: string
+    ownerName: string
+    total: number
+  }>
+  byYear: Array<{
+    year: number
+    total: number
+  }>
+}
+
+export interface DashboardQuery {
+  productType?: ProductType
+  owner?: string
+  from?: string
+  to?: string
+}
+
+export interface ProductAccessPolicy {
+  canView: boolean
+  canEdit: boolean
+  canDelete: boolean
+}
+
 export type ProductReviewAction = 'save-draft' | 'confirm'
 
 export interface UpdateAcademicProductDTO {
@@ -512,4 +552,5 @@ export interface UpdateAcademicProductDTO {
 export interface ProductWorkspaceDraftDTO {
   product: AcademicProductPublic
   uploadedFile: UploadedFileWorkspacePublic
+  access?: ProductAccessPolicy
 }

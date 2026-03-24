@@ -1,4 +1,5 @@
 import type { DatabaseId } from './database'
+import type { ProductReviewStatus, ProductType } from './academic-product'
 
 export const USER_ROLES = ['admin', 'docente'] as const
 export type UserRole = (typeof USER_ROLES)[number]
@@ -27,6 +28,22 @@ export interface UserPublic {
   isActive: boolean
   program?: string
   createdAt: string
+}
+
+export interface ProfileSummaryResponse {
+  user: UserPublic
+  totalOwnProducts: number
+  productSummaryByType: Array<{
+    productType: ProductType
+    total: number
+  }>
+  latestDrafts: Array<{
+    _id: string
+    productType: ProductType
+    reviewStatus: ProductReviewStatus
+    updatedAt: string
+    title?: string
+  }>
 }
 
 export interface CreateUserDTO {

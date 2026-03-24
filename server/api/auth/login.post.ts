@@ -10,8 +10,11 @@ import {
 } from '~~/server/utils/errors'
 import { ok } from '~~/server/utils/response'
 import { logAudit } from '~~/server/utils/audit'
+import { enforceAuthRateLimit } from '~~/server/utils/auth-rate-limit'
 
 export default defineEventHandler(async (event) => {
+  enforceAuthRateLimit(event, 'auth:login')
+
   const body = await readBody(event)
 
   const result = loginSchema.safeParse(body)

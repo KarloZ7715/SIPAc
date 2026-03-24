@@ -42,3 +42,8 @@ export interface NotificationPublic {
 export interface NotificationListQuery {
   unreadOnly?: boolean
 }
+
+export interface NotificationsListDTO {
+  notifications: NotificationPublic[]
+  unreadCount: number
+}

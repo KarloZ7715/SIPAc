@@ -87,6 +87,9 @@ export const useDocumentsStore = defineStore('documents', () => {
     () => !!workspaceDraftFile.value || !!draftProduct.value || !!activeTrackedDocument.value,
   )
   const hasPersistedDraft = computed(() => !!draftProduct.value)
+  const draftAccess = computed(() => draftProduct.value?.access)
+  const canEditDraft = computed(() => draftAccess.value?.canEdit !== false)
+  const canDeleteDraft = computed(() => draftAccess.value?.canDelete !== false)
   const activeTrackedDocument = computed(() => {
     if (!activeUploadId.value) {
       return null
@@ -99,7 +102,8 @@ export const useDocumentsStore = defineStore('documents', () => {
     () =>
       PRODUCT_TYPES.includes(workspaceDraftProductType.value) &&
       workspaceDetectedMetadata.title.trim().length > 0 &&
-      workspaceDetectedMetadata.authors.some((author) => author.trim().length > 0),
+      workspaceDetectedMetadata.authors.some((author) => author.trim().length > 0) &&
+      canEditDraft.value,
   )
 
   function resetWorkspaceMetadata() {
@@ -443,6 +447,10 @@ export const useDocumentsStore = defineStore('documents', () => {
   }
 
   async function cancelDraft() {
+    if (!canDeleteDraft.value) {
+      return
+    }
+
     if (!activeUploadId.value) {
       clearWorkspaceDraft()
       return
@@ -463,9 +471,25 @@ export const useDocumentsStore = defineStore('documents', () => {
       return
     }
 
+    void pollActiveStatuses()
     pollTimer = setInterval(() => {
       void pollActiveStatuses()
     }, intervalMs)
+  }
+
+  function refreshOnFocus() {
+    if (!import.meta.client) {
+      return
+    }
+
+    const handleFocus = () => {
+      if (activeDocuments.value.length > 0) {
+        void pollActiveStatuses()
+      }
+    }
+
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
   }
 
   function stopPolling() {
@@ -566,6 +590,9 @@ export const useDocumentsStore = defineStore('documents', () => {
     draftProduct,
     activeDocuments,
     activeTrackedDocument,
+    draftAccess,
+    canEditDraft,
+    canDeleteDraft,
     hasPersistedDraft,
     canConfirmDraft,
     hasWorkspaceDraft,
@@ -584,6 +611,7 @@ export const useDocumentsStore = defineStore('documents', () => {
     confirmDraft,
     cancelDraft,
     startPolling,
+    refreshOnFocus,
     stopPolling,
     setWorkspaceProductType,
     prepareWorkspaceDraft,

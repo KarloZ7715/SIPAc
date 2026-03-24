@@ -36,10 +36,18 @@ export default defineEventHandler(async (event) => {
     .lean()
 
   return ok({
-    draft: buildProductWorkspaceDraft(product, {
-      ...uploadedFile,
-      academicProductIds: siblingProducts.map((p) => p._id),
-      sourceWorkCount: uploadedFile.sourceWorkCount ?? siblingProducts.length,
-    }),
+    draft: buildProductWorkspaceDraft(
+      product,
+      {
+        ...uploadedFile,
+        academicProductIds: siblingProducts.map((p) => p._id),
+        sourceWorkCount: uploadedFile.sourceWorkCount ?? siblingProducts.length,
+      },
+      {
+        canView: true,
+        canEdit: true,
+        canDelete: true,
+      },
+    ),
   })
 })

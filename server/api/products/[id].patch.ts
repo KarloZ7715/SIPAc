@@ -374,6 +374,10 @@ export default defineEventHandler(async (event) => {
   })
 
   return ok({
-    draft: buildProductWorkspaceDraft(product.toJSON(), uploadedFile),
+    draft: buildProductWorkspaceDraft(product.toJSON(), uploadedFile, {
+      canView: true,
+      canEdit: true,
+      canDelete: true,
+    }),
   })
 })

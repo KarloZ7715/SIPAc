@@ -19,7 +19,13 @@ export default defineEventHandler(async (event) => {
     .sort({ createdAt: -1 })
     .limit(50)
 
+  const unreadCount = await Notification.countDocuments({
+    recipientId: auth.sub,
+    isRead: false,
+  })
+
   return ok({
     notifications: notifications.map((notification) => notification.toJSON()),
+    unreadCount,
   })
 })

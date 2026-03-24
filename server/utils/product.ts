@@ -1,5 +1,6 @@
 import type {
   AcademicProductPublic,
+  ProductAccessPolicy,
   ProductWorkspaceDraftDTO,
   ProductReviewStatus,
   ProductType,
@@ -431,6 +432,7 @@ export function toUploadedFileWorkspacePublic(
 export function buildProductWorkspaceDraft(
   product: ProductLike,
   uploadedFile: UploadedFileLike,
+  access?: ProductAccessPolicy,
 ): ProductWorkspaceDraftDTO {
   return {
     product: toAcademicProductPublic(product),
@@ -440,5 +442,6 @@ export function buildProductWorkspaceDraft(
       academicProductId: product._id,
       reviewStatus: product.reviewStatus,
     }),
+    access,
   }
 }

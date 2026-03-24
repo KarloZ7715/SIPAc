@@ -6,6 +6,7 @@ const { user, isAdmin, logout } = useAuth()
 const notificationsStore = useNotificationsStore()
 
 const showNotifications = ref(false)
+let stopNotificationsFocusRefresh: (() => void) | undefined
 
 const initials = computed(() => {
   if (!user.value?.fullName) return '?'
@@ -31,6 +32,30 @@ const routeMeta = computed(() => {
       eyebrow: 'Administración',
       title: 'Gestión de usuarios',
       description: 'Cuentas, roles y estado de acceso institucional.',
+    }
+  }
+
+  if (route.path === '/dashboard') {
+    return {
+      eyebrow: 'Analítica',
+      title: 'Dashboard académico',
+      description: 'Indicadores consolidados del repositorio confirmado.',
+    }
+  }
+
+  if (route.path === '/chat') {
+    return {
+      eyebrow: 'M9 · Chat IA',
+      title: 'Repositorio conversacional',
+      description: 'Consultas grounded sobre productos confirmados con historial persistido.',
+    }
+  }
+
+  if (route.path === '/admin/audit-logs') {
+    return {
+      eyebrow: 'Auditoría',
+      title: 'Registro de auditoría',
+      description: 'Trazabilidad de accesos y operaciones críticas del sistema.',
     }
   }
 
@@ -96,16 +121,21 @@ watch(
   (nextUserId) => {
     if (nextUserId) {
       notificationsStore.startPolling()
+      stopNotificationsFocusRefresh?.()
+      stopNotificationsFocusRefresh = notificationsStore.refreshOnFocus()
       return
     }
 
     notificationsStore.stopPolling()
+    stopNotificationsFocusRefresh?.()
+    stopNotificationsFocusRefresh = undefined
   },
   { immediate: true },
 )
 
 onBeforeUnmount(() => {
   notificationsStore.stopPolling()
+  stopNotificationsFocusRefresh?.()
 })
 </script>
 

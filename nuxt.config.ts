@@ -1,13 +1,20 @@
 const maxUploadFileSizeBytes = 20_971_520
 const maxMultipartRequestSizeBytes = 22_020_096
 const isProduction = process.env.NODE_ENV === 'production'
+const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true'
 const hasSentryDsn = Boolean(process.env.SENTRY_DSN)
 const enableSentry = isProduction && hasSentryDsn
+const modules = ['@nuxt/ui', '@pinia/nuxt', '@nuxt/eslint'] as string[]
+
+if (!isTest) {
+  modules.push('nuxt-security')
+  modules.push('@sentry/nuxt/module')
+}
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
-  devtools: { enabled: true },
-  modules: ['@nuxt/ui', '@pinia/nuxt', '@nuxt/eslint', 'nuxt-security', '@sentry/nuxt/module'],
+  devtools: { enabled: !isTest },
+  modules,
   css: ['~/assets/css/main.css'],
 
   typescript: {

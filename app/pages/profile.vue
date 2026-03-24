@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import type { ApiSuccessResponse, ProfileSummaryResponse } from '~~/app/types'
 import { updateProfileSchema, changePasswordSchema } from '~~/server/utils/schemas/auth'
 
 const { user, fetchUser } = useAuth()
 const toast = useToast()
+const profileSummary = ref<ProfileSummaryResponse | null>(null)
+const summaryLoading = ref(false)
 
 const profileState = reactive({ fullName: user.value?.fullName || '' })
 const passwordState = reactive({ currentPassword: '', newPassword: '' })
@@ -16,6 +19,16 @@ watch(
   },
 )
 
+async function loadProfileSummary() {
+  summaryLoading.value = true
+  try {
+    const response = await $fetch<ApiSuccessResponse<ProfileSummaryResponse>>('/api/profile')
+    profileSummary.value = response.data
+  } finally {
+    summaryLoading.value = false
+  }
+}
+
 async function onProfileSubmit() {
   profileSaving.value = true
   try {
@@ -24,6 +37,7 @@ async function onProfileSubmit() {
       body: profileState,
     })
     await fetchUser()
+    await loadProfileSummary()
     toast.add({ title: 'Perfil actualizado', icon: 'i-lucide-check-circle', color: 'success' })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
@@ -52,6 +66,10 @@ async function onPasswordSubmit() {
     passwordSaving.value = false
   }
 }
+
+onMounted(() => {
+  void loadProfileSummary()
+})
 </script>
 
 <template>
@@ -142,6 +160,75 @@ async function onPasswordSubmit() {
       </SipacCard>
 
       <div class="space-y-6">
+        <SipacCard>
+          <template #header>
+            <div class="flex items-center gap-3">
+              <span
+                class="flex size-11 items-center justify-center rounded-2xl bg-earth-50 text-earth-700"
+              >
+                <UIcon name="i-lucide-chart-column-big" class="size-5" aria-hidden="true" />
+              </span>
+              <div>
+                <h2 class="font-semibold text-text">Resumen académico</h2>
+                <p class="text-sm text-text-muted">Solo productos confirmados del repositorio</p>
+              </div>
+            </div>
+          </template>
+
+          <div v-if="summaryLoading" class="grid gap-3 sm:grid-cols-2">
+            <div class="panel-muted p-4">
+              <p class="text-sm text-text-muted">Cargando resumen...</p>
+            </div>
+          </div>
+
+          <div v-else class="space-y-4">
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div class="panel-muted p-4">
+                <p class="text-xs font-semibold tracking-[0.14em] text-text-soft uppercase">
+                  Total confirmado
+                </p>
+                <p class="mt-2 text-3xl font-semibold text-text">
+                  {{ profileSummary?.totalOwnProducts ?? 0 }}
+                </p>
+              </div>
+
+              <div class="panel-muted p-4">
+                <p class="text-xs font-semibold tracking-[0.14em] text-text-soft uppercase">
+                  Borradores recientes
+                </p>
+                <p class="mt-2 text-3xl font-semibold text-text">
+                  {{ profileSummary?.latestDrafts.length ?? 0 }}
+                </p>
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <p class="text-sm font-semibold text-text">Productos por tipo</p>
+              <div
+                v-if="profileSummary?.productSummaryByType.length"
+                class="grid gap-3 sm:grid-cols-2"
+              >
+                <div
+                  v-for="item in profileSummary.productSummaryByType"
+                  :key="item.productType"
+                  class="panel-muted flex items-center justify-between gap-3 p-4"
+                >
+                  <p class="text-sm text-text-muted">{{ item.productType }}</p>
+                  <p class="text-lg font-semibold text-text">{{ item.total }}</p>
+                </div>
+              </div>
+              <UAlert
+                v-else
+                color="neutral"
+                variant="soft"
+                icon="i-lucide-info"
+                title="Aún no hay productos confirmados"
+                description="Cuando confirmes productos en el workspace, el resumen aparecerá aquí."
+              />
+            </div>
+          </div>
+        </SipacCard>
+
         <SipacCard>
           <template #header>
             <div class="flex items-center gap-3">

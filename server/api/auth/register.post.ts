@@ -4,8 +4,11 @@ import { signToken } from '~~/server/utils/jwt'
 import { createValidationError, createConflictError } from '~~/server/utils/errors'
 import { ok } from '~~/server/utils/response'
 import { logAudit } from '~~/server/utils/audit'
+import { enforceAuthRateLimit } from '~~/server/utils/auth-rate-limit'
 
 export default defineEventHandler(async (event) => {
+  enforceAuthRateLimit(event, 'auth:register')
+
   const body = await readBody(event)
 
   const result = registerSchema.safeParse(body)

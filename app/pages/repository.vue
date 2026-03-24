@@ -1,207 +1,192 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <AppHeader />
+  <div class="space-y-8">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-2xl font-bold text-gray-900">Repositorio de Productos Academicos</h1>
+      <p class="mt-1 text-sm text-gray-500">
+        Explora y gestiona todos los productos academicos del sistema
+      </p>
+    </div>
 
-    <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <!-- Header -->
-      <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-900">Repositorio de Productos Academicos</h1>
-        <p class="mt-1 text-sm text-gray-500">
-          Explora y gestiona todos los productos academicos del sistema
-        </p>
-      </div>
-
-      <!-- Filters -->
-      <UCard class="mb-6">
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <!-- Search -->
-          <div class="lg:col-span-2">
-            <UInput
-              v-model="searchQuery"
-              placeholder="Buscar por titulo, autor, palabras clave..."
-              icon="i-heroicons-magnifying-glass"
-              :loading="documentsStore.repositoryLoading"
-              @keydown.enter="applySearch"
-            />
-          </div>
-
-          <!-- Product Type Filter -->
-          <USelectMenu
-            v-model="selectedProductType"
-            :options="productTypeOptions"
-            placeholder="Tipo de producto"
-            value-attribute="value"
-            option-attribute="label"
-          />
-
-          <!-- Year Filter -->
+    <!-- Filters -->
+    <UCard class="mb-6">
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <!-- Search -->
+        <div class="lg:col-span-2">
           <UInput
-            v-model="selectedYear"
-            placeholder="Ano (ej. 2026)"
-            type="number"
-            min="1900"
-            :max="new Date().getFullYear() + 1"
-          />
-
-          <!-- Institution Filter -->
-          <UInput v-model="selectedInstitution" placeholder="Institucion" />
-        </div>
-
-        <div class="mt-4 flex justify-end gap-2">
-          <UButton color="neutral" variant="soft" @click="clearFilters"> Limpiar filtros </UButton>
-          <UButton
-            color="primary"
+            v-model="searchQuery"
+            placeholder="Buscar por titulo, autor, palabras clave..."
+            icon="i-heroicons-magnifying-glass"
             :loading="documentsStore.repositoryLoading"
-            @click="applyFilters"
-          >
-            Aplicar filtros
-          </UButton>
+            @keydown.enter="applySearch"
+          />
+        </div>
+
+        <!-- Product Type Filter -->
+        <USelectMenu
+          v-model="selectedProductType"
+          :options="productTypeOptions"
+          placeholder="Tipo de producto"
+          value-attribute="value"
+          option-attribute="label"
+        />
+
+        <!-- Year Filter -->
+        <UInput
+          v-model="selectedYear"
+          placeholder="Ano (ej. 2026)"
+          type="number"
+          min="1900"
+          :max="new Date().getFullYear() + 1"
+        />
+
+        <!-- Institution Filter -->
+        <UInput v-model="selectedInstitution" placeholder="Institucion" />
+      </div>
+
+      <div class="mt-4 flex justify-end gap-2">
+        <UButton color="neutral" variant="soft" @click="clearFilters"> Limpiar filtros </UButton>
+        <UButton color="primary" :loading="documentsStore.repositoryLoading" @click="applyFilters">
+          Aplicar filtros
+        </UButton>
+      </div>
+    </UCard>
+
+    <!-- Results info -->
+    <div class="mb-4 flex items-center justify-between">
+      <p class="text-sm text-gray-600">
+        <template v-if="documentsStore.repositoryMeta">
+          Mostrando {{ documentsStore.repositoryProducts.length }} de
+          {{ documentsStore.repositoryMeta.total }} resultados
+        </template>
+        <template v-else> Cargando... </template>
+      </p>
+    </div>
+
+    <!-- Loading state -->
+    <div
+      v-if="documentsStore.repositoryLoading && !documentsStore.repositoryProducts.length"
+      class="flex justify-center py-12"
+    >
+      <UIcon name="i-heroicons-arrow-path" class="h-8 w-8 animate-spin text-primary-500" />
+    </div>
+
+    <!-- Empty state -->
+    <UCard v-else-if="!documentsStore.repositoryProducts.length" class="py-12 text-center">
+      <UIcon name="i-heroicons-document-magnifying-glass" class="mx-auto h-12 w-12 text-gray-400" />
+      <h3 class="mt-4 text-lg font-medium text-gray-900">No se encontraron productos</h3>
+      <p class="mt-2 text-sm text-gray-500">Intenta ajustar los filtros de busqueda</p>
+    </UCard>
+
+    <!-- Products Grid -->
+    <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <UCard
+        v-for="product in documentsStore.repositoryProducts"
+        :key="product._id"
+        class="transition-shadow hover:shadow-lg"
+      >
+        <template #header>
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <UBadge :color="getProductTypeColor(product.productType)" variant="subtle" size="xs">
+                {{ getProductTypeLabel(product.productType) }}
+              </UBadge>
+              <h3 class="mt-2 line-clamp-2 text-sm font-semibold text-gray-900">
+                {{
+                  product.manualMetadata.title ||
+                  product.extractedEntities.title?.value ||
+                  'Sin titulo'
+                }}
+              </h3>
+            </div>
+            <UDropdown :items="getProductActions(product)">
+              <UButton
+                color="neutral"
+                variant="ghost"
+                icon="i-heroicons-ellipsis-vertical"
+                size="xs"
+              />
+            </UDropdown>
+          </div>
+        </template>
+
+        <div class="space-y-3">
+          <!-- Authors -->
+          <div v-if="getAuthors(product).length" class="flex items-start gap-2">
+            <UIcon name="i-heroicons-users" class="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+            <p class="line-clamp-2 text-xs text-gray-600">
+              {{ getAuthors(product).join(', ') }}
+            </p>
+          </div>
+
+          <!-- Institution -->
+          <div v-if="getInstitution(product)" class="flex items-start gap-2">
+            <UIcon
+              name="i-heroicons-building-library"
+              class="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400"
+            />
+            <p class="line-clamp-1 text-xs text-gray-600">
+              {{ getInstitution(product) }}
+            </p>
+          </div>
+
+          <!-- Date -->
+          <div v-if="getDate(product)" class="flex items-center gap-2">
+            <UIcon name="i-heroicons-calendar" class="h-4 w-4 flex-shrink-0 text-gray-400" />
+            <p class="text-xs text-gray-600">
+              {{ getDate(product) }}
+            </p>
+          </div>
+
+          <!-- Keywords -->
+          <div v-if="getKeywords(product).length" class="flex flex-wrap gap-1">
+            <UBadge
+              v-for="keyword in getKeywords(product).slice(0, 3)"
+              :key="keyword"
+              color="neutral"
+              variant="outline"
+              size="xs"
+            >
+              {{ keyword }}
+            </UBadge>
+            <UBadge
+              v-if="getKeywords(product).length > 3"
+              color="neutral"
+              variant="outline"
+              size="xs"
+            >
+              +{{ getKeywords(product).length - 3 }}
+            </UBadge>
+          </div>
+
+          <!-- Status -->
+          <div class="flex items-center justify-between border-t border-gray-100 pt-2">
+            <UBadge
+              :color="product.reviewStatus === 'confirmed' ? 'success' : 'warning'"
+              variant="subtle"
+              size="xs"
+            >
+              {{ product.reviewStatus === 'confirmed' ? 'Confirmado' : 'Borrador' }}
+            </UBadge>
+            <p class="text-xs text-gray-400">
+              {{ formatDate(product.createdAt) }}
+            </p>
+          </div>
         </div>
       </UCard>
+    </div>
 
-      <!-- Results info -->
-      <div class="mb-4 flex items-center justify-between">
-        <p class="text-sm text-gray-600">
-          <template v-if="documentsStore.repositoryMeta">
-            Mostrando {{ documentsStore.repositoryProducts.length }} de
-            {{ documentsStore.repositoryMeta.total }} resultados
-          </template>
-          <template v-else> Cargando... </template>
-        </p>
-      </div>
-
-      <!-- Loading state -->
-      <div
-        v-if="documentsStore.repositoryLoading && !documentsStore.repositoryProducts.length"
-        class="flex justify-center py-12"
-      >
-        <UIcon name="i-heroicons-arrow-path" class="h-8 w-8 animate-spin text-primary-500" />
-      </div>
-
-      <!-- Empty state -->
-      <UCard v-else-if="!documentsStore.repositoryProducts.length" class="py-12 text-center">
-        <UIcon
-          name="i-heroicons-document-magnifying-glass"
-          class="mx-auto h-12 w-12 text-gray-400"
-        />
-        <h3 class="mt-4 text-lg font-medium text-gray-900">No se encontraron productos</h3>
-        <p class="mt-2 text-sm text-gray-500">Intenta ajustar los filtros de busqueda</p>
-      </UCard>
-
-      <!-- Products Grid -->
-      <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <UCard
-          v-for="product in documentsStore.repositoryProducts"
-          :key="product._id"
-          class="transition-shadow hover:shadow-lg"
-        >
-          <template #header>
-            <div class="flex items-start justify-between">
-              <div class="flex-1">
-                <UBadge
-                  :color="getProductTypeColor(product.productType)"
-                  variant="subtle"
-                  size="xs"
-                >
-                  {{ getProductTypeLabel(product.productType) }}
-                </UBadge>
-                <h3 class="mt-2 line-clamp-2 text-sm font-semibold text-gray-900">
-                  {{
-                    product.manualMetadata.title ||
-                    product.extractedEntities.title?.value ||
-                    'Sin titulo'
-                  }}
-                </h3>
-              </div>
-              <UDropdown :items="getProductActions(product)">
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  icon="i-heroicons-ellipsis-vertical"
-                  size="xs"
-                />
-              </UDropdown>
-            </div>
-          </template>
-
-          <div class="space-y-3">
-            <!-- Authors -->
-            <div v-if="getAuthors(product).length" class="flex items-start gap-2">
-              <UIcon name="i-heroicons-users" class="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
-              <p class="line-clamp-2 text-xs text-gray-600">
-                {{ getAuthors(product).join(', ') }}
-              </p>
-            </div>
-
-            <!-- Institution -->
-            <div v-if="getInstitution(product)" class="flex items-start gap-2">
-              <UIcon
-                name="i-heroicons-building-library"
-                class="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400"
-              />
-              <p class="line-clamp-1 text-xs text-gray-600">
-                {{ getInstitution(product) }}
-              </p>
-            </div>
-
-            <!-- Date -->
-            <div v-if="getDate(product)" class="flex items-center gap-2">
-              <UIcon name="i-heroicons-calendar" class="h-4 w-4 flex-shrink-0 text-gray-400" />
-              <p class="text-xs text-gray-600">
-                {{ getDate(product) }}
-              </p>
-            </div>
-
-            <!-- Keywords -->
-            <div v-if="getKeywords(product).length" class="flex flex-wrap gap-1">
-              <UBadge
-                v-for="keyword in getKeywords(product).slice(0, 3)"
-                :key="keyword"
-                color="neutral"
-                variant="outline"
-                size="xs"
-              >
-                {{ keyword }}
-              </UBadge>
-              <UBadge
-                v-if="getKeywords(product).length > 3"
-                color="neutral"
-                variant="outline"
-                size="xs"
-              >
-                +{{ getKeywords(product).length - 3 }}
-              </UBadge>
-            </div>
-
-            <!-- Status -->
-            <div class="flex items-center justify-between border-t border-gray-100 pt-2">
-              <UBadge
-                :color="product.reviewStatus === 'confirmed' ? 'success' : 'warning'"
-                variant="subtle"
-                size="xs"
-              >
-                {{ product.reviewStatus === 'confirmed' ? 'Confirmado' : 'Borrador' }}
-              </UBadge>
-              <p class="text-xs text-gray-400">
-                {{ formatDate(product.createdAt) }}
-              </p>
-            </div>
-          </div>
-        </UCard>
-      </div>
-
-      <!-- Pagination -->
-      <div
-        v-if="documentsStore.repositoryMeta && documentsStore.repositoryMeta.total > 0"
-        class="mt-8 flex justify-center"
-      >
-        <UPagination
-          v-model="currentPage"
-          :page-count="documentsStore.repositoryMeta.limit"
-          :total="documentsStore.repositoryMeta.total"
-          :max="5"
-        />
-      </div>
+    <!-- Pagination -->
+    <div
+      v-if="documentsStore.repositoryMeta && documentsStore.repositoryMeta.total > 0"
+      class="mt-8 flex justify-center"
+    >
+      <UPagination
+        v-model="currentPage"
+        :page-count="documentsStore.repositoryMeta.limit"
+        :total="documentsStore.repositoryMeta.total"
+        :max="5"
+      />
     </div>
 
     <!-- Delete Confirmation Modal -->
@@ -236,6 +221,7 @@ import type { AcademicProductPublic, ProductType } from '~~/app/types'
 
 const documentsStore = useDocumentsStore()
 const toast = useToast()
+const { user, isAdmin } = useAuth()
 
 // Filters state
 const searchQuery = ref('')
@@ -312,13 +298,17 @@ function getProductActions(product: AcademicProductPublic) {
         click: () => navigateTo(`/workspace-documents?productId=${product._id}`),
       },
     ],
-    [
-      {
-        label: 'Eliminar',
-        icon: 'i-heroicons-trash',
-        click: () => openDeleteModal(product),
-      },
-    ],
+    ...(isAdmin.value || user.value?._id === product.owner
+      ? [
+          [
+            {
+              label: 'Eliminar',
+              icon: 'i-heroicons-trash',
+              click: () => openDeleteModal(product),
+            },
+          ],
+        ]
+      : []),
   ]
 }
 

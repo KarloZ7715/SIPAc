@@ -19,7 +19,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const isOwner = product.owner.toString() === auth.sub
-  if (!isOwner && auth.role !== 'admin') {
+  const canEdit = isOwner || auth.role === 'admin'
+  const canView = canEdit || product.reviewStatus === 'confirmed'
+
+  if (!canView) {
     throw createAuthorizationError()
   }
 
@@ -37,10 +40,18 @@ export default defineEventHandler(async (event) => {
     .lean()
 
   return ok({
-    draft: buildProductWorkspaceDraft(product, {
-      ...uploadedFile,
-      academicProductIds: siblingProducts.map((p) => p._id),
-      sourceWorkCount: uploadedFile.sourceWorkCount ?? siblingProducts.length,
-    }),
+    draft: buildProductWorkspaceDraft(
+      product,
+      {
+        ...uploadedFile,
+        academicProductIds: siblingProducts.map((p) => p._id),
+        sourceWorkCount: uploadedFile.sourceWorkCount ?? siblingProducts.length,
+      },
+      {
+        canView: true,
+        canEdit,
+        canDelete: canEdit,
+      },
+    ),
   })
 })

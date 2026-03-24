@@ -13,6 +13,7 @@ import { PRODUCT_METADATA_LAYOUT } from '~~/app/utils/product-metadata-layout'
 const documentsStore = useDocumentsStore()
 const toast = useToast()
 const runtimeConfig = useRuntimeConfig()
+const route = useRoute()
 
 const pendingSelection = ref<File | null>(null)
 const showCancelModal = ref(false)
@@ -124,11 +125,15 @@ let highlightTimer: ReturnType<typeof setInterval> | null = null
 let highlightCursor = 0
 let highlightSerial = 0
 let highlightRemovalTimers: ReturnType<typeof setTimeout>[] = []
+let stopDocumentsFocusRefresh: (() => void) | undefined
 
 const currentStage = computed(() => documentsStore.workspaceStage)
 const currentStageCopy = computed(() => stageCopy[currentStage.value])
 const hasDraft = computed(() => documentsStore.hasWorkspaceDraft)
 const hasPersistedDraft = computed(() => documentsStore.hasPersistedDraft)
+const canEditCurrentDraft = computed(() => documentsStore.canEditDraft)
+const canDeleteCurrentDraft = computed(() => documentsStore.canDeleteDraft)
+const isReadonlyView = computed(() => hasPersistedDraft.value && !canEditCurrentDraft.value)
 const currentPreviewUrl = computed(() => documentsStore.workspaceDraftPreviewUrl)
 const currentLocalFile = computed(() => documentsStore.workspaceDraftFile)
 const currentTrackedFile = computed(
@@ -212,7 +217,10 @@ const canSave = computed(
     documentsStore.canConfirmDraft,
 )
 const canSaveSnapshot = computed(
-  () => ['review', 'ready'].includes(currentStage.value) && hasPersistedDraft.value,
+  () =>
+    ['review', 'ready'].includes(currentStage.value) &&
+    hasPersistedDraft.value &&
+    canEditCurrentDraft.value,
 )
 const metadataCompletion = computed(() => {
   const checks = [
@@ -1493,6 +1501,18 @@ function resetWorkspaceVisualState() {
 }
 
 async function clearLocalDraft() {
+  if (currentStage.value === 'confirmed') {
+    resetWorkspaceVisualState()
+    activeHighlightKey.value = null
+    documentsStore.clearWorkspaceDraft()
+
+    if (route.query.productId) {
+      await navigateTo('/workspace-documents')
+    }
+
+    return
+  }
+
   if (hasPersistedDraft.value || documentsStore.activeUploadId) {
     try {
       await documentsStore.cancelDraft()
@@ -1585,11 +1605,19 @@ async function loadPersistedDraft() {
   hydratingWorkspace.value = true
 
   try {
-    const draft = await documentsStore.loadCurrentDraft()
+    const requestedProductId =
+      typeof route.query.productId === 'string' ? route.query.productId.trim() : ''
+    const draft = requestedProductId
+      ? await documentsStore.loadDraftProduct(requestedProductId)
+      : await documentsStore.loadCurrentDraft()
 
     if (draft) {
       analysisProgress.value = 100
-      pushAnalysisHighlight('Retomamos tu revisión para que continúes donde la dejaste.')
+      pushAnalysisHighlight(
+        requestedProductId
+          ? 'Cargamos el producto solicitado para que lo consultes desde esta vista.'
+          : 'Retomamos tu revisión para que continúes donde la dejaste.',
+      )
     }
   } finally {
     hydratingWorkspace.value = false
@@ -1710,6 +1738,10 @@ async function saveWorkspaceResult() {
 }
 
 function requestCancelFlow() {
+  if (!canDeleteCurrentDraft.value) {
+    return
+  }
+
   showCancelModal.value = true
 }
 
@@ -1736,6 +1768,27 @@ async function confirmCancelFlow() {
 }
 
 watch(pendingSelection, handleFileSelection)
+
+watch(
+  () => route.query.productId,
+  async (productId, previousProductId) => {
+    if (productId === previousProductId) {
+      return
+    }
+
+    if (typeof productId === 'string' && productId.trim().length > 0) {
+      hydratingWorkspace.value = true
+      try {
+        await documentsStore.loadDraftProduct(productId)
+      } finally {
+        hydratingWorkspace.value = false
+      }
+      return
+    }
+
+    await loadPersistedDraft()
+  },
+)
 
 watch(
   currentStage,
@@ -1797,11 +1850,13 @@ watch(
 )
 
 onMounted(async () => {
+  stopDocumentsFocusRefresh = documentsStore.refreshOnFocus()
   await loadPersistedDraft()
 })
 
 onBeforeUnmount(() => {
   stopProcessingFeedback()
+  stopDocumentsFocusRefresh?.()
 })
 </script>
 
@@ -1818,6 +1873,15 @@ onBeforeUnmount(() => {
             Sube un PDF o una imagen, revisa lo que se detectó y corrige lo necesario sin salir de
             esta misma vista.
           </p>
+          <UAlert
+            v-if="isReadonlyView"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-eye"
+            title="Vista de solo lectura"
+            description="Este producto confirmado puede consultarse aquí, pero no editarse ni eliminarse desde tu sesión actual."
+            class="max-w-2xl"
+          />
         </div>
 
         <div class="flex flex-wrap gap-3">
@@ -2011,6 +2075,7 @@ onBeforeUnmount(() => {
               color="neutral"
               variant="soft"
               :loading="savingSnapshot || documentsStore.savingDraft"
+              :disabled="!canEditCurrentDraft"
               @click="saveDraftSnapshot"
             >
               Guardar avances
@@ -2033,6 +2098,7 @@ onBeforeUnmount(() => {
               color="neutral"
               variant="ghost"
               :loading="documentsStore.cancelingDraft"
+              :disabled="!canDeleteCurrentDraft"
               @click="requestCancelFlow"
             >
               Cancelar proceso
@@ -2043,9 +2109,10 @@ onBeforeUnmount(() => {
               size="sm"
               color="neutral"
               variant="ghost"
-              @click="clearLocalDraft"
+              :to="isReadonlyView ? '/repository' : undefined"
+              @click="!isReadonlyView ? clearLocalDraft() : undefined"
             >
-              Empezar otro archivo
+              {{ isReadonlyView ? 'Volver al repositorio' : 'Empezar otro archivo' }}
             </SipacButton>
           </div>
         </div>
@@ -2340,7 +2407,10 @@ onBeforeUnmount(() => {
                 </p>
               </div>
 
-              <div v-if="currentStage !== 'confirmed'" class="panel-muted p-4 sm:p-5">
+              <div
+                v-if="currentStage !== 'confirmed' && canEditCurrentDraft"
+                class="panel-muted p-4 sm:p-5"
+              >
                 <div class="grid gap-4 sm:grid-cols-2">
                   <UFormField label="Tipo de producto" name="productTypeEditable">
                     <USelect
@@ -2539,7 +2609,7 @@ onBeforeUnmount(() => {
               </div>
 
               <div
-                v-if="currentStage !== 'confirmed'"
+                v-if="currentStage !== 'confirmed' && canEditCurrentDraft"
                 class="rounded-lg border border-sipac-200 bg-sipac-50/85 p-4 shadow-[0_18px_34px_-30px_rgba(17,46,29,0.14)]"
               >
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
