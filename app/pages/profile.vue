@@ -74,172 +74,166 @@ onMounted(() => {
 
 <template>
   <div class="space-y-8">
-    <section class="panel-surface hero-wash fade-up p-6 sm:p-8">
-      <div class="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_22rem]">
-        <div class="space-y-4">
-          <div class="section-chip">Cuenta institucional</div>
+    <ExperiencePageHero
+      eyebrow="Cuenta personal"
+      :title="user?.fullName || 'Mi perfil'"
+      description="Mantén tus datos al día, revisa tu resumen académico y controla los cambios importantes de tu cuenta."
+      icon="i-lucide-user-round"
+      compact
+    >
+      <template #badges>
+        <SipacBadge color="primary" variant="subtle" size="lg">
+          <UIcon name="i-lucide-shield-check" class="size-3.5" />
+          {{ user?.role === 'admin' ? 'Administrador' : 'Docente' }}
+        </SipacBadge>
+        <SipacBadge color="neutral" variant="outline" size="lg">
+          {{ user?.program || 'Universidad de Córdoba' }}
+        </SipacBadge>
+      </template>
+
+      <template #aside>
+        <ExperienceContextPanel
+          eyebrow="Estado de la cuenta"
+          title="Tu acceso está activo y listo para seguir trabajando."
+          description="Aquí puedes confirmar tus datos principales antes de editar nombre o cambiar contraseña."
+          icon="i-lucide-badge-check"
+          tone="neutral"
+        >
           <div class="space-y-3">
-            <h1 class="font-display text-4xl font-semibold text-text sm:text-5xl">
-              Tu perfil institucional.
-            </h1>
-            <p class="max-w-2xl text-base leading-7 text-text-muted">
-              Información personal visible en la plataforma y control de credenciales en un solo
-              lugar.
-            </p>
-          </div>
-          <div class="flex flex-wrap gap-3">
-            <SipacBadge color="primary" variant="subtle" size="lg">
-              {{ user?.role === 'admin' ? 'Administrador' : 'Docente' }}
-            </SipacBadge>
-            <SipacBadge color="neutral" variant="outline" size="lg">
-              {{ user?.program || 'Programa no especificado' }}
-            </SipacBadge>
-          </div>
-        </div>
-
-        <div class="panel-muted space-y-3 p-5">
-          <p class="text-[0.72rem] font-semibold tracking-[0.18em] text-text-soft uppercase">
-            Cuenta activa
-          </p>
-          <div class="space-y-3 text-sm">
-            <div>
-              <p class="font-semibold text-text">Correo institucional</p>
-              <p class="wrap-break-word text-text-muted">{{ user?.email }}</p>
+            <div class="rounded-xl bg-white/78 p-3">
+              <p class="text-xs font-semibold tracking-[0.12em] text-text-soft uppercase">Correo</p>
+              <p class="mt-1 text-sm font-semibold text-text">{{ user?.email }}</p>
             </div>
-            <div>
-              <p class="font-semibold text-text">Estado</p>
-              <p class="text-text-muted">Sesión activa y credenciales verificadas.</p>
+            <div class="rounded-xl bg-white/78 p-3">
+              <p class="text-xs font-semibold tracking-[0.12em] text-text-soft uppercase">Estado</p>
+              <p class="mt-1 text-sm font-semibold text-text">Cuenta activa y verificada</p>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
+        </ExperienceContextPanel>
+      </template>
+    </ExperiencePageHero>
 
+    <!-- Main Content -->
     <section class="grid gap-6 xl:grid-cols-[minmax(18rem,0.75fr)_minmax(0,1fr)]">
-      <SipacCard>
+      <!-- Info Card -->
+      <SipacCard class="card-glow">
         <template #header>
           <div class="flex items-center gap-3">
             <span
-              class="flex size-11 items-center justify-center rounded-2xl bg-sipac-50 text-sipac-700"
+              class="flex size-10 items-center justify-center rounded-xl bg-sipac-50 text-sipac-700"
             >
-              <UIcon name="i-lucide-user-round" class="size-5" aria-hidden="true" />
+              <UIcon name="i-lucide-id-card" class="size-5" />
             </span>
             <div>
-              <h2 class="font-semibold text-text">Información visible</h2>
-              <p class="text-sm text-text-muted">Datos base de tu cuenta en SIPAc</p>
+              <h2 class="font-semibold text-text">Datos de la cuenta</h2>
+              <p class="text-sm text-text-muted">Información registrada</p>
             </div>
           </div>
         </template>
 
-        <div class="space-y-4 text-sm">
-          <div class="panel-muted p-4">
-            <p class="font-semibold text-text">Correo</p>
-            <p class="mt-1 wrap-break-word text-text-muted">{{ user?.email }}</p>
+        <div class="space-y-3">
+          <div class="rounded-xl border border-border/60 bg-surface-muted/50 p-4">
+            <p class="text-sm font-medium text-text-soft">Correo institucional</p>
+            <p class="mt-1 truncate font-semibold text-text">{{ user?.email }}</p>
           </div>
-          <div class="panel-muted p-4">
-            <p class="font-semibold text-text">Rol</p>
-            <p class="mt-1 text-text-muted">
-              {{ user?.role === 'admin' ? 'Administrador del sistema' : 'Docente del programa' }}
+          <div class="rounded-xl border border-border/60 bg-surface-muted/50 p-4">
+            <p class="text-sm font-medium text-text-soft">Rol en el sistema</p>
+            <p class="mt-1 font-semibold text-text">
+              {{ user?.role === 'admin' ? 'Administrador' : 'Docente' }}
             </p>
           </div>
-          <div class="panel-muted p-4">
-            <p class="font-semibold text-text">Programa</p>
-            <p class="mt-1 text-text-muted">{{ user?.program || 'No registrado' }}</p>
+          <div class="rounded-xl border border-border/60 bg-surface-muted/50 p-4">
+            <p class="text-sm font-medium text-text-soft">Programa</p>
+            <p class="mt-1 font-semibold text-text">{{ user?.program || 'No asignado' }}</p>
           </div>
         </div>
 
         <template #footer>
-          <UAlert
-            color="neutral"
-            variant="solid"
-            icon="i-lucide-info"
-            title="Solo lectura"
-            description="El correo y el rol se gestionan desde administración."
-          />
+          <div class="flex items-start gap-2 rounded-xl bg-surface-muted/50 p-3">
+            <UIcon name="i-lucide-info" class="mt-0.5 size-4 shrink-0 text-text-soft" />
+            <p class="text-xs text-text-muted">
+              El correo y el rol solo pueden cambiarlos los administradores
+            </p>
+          </div>
         </template>
       </SipacCard>
 
+      <!-- Right Column -->
       <div class="space-y-6">
-        <SipacCard>
+        <!-- Academic Summary -->
+        <SipacCard class="card-glow">
           <template #header>
             <div class="flex items-center gap-3">
               <span
-                class="flex size-11 items-center justify-center rounded-2xl bg-earth-50 text-earth-700"
+                class="flex size-10 items-center justify-center rounded-xl bg-earth-50 text-earth-700"
               >
-                <UIcon name="i-lucide-chart-column-big" class="size-5" aria-hidden="true" />
+                <UIcon name="i-lucide-bar-chart-3" class="size-5" />
               </span>
               <div>
-                <h2 class="font-semibold text-text">Resumen académico</h2>
-                <p class="text-sm text-text-muted">Solo productos confirmados del repositorio</p>
+                <h2 class="font-semibold text-text">Tu producción</h2>
+                <p class="text-sm text-text-muted">Documentos guardados</p>
               </div>
             </div>
           </template>
 
           <div v-if="summaryLoading" class="grid gap-3 sm:grid-cols-2">
-            <div class="panel-muted p-4">
-              <p class="text-sm text-text-muted">Cargando resumen...</p>
-            </div>
+            <div class="skeleton-shimmer h-24 rounded-xl" />
+            <div class="skeleton-shimmer h-24 rounded-xl" />
           </div>
 
           <div v-else class="space-y-4">
             <div class="grid gap-3 sm:grid-cols-2">
-              <div class="panel-muted p-4">
-                <p class="text-xs font-semibold tracking-[0.14em] text-text-soft uppercase">
-                  Total confirmado
-                </p>
-                <p class="mt-2 text-3xl font-semibold text-text">
-                  {{ profileSummary?.totalOwnProducts ?? 0 }}
-                </p>
-              </div>
-
-              <div class="panel-muted p-4">
-                <p class="text-xs font-semibold tracking-[0.14em] text-text-soft uppercase">
-                  Borradores recientes
-                </p>
-                <p class="mt-2 text-3xl font-semibold text-text">
-                  {{ profileSummary?.latestDrafts.length ?? 0 }}
-                </p>
-              </div>
+              <ExperienceStatCard
+                label="Documentos"
+                :value="profileSummary?.totalOwnProducts ?? 0"
+                icon="i-lucide-file-check"
+                caption="documentos guardados"
+              />
+              <ExperienceStatCard
+                label="Borradores"
+                :value="profileSummary?.latestDrafts.length ?? 0"
+                icon="i-lucide-file-pen-line"
+                tone="earth"
+                caption="borradores activos"
+              />
             </div>
 
-            <div class="space-y-3">
-              <p class="text-sm font-semibold text-text">Productos por tipo</p>
-              <div
-                v-if="profileSummary?.productSummaryByType.length"
-                class="grid gap-3 sm:grid-cols-2"
-              >
+            <div v-if="profileSummary?.productSummaryByType.length" class="space-y-2">
+              <p class="text-sm font-medium text-text">Por tipo de documento</p>
+              <div class="grid gap-2 sm:grid-cols-2">
                 <div
                   v-for="item in profileSummary.productSummaryByType"
                   :key="item.productType"
-                  class="panel-muted flex items-center justify-between gap-3 p-4"
+                  class="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-white px-3 py-2"
                 >
                   <p class="text-sm text-text-muted">{{ item.productType }}</p>
-                  <p class="text-lg font-semibold text-text">{{ item.total }}</p>
+                  <SipacBadge color="primary" variant="subtle">{{ item.total }}</SipacBadge>
                 </div>
               </div>
-              <UAlert
-                v-else
-                color="neutral"
-                variant="soft"
-                icon="i-lucide-info"
-                title="Aún no hay productos confirmados"
-                description="Cuando confirmes productos en el workspace, el resumen aparecerá aquí."
-              />
             </div>
+
+            <ExperienceEmptyState
+              v-else
+              icon="i-lucide-folder-open"
+              title="Sin documentos aún"
+              description="Cuando guardes documentos, verás aquí un resumen claro de tu producción."
+              compact
+            />
           </div>
         </SipacCard>
 
+        <!-- Update Name -->
         <SipacCard>
           <template #header>
             <div class="flex items-center gap-3">
               <span
-                class="flex size-11 items-center justify-center rounded-2xl bg-sipac-50 text-sipac-700"
+                class="flex size-10 items-center justify-center rounded-xl bg-sipac-50 text-sipac-700"
               >
-                <UIcon name="i-lucide-pencil-line" class="size-5" aria-hidden="true" />
+                <UIcon name="i-lucide-pencil" class="size-5" />
               </span>
               <div>
                 <h2 class="font-semibold text-text">Actualizar nombre</h2>
-                <p class="text-sm text-text-muted">Mantén tu identidad académica al día</p>
+                <p class="text-sm text-text-muted">Cómo apareces en el sistema</p>
               </div>
             </div>
           </template>
@@ -257,28 +251,30 @@ onMounted(() => {
                 variant="outline"
                 name="fullName"
                 autocomplete="name"
-                icon="i-lucide-user-round"
+                icon="i-lucide-user"
+                placeholder="Tu nombre completo"
                 class="w-full"
               />
             </UFormField>
 
-            <div class="flex flex-wrap items-center gap-3">
-              <SipacButton type="submit" :loading="profileSaving">Guardar cambios</SipacButton>
-            </div>
+            <SipacButton type="submit" icon="i-lucide-save" :loading="profileSaving">
+              Guardar cambios
+            </SipacButton>
           </UForm>
         </SipacCard>
 
+        <!-- Change Password -->
         <SipacCard>
           <template #header>
             <div class="flex items-center gap-3">
               <span
-                class="flex size-11 items-center justify-center rounded-2xl bg-earth-50 text-earth-700"
+                class="flex size-10 items-center justify-center rounded-xl bg-earth-50 text-earth-700"
               >
-                <UIcon name="i-lucide-lock-keyhole" class="size-5" aria-hidden="true" />
+                <UIcon name="i-lucide-key-round" class="size-5" />
               </span>
               <div>
                 <h2 class="font-semibold text-text">Cambiar contraseña</h2>
-                <p class="text-sm text-text-muted">Un flujo separado para tareas sensibles</p>
+                <p class="text-sm text-text-muted">Mantén tu cuenta segura</p>
               </div>
             </div>
           </template>
@@ -297,6 +293,7 @@ onMounted(() => {
                 name="currentPassword"
                 autocomplete="current-password"
                 icon="i-lucide-lock"
+                placeholder="Tu contraseña actual"
                 class="w-full"
               />
             </UFormField>
@@ -308,16 +305,21 @@ onMounted(() => {
                 variant="outline"
                 name="newPassword"
                 autocomplete="new-password"
-                icon="i-lucide-shield-check"
+                icon="i-lucide-shield"
+                placeholder="Tu nueva contraseña"
                 class="w-full"
               />
             </UFormField>
 
-            <div class="flex flex-wrap items-center gap-3">
-              <SipacButton type="submit" color="neutral" variant="soft" :loading="passwordSaving">
-                Cambiar contraseña
-              </SipacButton>
-            </div>
+            <SipacButton
+              type="submit"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-key-round"
+              :loading="passwordSaving"
+            >
+              Cambiar contraseña
+            </SipacButton>
           </UForm>
         </SipacCard>
       </div>

@@ -21,7 +21,7 @@ function renderInlineMarkdown(text: string) {
   html = html.replace(
     /`([^`]+)`/g,
     (_match, content: string) =>
-      `<code class="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[0.92em] text-neutral-900">${escapeHtml(content)}</code>`,
+      `<code class="rounded-md bg-sipac-50 px-1.5 py-0.5 font-mono text-[0.9em] text-sipac-900">${escapeHtml(content)}</code>`,
   )
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold text-text">$1</strong>')
   html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>')
@@ -73,7 +73,7 @@ function renderTable(lines: string[]) {
   const headerHtml = header
     .map(
       (cell) =>
-        `<th class="border-b border-border/70 px-3 py-2 text-left text-xs font-semibold tracking-[0.14em] text-text-soft uppercase">${renderInlineMarkdown(
+        `<th class="px-3 py-2.5 text-xs font-semibold tracking-wide text-sipac-900">${renderInlineMarkdown(
           cell,
         )}</th>`,
     )
@@ -83,7 +83,7 @@ function renderTable(lines: string[]) {
       const cells = row
         .map(
           (cell) =>
-            `<td class="border-b border-border/50 px-3 py-2 align-top text-sm text-text-muted">${renderInlineMarkdown(
+            `<td class="px-3 py-2.5 align-top text-sm text-text leading-relaxed">${renderInlineMarkdown(
               cell,
             )}</td>`,
         )
@@ -92,7 +92,7 @@ function renderTable(lines: string[]) {
     })
     .join('')
 
-  return `<div class="overflow-x-auto rounded-2xl border border-border/60"><table class="min-w-full border-collapse bg-white"><thead class="bg-surface-elevated/70"><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`
+  return `<div class="chat-md-table-wrap overflow-x-auto rounded-xl border border-border/70 bg-white shadow-sm"><table class="min-w-full border-collapse text-left"><thead><tr class="border-b border-border/80 bg-sipac-50/90">${headerHtml}</tr></thead><tbody class="divide-y divide-border/40">${bodyHtml}</tbody></table></div>`
 }
 
 export function renderChatMarkdown(markdown: string) {
@@ -123,7 +123,7 @@ export function renderChatMarkdown(markdown: string) {
   const flushQuote = () => {
     if (quoteBuffer.length > 0) {
       htmlBlocks.push(
-        `<blockquote class="border-l-4 border-earth-300 bg-earth-50/70 px-4 py-3 text-sm text-text-muted">${quoteBuffer
+        `<blockquote class="border-l-4 border-sipac-300 bg-sipac-50/70 px-4 py-3 text-sm text-text-muted">${quoteBuffer
           .map((line) => `<p>${renderInlineMarkdown(line)}</p>`)
           .join('')}</blockquote>`,
       )
@@ -148,10 +148,13 @@ export function renderChatMarkdown(markdown: string) {
       flushTable()
 
       if (codeFence) {
+        const lang = (codeFence.language ?? '').trim() || 'texto'
         htmlBlocks.push(
-          `<pre class="overflow-x-auto rounded-2xl bg-neutral-950 px-4 py-4 text-sm text-neutral-100"><code data-language="${escapeHtml(
-            codeFence.language ?? '',
-          )}">${escapeHtml(codeFence.lines.join('\n'))}</code></pre>`,
+          `<div class="chat-md-code not-prose overflow-hidden rounded-xl border border-border/80 bg-[#0f172a] shadow-sm"><div class="flex items-center border-b border-white/10 px-3 py-1.5"><span class="font-mono text-[0.65rem] font-medium uppercase tracking-wider text-white/55">${escapeHtml(
+            lang,
+          )}</span></div><pre class="overflow-x-auto px-4 py-3 text-[0.8125rem] leading-relaxed text-slate-100"><code class="font-mono">${escapeHtml(
+            codeFence.lines.join('\n'),
+          )}</code></pre></div>`,
         )
         codeFence = null
       } else {

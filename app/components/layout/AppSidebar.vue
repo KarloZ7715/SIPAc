@@ -1,19 +1,27 @@
 <script setup lang="ts">
+import type { DropdownMenuItem } from '@nuxt/ui'
+
 interface SidebarItem {
   label: string
   to: string
   icon: string
-  caption: string
   match?: string
-  kind?: 'route' | 'anchor'
+}
+
+interface SidebarSection {
+  label: string
+  items: SidebarItem[]
 }
 
 const props = defineProps<{
   collapsed?: boolean
+  mobile?: boolean
 }>()
 
 const route = useRoute()
-const { user, isAdmin } = useAuth()
+const { user, isAdmin, logout } = useAuth()
+const mobileSidebarOpen = useState<boolean>('sipac-mobile-sidebar-open')
+const desktopSidebarCollapsed = useState<boolean>('sipac-desktop-sidebar-collapsed')
 
 const initials = computed(() => {
   if (!user.value?.fullName) return 'SI'
@@ -26,186 +34,266 @@ const initials = computed(() => {
     .toUpperCase()
 })
 
-const docenteItems: SidebarItem[] = [
+const workspaceLabel = computed(() =>
+  isAdmin.value ? 'Panel administrativo' : 'Workspace docente',
+)
+const footerMeta = computed(
+  () => user.value?.program || (isAdmin.value ? 'Administrador' : 'Docente'),
+)
+
+const docenteSections: SidebarSection[] = [
   {
-    label: 'Inicio',
-    to: '/',
-    icon: 'i-lucide-layout-dashboard',
-    caption: 'Vista general del workspace',
-    match: '/',
-    kind: 'route',
-  },
-  {
-    label: 'Chat IA',
-    to: '/chat',
-    icon: 'i-lucide-sparkles',
-    caption: 'Consultas conversacionales sobre el repositorio',
-    match: '/chat',
-    kind: 'route',
-  },
-  {
-    label: 'Documentos',
-    to: '/workspace-documents',
-    icon: 'i-lucide-folder-up',
-    caption: 'Subir, revisar y guardar documentos',
-    match: '/workspace-documents',
-    kind: 'route',
-  },
-  {
-    label: 'Dashboard',
-    to: '/dashboard',
-    icon: 'i-lucide-chart-column-big',
-    caption: 'Indicadores del repositorio confirmado',
-    match: '/dashboard',
-    kind: 'route',
-  },
-  {
-    label: 'Mi perfil',
-    to: '/profile',
-    icon: 'i-lucide-user-round',
-    caption: 'Cuenta y credenciales',
-    match: '/profile',
-    kind: 'route',
+    label: 'Principal',
+    items: [
+      { label: 'Inicio', to: '/', icon: 'i-lucide-house', match: '/' },
+      { label: 'Chat', to: '/chat', icon: 'i-lucide-sparkles', match: '/chat' },
+      {
+        label: 'Documentos',
+        to: '/workspace-documents',
+        icon: 'i-lucide-folder-up',
+        match: '/workspace-documents',
+      },
+      {
+        label: 'Dashboard',
+        to: '/dashboard',
+        icon: 'i-lucide-chart-column-big',
+        match: '/dashboard',
+      },
+      {
+        label: 'Repositorio',
+        to: '/repository',
+        icon: 'i-lucide-library-big',
+        match: '/repository',
+      },
+    ],
   },
 ]
 
-const adminItems: SidebarItem[] = [
+const adminSections: SidebarSection[] = [
   {
-    label: 'Inicio',
-    to: '/',
-    icon: 'i-lucide-layout-dashboard',
-    caption: 'Resumen operativo del sistema',
-    match: '/',
-    kind: 'route',
+    label: 'Principal',
+    items: [
+      { label: 'Inicio', to: '/', icon: 'i-lucide-house', match: '/' },
+      {
+        label: 'Dashboard',
+        to: '/dashboard',
+        icon: 'i-lucide-chart-column-big',
+        match: '/dashboard',
+      },
+      {
+        label: 'Repositorio',
+        to: '/repository',
+        icon: 'i-lucide-library-big',
+        match: '/repository',
+      },
+      { label: 'Chat', to: '/chat', icon: 'i-lucide-sparkles', match: '/chat' },
+    ],
   },
   {
-    label: 'Usuarios',
-    to: '/admin/users',
-    icon: 'i-lucide-users-round',
-    caption: 'Gestión administrativa de cuentas',
-    match: '/admin',
-    kind: 'route',
-  },
-  {
-    label: 'Dashboard',
-    to: '/dashboard',
-    icon: 'i-lucide-chart-column-big',
-    caption: 'Indicadores institucionales del repositorio',
-    match: '/dashboard',
-    kind: 'route',
-  },
-  {
-    label: 'Chat IA',
-    to: '/chat',
-    icon: 'i-lucide-sparkles',
-    caption: 'Laboratorio conversacional grounded',
-    match: '/chat',
-    kind: 'route',
-  },
-  {
-    label: 'Auditoría',
-    to: '/admin/audit-logs',
-    icon: 'i-lucide-shield-ellipsis',
-    caption: 'Registro de acciones críticas',
-    match: '/admin/audit-logs',
-    kind: 'route',
-  },
-  {
-    label: 'Mi perfil',
-    to: '/profile',
-    icon: 'i-lucide-user-round',
-    caption: 'Cuenta y credenciales',
-    match: '/profile',
-    kind: 'route',
+    label: 'Gestión',
+    items: [
+      {
+        label: 'Usuarios',
+        to: '/admin/users',
+        icon: 'i-lucide-users-round',
+        match: '/admin/users',
+      },
+      {
+        label: 'Auditoría',
+        to: '/admin/audit-logs',
+        icon: 'i-lucide-shield-ellipsis',
+        match: '/admin/audit-logs',
+      },
+    ],
   },
 ]
 
-const items = computed(() => (isAdmin.value ? adminItems : docenteItems))
+const sections = computed(() => (isAdmin.value ? adminSections : docenteSections))
+const userMenuItems = computed<DropdownMenuItem[][]>(() => [
+  [
+    {
+      label: user.value?.fullName || 'Usuario SIPAc',
+      type: 'label' as const,
+    },
+  ],
+  [
+    {
+      label: 'Mi perfil',
+      icon: 'i-lucide-user-round',
+      to: '/profile',
+      onSelect: () => closeMobileSidebar(),
+    },
+  ],
+  [
+    {
+      label: 'Cerrar sesión',
+      icon: 'i-lucide-log-out',
+      color: 'error' as const,
+      onSelect: () => logout(),
+    },
+  ],
+])
 
 function isItemActive(item: SidebarItem) {
-  if (item.kind === 'anchor') {
-    const [, hash] = item.to.split('#')
-    return route.path === '/' && route.hash === `#${hash}`
-  }
-
   if (item.to === '/') {
     return route.path === '/' && !route.hash
   }
 
   return route.path === item.to || (!!item.match && route.path.startsWith(item.match))
 }
+
+function closeMobileSidebar() {
+  if (props.mobile) {
+    mobileSidebarOpen.value = false
+  }
+}
+
+function toggleDesktopSidebar() {
+  if (!props.mobile) {
+    desktopSidebarCollapsed.value = !desktopSidebarCollapsed.value
+  }
+}
 </script>
 
 <template>
-  <div class="flex h-full flex-col justify-between gap-6 p-3">
-    <div class="space-y-5">
-      <div
-        class="rounded-[1.65rem] border border-sipac-200/80 bg-linear-to-br from-white via-sipac-50/60 to-earth-50/50 p-4 shadow-[0_16px_40px_-28px_rgba(18,63,40,0.4)]"
+  <aside
+    class="sidebar-shell flex h-full flex-col overflow-hidden"
+    :data-collapsed="props.collapsed && !props.mobile ? 'true' : 'false'"
+    :data-mobile="props.mobile ? 'true' : 'false'"
+  >
+    <div
+      class="flex"
+      :class="
+        props.collapsed && !props.mobile
+          ? 'flex-col items-center gap-2'
+          : 'items-start justify-between gap-3'
+      "
+    >
+      <NuxtLink
+        to="/"
+        class="sidebar-brand group min-w-0"
+        :class="
+          props.collapsed && !props.mobile ? 'mx-auto w-[3.45rem] justify-center px-0' : 'flex-1'
+        "
+        :aria-label="props.collapsed && !props.mobile ? 'Ir al inicio' : undefined"
+        :title="props.collapsed && !props.mobile ? 'Ir al inicio' : undefined"
+        @click="closeMobileSidebar"
       >
-        <div class="flex items-start gap-3">
-          <div
-            class="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-sipac-700 text-white"
-          >
-            <UIcon name="i-lucide-graduation-cap" class="size-6" />
-          </div>
+        <span class="sidebar-brand__mark" aria-hidden="true">
+          <UIcon name="i-lucide-graduation-cap" class="size-5" />
+        </span>
 
-          <div v-if="!props.collapsed" class="min-w-0 space-y-2">
-            <div class="space-y-1">
-              <p class="text-[0.68rem] font-semibold tracking-[0.22em] text-sipac-700 uppercase">
-                Universidad de Córdoba
-              </p>
-              <h1 class="font-display text-xl font-semibold text-text">SIPAc</h1>
-              <p class="text-sm leading-5 text-text-muted">Productividad académica inteligente.</p>
-            </div>
+        <template v-if="!(props.collapsed && !props.mobile)">
+          <span class="sidebar-brand__text">
+            <span class="sidebar-brand__title">SIPAc</span>
+            <span class="sidebar-brand__meta">{{ workspaceLabel }}</span>
+          </span>
+        </template>
+      </NuxtLink>
 
-            <div class="flex flex-wrap gap-2">
-              <SipacBadge color="primary" variant="subtle" size="sm">
-                {{ isAdmin ? 'Panel administrativo' : 'Workspace docente' }}
-              </SipacBadge>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div
-        class="rounded-[1.5rem] border border-border/60 bg-white/78 p-2 backdrop-blur-sm transition-colors duration-200"
+      <SipacButton
+        v-if="!props.mobile"
+        color="neutral"
+        variant="ghost"
+        class="sidebar-toggle hidden shrink-0 lg:inline-flex"
+        :aria-label="props.collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'"
+        @click="toggleDesktopSidebar"
       >
-        <p
-          v-if="!props.collapsed"
-          class="px-3 pt-2 pb-3 text-[0.7rem] font-semibold tracking-[0.16em] text-text-soft uppercase"
+        <UIcon
+          :name="props.collapsed ? 'i-lucide-panel-left-open' : 'i-lucide-panel-left-close'"
+          class="size-[1.05rem]"
+        />
+      </SipacButton>
+
+      <SipacButton
+        v-else
+        color="neutral"
+        variant="ghost"
+        class="sidebar-toggle rounded-full p-2"
+        aria-label="Cerrar navegación"
+        @click="closeMobileSidebar"
+      >
+        <UIcon name="i-lucide-x" class="size-4.5" />
+      </SipacButton>
+    </div>
+
+    <div class="sidebar-divider" />
+
+    <div class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+      <div class="space-y-5">
+        <section
+          v-for="section in sections"
+          :key="section.label"
+          class="sidebar-nav-section"
+          :class="props.collapsed && !props.mobile ? 'items-center' : ''"
         >
-          Navegación
-        </p>
-
-        <nav aria-label="Principal">
-          <ul class="space-y-1">
-            <li v-for="item in items" :key="item.label">
-              <SipacQuickAction
-                :to="item.to"
-                :icon="item.icon"
-                :label="item.label"
-                :caption="item.caption"
-                :collapsed="props.collapsed"
-                :active="isItemActive(item)"
-                :emphasis="item.kind === 'anchor' ? 'quick' : 'neutral'"
-              />
-            </li>
-          </ul>
-        </nav>
-      </div>
-    </div>
-
-    <div class="rounded-[1.5rem] border border-border/60 bg-white/78 p-3 backdrop-blur-sm">
-      <div class="flex items-center gap-3">
-        <UAvatar :text="initials" :alt="user?.fullName" size="md" class="ring-2 ring-sipac-100" />
-
-        <div v-if="!props.collapsed" class="min-w-0">
-          <p class="truncate text-sm font-semibold text-text">{{ user?.fullName }}</p>
-          <p class="truncate text-xs text-text-muted">
-            {{ user?.program || 'Sin programa asignado' }}
+          <p
+            class="sidebar-section-label"
+            :data-hidden="props.collapsed && !props.mobile ? 'true' : 'false'"
+          >
+            {{ section.label }}
           </p>
-        </div>
+
+          <nav
+            :aria-label="section.label"
+            :class="props.collapsed && !props.mobile ? 'mx-auto w-auto' : 'w-full'"
+          >
+            <ul class="space-y-1.5">
+              <li v-for="item in section.items" :key="item.to">
+                <LayoutSidebarNavItem
+                  :to="item.to"
+                  :icon="item.icon"
+                  :label="item.label"
+                  :collapsed="props.collapsed"
+                  :active="isItemActive(item)"
+                  :secondary="section.label !== 'Principal'"
+                  @click="closeMobileSidebar"
+                />
+              </li>
+            </ul>
+          </nav>
+        </section>
+
+        <LayoutAppSidebarChatRecents
+          v-if="route.path.startsWith('/chat')"
+          :collapsed="props.collapsed"
+          :mobile="props.mobile"
+        />
       </div>
     </div>
-  </div>
+
+    <div class="sidebar-divider mt-5" />
+
+    <div class="pt-4">
+      <UDropdownMenu :items="userMenuItems">
+        <button
+          type="button"
+          class="sidebar-user-card w-full text-left"
+          :class="props.collapsed && !props.mobile ? 'mx-auto w-[3.45rem] justify-center px-0' : ''"
+          :aria-label="props.collapsed && !props.mobile ? 'Abrir menú de usuario' : undefined"
+          :title="props.collapsed && !props.mobile ? 'Abrir menú de usuario' : undefined"
+        >
+          <UAvatar
+            :text="initials"
+            :alt="user?.fullName"
+            size="md"
+            class="ring-2 ring-sipac-200/80 ring-offset-2 ring-offset-surface"
+          />
+
+          <template v-if="!(props.collapsed && !props.mobile)">
+            <div class="sidebar-user-card__text">
+              <p class="truncate text-sm font-semibold text-text">{{ user?.fullName }}</p>
+              <p class="truncate text-xs text-text-muted">{{ footerMeta }}</p>
+            </div>
+
+            <UIcon
+              name="i-lucide-chevrons-up-down"
+              class="sidebar-user-card__chevron size-4 text-text-soft"
+              aria-hidden="true"
+            />
+          </template>
+        </button>
+      </UDropdownMenu>
+    </div>
+  </aside>
 </template>

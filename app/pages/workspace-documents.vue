@@ -82,14 +82,14 @@ const processingMessages = [
   'Ya vamos ubicando título, autores y fecha para armar la ficha.',
   'La vista previa seguirá disponible para que compares cada dato con calma.',
   'En cuanto la ficha esté lista, podrás corregirla antes de guardarla.',
-  'Estamos afinando la lectura OCR para distinguir texto principal y notas visibles.',
+  'Estamos afinando la lectura automática para distinguir texto principal y notas visibles.',
   'Vamos separando encabezados, cuerpo y referencias para describir mejor el documento.',
   'Estamos reconociendo nombres propios, instituciones y fechas relevantes.',
   'Ya estamos contrastando autores, título y año para reducir ambigüedades.',
   'Analizamos la jerarquía del contenido para ordenar la ficha con más claridad.',
-  'Vamos detectando palabras clave y trazas bibliográficas que pueden servirte al revisar.',
+  'Vamos detectando palabras clave y referencias bibliográficas que pueden servirte al revisar.',
   'Estamos verificando si el documento trae DOI, referencia o identificadores útiles.',
-  'La extracción NER sigue en curso para proponer campos editables desde la primera versión.',
+  'Seguimos detectando datos clave para proponerte campos editables desde la primera versión.',
   'Revisamos la consistencia entre portada, encabezado y texto interno del archivo.',
   'Estamos buscando señales del tipo de producto para dejar una clasificación inicial.',
   'Ya vamos ubicando universidad, revista o entidad responsable cuando aparecen en el archivo.',
@@ -101,9 +101,9 @@ const processingMessages = [
   'Seguimos leyendo tablas, encabezados y secciones breves que puedan contener metadatos.',
   'Vamos consolidando una primera propuesta de ficha para que la revisión manual sea más rápida.',
   'Estamos priorizando los datos más útiles para que aparezcan primero en la revisión.',
-  'La detección de entidades sigue activa; pronto podrás validar cada campo con calma.',
+  'La detección de datos sigue activa; pronto podrás validar cada campo con calma.',
   'Estamos revisando si hay metadatos dispersos entre portada, resumen y páginas interiores.',
-  'Vamos preparando una versión clara de la ficha a partir del OCR y la extracción semántica.',
+  'Vamos preparando una versión clara de la ficha a partir de la lectura automática del documento.',
 ]
 
 const MAX_VISIBLE_ANALYSIS_HIGHLIGHTS = 4
@@ -1862,31 +1862,55 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="space-y-5">
-    <section class="panel-surface fade-up px-6 py-6 sm:px-7">
-      <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <!-- Hero Section -->
+    <section
+      class="panel-surface paper-texture hero-warm fade-up relative overflow-hidden px-6 py-6 sm:px-8 sm:py-8"
+    >
+      <!-- Decorative elements -->
+      <div
+        class="pointer-events-none absolute -right-16 -top-16 size-52 rounded-full bg-sipac-200 opacity-20 blur-3xl"
+        aria-hidden="true"
+      ></div>
+      <div
+        class="pointer-events-none absolute -bottom-12 -left-12 size-40 rounded-full bg-earth-200 opacity-15 blur-3xl"
+        aria-hidden="true"
+      ></div>
+
+      <div class="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div class="space-y-3">
-          <p class="section-chip">Documentos</p>
-          <h1 class="max-w-3xl font-display text-3xl font-semibold text-text sm:text-[2.6rem]">
-            Revisa tu archivo antes de guardarlo.
-          </h1>
+          <div class="flex items-center gap-3">
+            <span
+              class="flex size-11 items-center justify-center rounded-2xl bg-sipac-100 text-sipac-700"
+            >
+              <UIcon name="i-lucide-folder-up" class="size-5" />
+            </span>
+            <div>
+              <h1 class="font-display text-2xl font-semibold text-text sm:text-3xl">
+                Carga de documentos
+              </h1>
+              <p class="text-sm text-text-muted">Sube, revisa y confirma tu producción académica</p>
+            </div>
+          </div>
+
           <p class="max-w-2xl text-sm leading-6 text-text-muted sm:text-base">
-            Sube un PDF o una imagen, revisa lo que se detectó y corrige lo necesario sin salir de
-            esta misma vista.
+            El sistema lee tu archivo automáticamente. Tú solo revisas la información detectada y
+            corriges lo que haga falta antes de guardar.
           </p>
+
           <UAlert
             v-if="isReadonlyView"
             color="neutral"
             variant="soft"
             icon="i-lucide-eye"
-            title="Vista de solo lectura"
-            description="Este producto confirmado puede consultarse aquí, pero no editarse ni eliminarse desde tu sesión actual."
+            title="Solo consulta"
+            description="Este documento ya está guardado y no puede editarse desde aquí."
             class="max-w-2xl"
           />
         </div>
 
         <div class="flex flex-wrap gap-3">
-          <SipacButton to="/" icon="i-lucide-arrow-left" color="neutral" variant="soft">
-            Volver al inicio
+          <SipacButton to="/" icon="i-lucide-home" color="neutral" variant="soft">
+            Inicio
           </SipacButton>
         </div>
       </div>
@@ -2663,7 +2687,7 @@ onBeforeUnmount(() => {
           <p class="text-[0.72rem] font-semibold tracking-[0.16em] text-amber-700 uppercase">
             Métricas de prueba
           </p>
-          <h2 class="mt-1 text-lg font-semibold text-text">Seguimiento OCR/NER (solo testing)</h2>
+          <h2 class="mt-1 text-lg font-semibold text-text">Seguimiento técnico (solo testing)</h2>
           <p class="mt-1 max-w-2xl text-sm leading-6 text-text-muted">
             Estas métricas son de soporte para pruebas del flujo actual y se muestran únicamente en
             desarrollo.

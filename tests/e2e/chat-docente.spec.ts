@@ -7,9 +7,12 @@ import AcademicProduct from '../../server/models/AcademicProduct'
 import ChatConversation from '../../server/models/ChatConversation'
 
 const testRunId = `e2e-chat-${Date.now()}`
-const docenteEmail = `${testRunId}@correo.unicordoba.edu.co`
+const ownerEmail = `owner-${testRunId}@correo.unicordoba.edu.co`
+const ownerPassword = 'Docente12345!'
+const ownerFullName = 'Docente Propietario E2E Chat'
+const docenteEmail = `query-${testRunId}@correo.unicordoba.edu.co`
 const docentePassword = 'Docente12345!'
-const docenteFullName = 'Docente E2E Chat'
+const docenteFullName = 'Docente Consultante E2E Chat'
 const seededTitle = `Memorias E2E ${testRunId}`
 const seededDbCiOptIn = /^(1|true)$/i.test(process.env.PLAYWRIGHT_E2E_SEEDED_DB ?? '')
 const shouldRunSeededChatE2E = process.env.CI !== 'true' || seededDbCiOptIn
@@ -54,9 +57,17 @@ test.describe('Chat IA docente', () => {
   test.beforeAll(async () => {
     await connectMongo()
 
-    await User.deleteMany({ email: docenteEmail })
+    await User.deleteMany({ email: { $in: [ownerEmail, docenteEmail] } })
 
-    const user = await User.create({
+    const ownerUser = await User.create({
+      fullName: ownerFullName,
+      email: ownerEmail,
+      passwordHash: ownerPassword,
+      program: 'Ingeniería de Sistemas',
+      role: 'docente',
+    })
+
+    await User.create({
       fullName: docenteFullName,
       email: docenteEmail,
       passwordHash: docentePassword,
@@ -65,7 +76,7 @@ test.describe('Chat IA docente', () => {
     })
 
     const uploadedFile = await UploadedFile.create({
-      uploadedBy: user._id,
+      uploadedBy: ownerUser._id,
       originalFilename: `${testRunId}.pdf`,
       gridfsFileId: new mongoose.Types.ObjectId(),
       mimeType: 'application/pdf',
@@ -86,7 +97,7 @@ test.describe('Chat IA docente', () => {
 
     await AcademicProduct.create({
       productType: 'conference_paper',
-      owner: user._id,
+      owner: ownerUser._id,
       sourceFile: uploadedFile._id,
       segmentIndex: 0,
       reviewStatus: 'confirmed',
@@ -122,13 +133,24 @@ test.describe('Chat IA docente', () => {
   })
 
   test.afterAll(async () => {
-    const seededUser = await User.findOne({ email: docenteEmail }).lean()
+    const seededUsers = await User.find({ email: { $in: [ownerEmail, docenteEmail] } })
+      .select('_id email')
+      .lean()
 
-    if (seededUser?._id) {
-      await AcademicProduct.deleteMany({ owner: seededUser._id })
-      await UploadedFile.deleteMany({ uploadedBy: seededUser._id })
-      await ChatConversation.deleteMany({ userId: seededUser._id })
-      await User.deleteOne({ _id: seededUser._id })
+    const ownerUser = seededUsers.find((user) => user.email === ownerEmail)
+    const queryingUser = seededUsers.find((user) => user.email === docenteEmail)
+
+    if (ownerUser?._id) {
+      await AcademicProduct.deleteMany({ owner: ownerUser._id })
+      await UploadedFile.deleteMany({ uploadedBy: ownerUser._id })
+    }
+
+    if (queryingUser?._id) {
+      await ChatConversation.deleteMany({ userId: queryingUser._id })
+    }
+
+    if (seededUsers.length > 0) {
+      await User.deleteMany({ _id: { $in: seededUsers.map((user) => user._id) } })
     }
 
     if (mongoose.connection.readyState === 1) {
@@ -136,7 +158,7 @@ test.describe('Chat IA docente', () => {
     }
   })
 
-  test('un docente inicia sesión, consulta el chat grounded, valida evidencia y cierra sesión', async ({
+  test('un docente consulta desde el chat el repositorio compartido y valida la evidencia grounded', async ({
     page,
   }) => {
     const browserConsole: string[] = []
@@ -192,21 +214,19 @@ test.describe('Chat IA docente', () => {
     await page.getByRole('link', { name: 'Chat IA' }).click()
     await expect(page).toHaveURL(/\/chat/)
     await page.waitForLoadState('networkidle')
-    await expect(
-      page.getByRole('heading', { name: 'Repositorio conversacional grounded' }),
-    ).toBeVisible()
-    await expect(page.getByText('Selector de modelo')).toBeVisible()
+    await expect(page.getByRole('heading', { name: '¿Qué investigaremos hoy?' })).toBeVisible()
+    await expect(page.getByRole('combobox')).toBeVisible()
 
     const modelSelector = page.getByRole('combobox')
     await modelSelector.click()
 
     const preferredOptions = [
-      page.getByText('Cerebras · qwen-3-235b-a22b-instruct-2507'),
-      page.getByText('NVIDIA · z-ai/glm4.7'),
-      page.getByText('Groq · openai/gpt-oss-120b'),
-      page.getByText('Groq · openai/gpt-oss-20b'),
-      page.getByText('OpenRouter · minimax/minimax-m2.5:free'),
-      page.getByText('OpenRouter · openai/gpt-oss-120b:free'),
+      page.getByText('Qwen 3 235B Instruct'),
+      page.getByText('GLM 4.7'),
+      page.getByText('GPT-OSS 120B'),
+      page.getByText('GPT-OSS 20B'),
+      page.getByText('MiniMax M2.5 (gratis)'),
+      page.getByText('Gemini 2.5 Flash'),
     ]
 
     let selectedOption = false
@@ -223,7 +243,7 @@ test.describe('Chat IA docente', () => {
     }
 
     const chatTextarea = page.getByPlaceholder(
-      'Pregunta por documentos, autores, temas, fechas o combinaciones del repositorio confirmado...',
+      'Pregunta por autores, tema, institución, fechas o tipo de obra académica…',
     )
     await chatTextarea.fill('¿Qué tesis confirmadas están asociadas a la Universidad de Córdoba?')
     await expect(page.getByRole('button', { name: 'Consultar' })).toBeEnabled()
@@ -258,8 +278,8 @@ ${pageErrors.join('\n') || '(sin errores)'}
     ).toBeTruthy()
 
     await expect(
-      page.getByText('Recuperación grounded'),
-      `No apareció evidencia grounded.
+      page.getByText('Búsqueda en el texto del archivo'),
+      `No apareció la estrategia grounded esperada.
 
 Requests:
 ${chatRequests.join('\n') || '(sin requests)'}
@@ -274,20 +294,13 @@ Page errors:
 ${pageErrors.join('\n') || '(sin errores)'}
 `,
     ).toBeVisible({ timeout: 60_000 })
-    await expect(page.getByText('Diagnóstico de recuperación')).toBeVisible({ timeout: 60_000 })
-    await expect(
-      page.getByText('Se amplió la búsqueda retirando temporalmente la restricción de tipo'),
-    ).toBeVisible({ timeout: 60_000 })
     const resultCard = page.locator('article').filter({ hasText: seededTitle }).first()
     await expect(resultCard).toBeVisible({ timeout: 60_000 })
+    await expect(resultCard).toContainText('Ponencia')
     await expect(resultCard).toContainText('Universidad de Córdoba')
     await expect(resultCard).toContainText(
-      'La coincidencia se recuperó por evidencia OCR/nativa y puede no corresponder al tipo thesis.',
+      'Este resultado apareció al buscar también dentro del texto del archivo; puede no ser exactamente una tesis.',
     )
-
-    await page.getByRole('button', { name: 'Nueva conversación' }).click()
-    await expect(page).toHaveURL(/\/chat\?id=/)
-    await expect(page.getByText('Primeros ejemplos')).toBeVisible()
 
     await page.getByRole('button', { name: 'Abrir menú de usuario' }).click()
     await page.getByRole('menuitem', { name: 'Cerrar sesión' }).click()

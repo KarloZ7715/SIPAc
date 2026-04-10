@@ -1,5 +1,75 @@
+<script setup lang="ts">
+const mobileSidebarOpen = useState<boolean>('sipac-mobile-sidebar-open', () => false)
+const desktopSidebarCollapsed = useState<boolean>('sipac-desktop-sidebar-collapsed', () => false)
+const layoutHydrated = ref(false)
+const route = useRoute()
+const isChatRoute = computed(() => route.path.startsWith('/chat'))
+const contentWidthClass = computed(() => {
+  if (isChatRoute.value) {
+    return 'max-w-none w-full'
+  }
+  return route.path === '/' ? 'max-w-[96rem] xl:px-10' : 'max-w-7xl'
+})
+const contentSpacingClass = computed(() => {
+  if (isChatRoute.value) {
+    return 'py-0'
+  }
+  return route.path === '/' ? 'py-4 lg:py-5' : 'py-5 lg:py-6'
+})
+const mainHorizontalPaddingClass = computed(() =>
+  isChatRoute.value ? 'px-3 sm:px-4 lg:px-5' : 'px-4 sm:px-6 lg:px-8',
+)
+const chatMainLayoutClass = computed(() =>
+  isChatRoute.value ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : '',
+)
+
+/** En /chat el shell ocupa el viewport y no añade scroll de página; el hilo hace overflow interno. */
+const shellRootClass = computed(() =>
+  isChatRoute.value
+    ? 'app-shell-bg flex h-dvh max-h-dvh flex-col overflow-hidden'
+    : 'app-shell-bg min-h-screen',
+)
+
+const mobileStackClass = computed(() =>
+  isChatRoute.value ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : '',
+)
+
+const desktopDashboardClass = computed(() =>
+  isChatRoute.value ? 'hidden min-h-0 flex-1 flex-col overflow-hidden lg:flex' : 'hidden lg:block',
+)
+
+const dashboardPanelClass = computed(() =>
+  isChatRoute.value ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'min-h-screen',
+)
+
+/** Solo en /chat se encadena altura fija y sin scroll del panel; el resto conserva scroll natural del documento. */
+const dashboardGroupClass = computed(() =>
+  isChatRoute.value ? 'flex h-full min-h-0 min-w-0 flex-1' : '',
+)
+
+const dashboardPanelUi = computed(() =>
+  isChatRoute.value
+    ? {
+        root: 'flex min-h-0 flex-1 flex-col overflow-hidden',
+        body: 'flex min-h-0 flex-1 flex-col overflow-hidden',
+      }
+    : {},
+)
+
+watch(
+  () => route.fullPath,
+  () => {
+    mobileSidebarOpen.value = false
+  },
+)
+
+onMounted(() => {
+  layoutHydrated.value = true
+})
+</script>
+
 <template>
-  <div class="app-shell-bg min-h-screen">
+  <div :class="shellRootClass">
     <a
       href="#main-content"
       class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-100 focus:rounded-full focus:bg-sipac-700 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
@@ -7,31 +77,108 @@
       Saltar al contenido principal
     </a>
 
-    <UDashboardGroup storage="local" storage-key="sipac-dashboard-shell">
-      <UDashboardSidebar
-        collapsible
-        resizable
-        :min-size="18"
-        :default-size="22"
-        :max-size="26"
-        class="border-r border-border/50 bg-white/84 backdrop-blur-md"
+    <div class="lg:hidden" :class="mobileStackClass">
+      <LayoutAppHeader />
+      <main
+        id="main-content"
+        class="mx-auto w-full"
+        :class="[
+          mainHorizontalPaddingClass,
+          contentWidthClass,
+          contentSpacingClass,
+          chatMainLayoutClass,
+          isChatRoute ? 'min-h-0 flex-1' : '',
+        ]"
       >
-        <template #default="{ collapsed }">
-          <LayoutAppSidebar :collapsed="collapsed" />
-        </template>
-      </UDashboardSidebar>
+        <slot />
+      </main>
 
-      <UDashboardPanel class="min-h-screen">
-        <template #header>
-          <LayoutAppHeader />
-        </template>
-
+      <USlideover
+        v-model:open="mobileSidebarOpen"
+        side="left"
+        :overlay="true"
+        :ui="{ content: 'max-w-[18.5rem] border-r border-border/60 bg-white/96 backdrop-blur-xl' }"
+      >
         <template #body>
-          <main id="main-content" class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div class="h-full overflow-y-auto">
+            <LayoutAppSidebar mobile />
+          </div>
+        </template>
+      </USlideover>
+    </div>
+
+    <div :class="desktopDashboardClass">
+      <UDashboardGroup
+        v-if="layoutHydrated"
+        storage="local"
+        storage-key="sipac-dashboard-shell"
+        unit="rem"
+        :class="dashboardGroupClass"
+      >
+        <UDashboardSidebar
+          v-model:collapsed="desktopSidebarCollapsed"
+          collapsible
+          resizable
+          :min-size="16.5"
+          :default-size="18.5"
+          :max-size="24"
+          :collapsed-size="5.75"
+          :ui="{
+            root: 'relative hidden lg:flex flex-col min-h-svh min-w-16 w-(--width) shrink-0 transition-[width] duration-300 ease-[var(--ease-sipac)]',
+            header: 'h-auto shrink-0 px-1.5 pt-1.5',
+            body: 'flex flex-col gap-4 flex-1 overflow-x-hidden overflow-y-auto px-1.5 py-1.5',
+            footer: 'shrink-0 px-1.5 pb-1.5 pt-0',
+          }"
+          class="sipac-dashboard-sidebar overflow-hidden border-r border-border/50 bg-white/84 backdrop-blur-md"
+        >
+          <template #default="{ collapsed }">
+            <LayoutAppSidebar :collapsed="collapsed" />
+          </template>
+        </UDashboardSidebar>
+
+        <UDashboardPanel :class="dashboardPanelClass" :ui="dashboardPanelUi">
+          <template #header>
+            <LayoutAppHeader />
+          </template>
+
+          <template #body>
+            <main
+              id="main-content"
+              class="mx-auto w-full"
+              :class="[
+                mainHorizontalPaddingClass,
+                contentWidthClass,
+                contentSpacingClass,
+                chatMainLayoutClass,
+                isChatRoute ? 'min-h-0 flex-1' : '',
+              ]"
+            >
+              <slot />
+            </main>
+          </template>
+        </UDashboardPanel>
+      </UDashboardGroup>
+      <div v-else class="hidden min-h-0 flex-1 lg:flex">
+        <aside
+          class="sipac-dashboard-sidebar hidden min-h-svh w-[18.5rem] shrink-0 border-r border-border/50 bg-white/84 backdrop-blur-md lg:flex"
+        />
+        <div class="flex min-h-0 flex-1 flex-col">
+          <LayoutAppHeader />
+          <main
+            id="main-content"
+            class="mx-auto w-full"
+            :class="[
+              mainHorizontalPaddingClass,
+              contentWidthClass,
+              contentSpacingClass,
+              chatMainLayoutClass,
+              isChatRoute ? 'min-h-0 flex-1' : '',
+            ]"
+          >
             <slot />
           </main>
-        </template>
-      </UDashboardPanel>
-    </UDashboardGroup>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

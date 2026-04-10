@@ -4,6 +4,9 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 const route = useRoute()
 const { user, isAdmin, logout } = useAuth()
 const notificationsStore = useNotificationsStore()
+const mobileSidebarOpen = useState<boolean>('sipac-mobile-sidebar-open')
+const isHomeSpecial = computed(() => route.path === '/' && !isAdmin.value)
+const isChatSpecial = computed(() => route.path.startsWith('/chat'))
 
 const showNotifications = ref(false)
 let stopNotificationsFocusRefresh: (() => void) | undefined
@@ -39,15 +42,34 @@ const routeMeta = computed(() => {
     return {
       eyebrow: 'Analítica',
       title: 'Dashboard académico',
-      description: 'Indicadores consolidados del repositorio confirmado.',
+      description: 'Revisa tu avance, detecta patrones y entiende cómo va tu producción.',
+    }
+  }
+
+  if (route.path === '/repository') {
+    return {
+      eyebrow: 'Base académica',
+      title: 'Repositorio académico',
+      description:
+        'Explora productos confirmados, revisa filtros y encuentra material útil sin salir del flujo.',
     }
   }
 
   if (route.path === '/chat') {
     return {
-      eyebrow: 'M9 · Chat IA',
-      title: 'Repositorio conversacional',
-      description: 'Consultas grounded sobre productos confirmados con historial persistido.',
+      eyebrow: 'Consulta asistida',
+      title: 'Chat con respaldo documental',
+      description:
+        'Haz preguntas en lenguaje natural y revisa los documentos que sustentan cada respuesta.',
+    }
+  }
+
+  if (route.path === '/workspace-documents') {
+    return {
+      eyebrow: 'Revisión guiada',
+      title: 'Carga y valida documentos',
+      description:
+        'Sube un archivo, revisa la ficha sugerida y guarda el resultado final con tranquilidad.',
     }
   }
 
@@ -59,12 +81,22 @@ const routeMeta = computed(() => {
     }
   }
 
+  if (route.path === '/') {
+    return {
+      eyebrow: isAdmin.value ? 'Centro administrativo' : 'Centro de trabajo',
+      title: isAdmin.value ? 'Panel institucional' : 'Tu jornada en SIPAc',
+      description: isAdmin.value
+        ? 'Supervisa usuarios, actividad y operacion sin perder de vista lo importante.'
+        : 'Retoma consultas, revisa borradores y mantén tu produccion lista para el siguiente paso.',
+    }
+  }
+
   return {
     eyebrow: isAdmin.value ? 'Centro administrativo' : 'Workspace de productividad',
     title: isAdmin.value ? 'Panel institucional' : 'Bienvenido a SIPAc',
     description: isAdmin.value
-      ? 'Supervisión de usuarios y operación del sistema.'
-      : 'Consulta con IA y gestión documental académica.',
+      ? 'Supervisa usuarios, actividad y operación sin perder de vista lo importante.'
+      : 'Continúa tu trabajo, consulta documentos y organiza nuevas evidencias.',
   }
 })
 
@@ -116,6 +148,10 @@ function openNotifications() {
   void notificationsStore.fetchNotifications()
 }
 
+function openMobileSidebar() {
+  mobileSidebarOpen.value = true
+}
+
 watch(
   () => user.value?._id,
   (nextUserId) => {
@@ -140,29 +176,89 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <header class="border-b border-border/50 bg-white/85 backdrop-blur-md">
+  <header
+    class="border-b backdrop-blur-md"
+    :class="
+      isHomeSpecial || isChatSpecial
+        ? 'border-border/35 bg-white/68 supports-[backdrop-filter]:bg-white/58'
+        : 'border-border/50 bg-white/85'
+    "
+  >
     <div
-      class="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8"
+      class="mx-auto flex w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8"
+      :class="isHomeSpecial || isChatSpecial ? 'max-w-[96rem] py-3.5 xl:px-10' : 'max-w-7xl py-4'"
     >
-      <div class="min-w-0">
-        <p class="text-[0.68rem] font-semibold tracking-[0.22em] text-text-soft uppercase">
-          {{ routeMeta.eyebrow }}
-        </p>
-        <div class="flex flex-wrap items-center gap-3">
-          <h2 class="font-display text-2xl font-semibold text-text sm:text-[2rem]">
-            {{ routeMeta.title }}
-          </h2>
-          <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
-            {{ todayLabel }}
-          </SipacBadge>
+      <div class="flex min-w-0 items-start gap-3">
+        <SipacButton
+          color="neutral"
+          variant="ghost"
+          class="mt-1 rounded-full p-2 lg:hidden"
+          aria-label="Abrir navegación principal"
+          @click="openMobileSidebar"
+        >
+          <UIcon name="i-lucide-panel-left-open" class="size-5" />
+        </SipacButton>
+
+        <div v-if="isHomeSpecial" class="min-w-0">
+          <div class="flex flex-wrap items-center gap-3">
+            <p class="text-[0.68rem] font-semibold tracking-[0.22em] text-text-soft uppercase">
+              Workspace docente
+            </p>
+            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
+            <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
+              {{ todayLabel }}
+            </SipacBadge>
+          </div>
+          <p class="mt-2 text-sm leading-6 text-text-muted">
+            Vuelve a lo que importa hoy sin cargar el inicio con chrome innecesario.
+          </p>
         </div>
-        <p class="mt-1 max-w-2xl text-sm leading-6 text-text-muted">
-          {{ routeMeta.description }}
-        </p>
+
+        <div v-else-if="isChatSpecial" class="min-w-0">
+          <div class="flex flex-wrap items-center gap-3">
+            <p class="text-[0.68rem] font-semibold tracking-[0.22em] text-text-soft uppercase">
+              {{ isAdmin ? 'Centro administrativo' : 'Workspace docente' }}
+            </p>
+            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
+            <SipacBadge color="primary" variant="subtle" size="sm" class="gap-1">
+              <UIcon name="i-lucide-shield-check" class="size-3" />
+              Respaldo documental
+            </SipacBadge>
+            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
+            <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
+              {{ todayLabel }}
+            </SipacBadge>
+          </div>
+          <p class="mt-2 text-sm leading-6 text-text-muted">
+            Haz preguntas como lo harías con un colega; las respuestas se apoyan en los documentos
+            que ya subiste a SIPAc.
+          </p>
+        </div>
+
+        <div v-else class="min-w-0">
+          <p class="text-[0.68rem] font-semibold tracking-[0.22em] text-text-soft uppercase">
+            {{ routeMeta.eyebrow }}
+          </p>
+          <div class="flex flex-wrap items-center gap-3">
+            <h2 class="font-display text-2xl font-semibold text-text sm:text-[2rem]">
+              {{ routeMeta.title }}
+            </h2>
+            <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
+              {{ todayLabel }}
+            </SipacBadge>
+          </div>
+          <p class="mt-1 max-w-2xl text-sm leading-6 text-text-muted">
+            {{ routeMeta.description }}
+          </p>
+        </div>
       </div>
 
       <div class="flex shrink-0 items-center gap-2 sm:gap-3">
-        <SipacBadge :color="isAdmin ? 'warning' : 'primary'" variant="outline">
+        <SipacBadge
+          :color="isAdmin ? 'warning' : 'primary'"
+          variant="outline"
+          class="hidden sm:inline-flex"
+        >
           {{ isAdmin ? 'Administrador' : 'Docente' }}
         </SipacBadge>
 

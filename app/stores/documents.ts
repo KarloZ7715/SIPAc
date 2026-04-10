@@ -16,6 +16,7 @@ type DeleteUploadResponse = ApiSuccessResponse<{ message: string }>
 type ProductDraftResponse = ApiSuccessResponse<{ draft: ProductWorkspaceDraftDTO | null }>
 type ProductsListResponse = ApiSuccessResponse<AcademicProductPublic[]>
 type DeleteProductResponse = ApiSuccessResponse<{ deleted: boolean }>
+type StoreFetch = <T>(request: string, options?: Parameters<typeof $fetch>[1]) => Promise<T>
 
 export interface RepositoryFilters {
   productType?: ProductType
@@ -334,11 +335,11 @@ export const useDocumentsStore = defineStore('documents', () => {
     }
   }
 
-  async function loadCurrentDraft() {
+  async function loadCurrentDraft(fetcher: StoreFetch = $fetch) {
     loadingDraft.value = true
 
     try {
-      const response = await $fetch<ProductDraftResponse>('/api/products/drafts/current')
+      const response = await fetcher<ProductDraftResponse>('/api/products/drafts/current')
 
       if (!response.data.draft) {
         if (!workspaceDraftFile.value) {

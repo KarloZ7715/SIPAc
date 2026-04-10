@@ -122,6 +122,19 @@ describe('useDocumentsStore', () => {
     expect(store.workspaceStage).toBe('ready')
   })
 
+  it('usa un fetcher inyectado para recuperar el borrador actual en SSR', async () => {
+    const store = useDocumentsStore()
+    const draft = createDraftSnapshot()
+    const requestFetchMock = vi.fn().mockResolvedValueOnce({ success: true, data: { draft } })
+
+    await store.loadCurrentDraft(requestFetchMock)
+
+    expect(requestFetchMock).toHaveBeenCalledWith('/api/products/drafts/current')
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(store.activeUploadId).toBe('upload-1')
+    expect(store.workspaceStage).toBe('ready')
+  })
+
   it('confirms the draft and moves the workspace to confirmed', async () => {
     const store = useDocumentsStore()
     const confirmedDraft = createDraftSnapshot({

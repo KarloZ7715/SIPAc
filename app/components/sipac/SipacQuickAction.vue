@@ -58,6 +58,7 @@ const iconClass = computed(() => {
     :to="props.to"
     :aria-label="props.collapsed ? props.label : undefined"
     :aria-current="props.active ? 'page' : undefined"
+    :title="props.collapsed ? props.label : undefined"
     :class="[baseClass, emphasisClass]"
   >
     <span

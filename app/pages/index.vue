@@ -1,373 +1,937 @@
 <script setup lang="ts">
+import { motion } from 'motion-v'
+import type {
+  AcademicProductPublic,
+  ApiSuccessResponse,
+  ProductType,
+  ProfileSummaryResponse,
+} from '~~/app/types'
+
+interface HomeAction {
+  label: string
+  to: string
+  icon: string
+}
+
+interface HomePriorityMetric {
+  label: string
+  value: string
+  note: string
+}
+
+interface HomePrioritySignal {
+  label: string
+  value: string
+  note: string
+  icon: string
+}
+
+interface HomePriorityState {
+  kind:
+    | 'draft_ready'
+    | 'draft_review'
+    | 'document_processing'
+    | 'conversation_resume'
+    | 'confirmed_base'
+    | 'new_user'
+  score: number
+  eyebrow: string
+  statusLabel: string
+  statusTone: 'primary' | 'earth' | 'neutral'
+  title: string
+  summary: string
+  primaryAction: HomeAction
+  secondaryAction: HomeAction | null
+  metrics: HomePriorityMetric[]
+  focusEyebrow: string
+  focusTitle: string
+  focusValue: string
+  focusMeta: string
+  signals: HomePrioritySignal[]
+}
+
+interface HomeRailItem {
+  label: string
+  value: string
+  note: string
+  icon: string
+  tone?: 'primary' | 'earth' | 'neutral'
+}
+
+interface HomeContinuationItem {
+  id: string
+  eyebrow: string
+  title: string
+  reason: string
+  outcome: string
+  meta: string
+  icon: string
+  to: string
+  tone?: 'primary' | 'earth' | 'neutral'
+}
+
+interface HomeDockAction {
+  title: string
+  outcome: string
+  to: string
+  icon: string
+  label?: string
+  tone?: 'primary' | 'earth' | 'neutral'
+  active?: boolean
+}
+
 const { user, isAdmin } = useAuth()
 const usersStore = useUsersStore()
+const chatStore = useChatStore()
+const documentsStore = useDocumentsStore()
 
-const quickPrompts = [
-  'Resume los artículos publicados entre 2022 y 2025.',
-  'Muéstrame documentos relacionados con innovación educativa.',
-  'Identifica evidencias útiles para acreditación institucional.',
-]
+const prefersReducedMotion = useState<boolean>('sipac-home-reduced-motion', () => false)
 
-const selectedPrompt = ref(quickPrompts[0] || '')
+if (import.meta.client) {
+  const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+  prefersReducedMotion.value = media.matches
+
+  const syncReducedMotion = (event: MediaQueryListEvent) => {
+    prefersReducedMotion.value = event.matches
+  }
+
+  onMounted(() => media.addEventListener('change', syncReducedMotion))
+  onBeforeUnmount(() => media.removeEventListener('change', syncReducedMotion))
+}
+
+const { data: homeOverview, pending: homePending } = await useAsyncData(
+  'home-overview',
+  async () => {
+    const requestFetch = import.meta.server ? useRequestFetch() : $fetch
+
+    if (isAdmin.value) {
+      const adminResult = await Promise.allSettled([usersStore.fetchUsers({ page: 1, limit: 6 })])
+
+      return {
+        profileSummary: null,
+        partialFailures: adminResult.some((result) => result.status === 'rejected'),
+      }
+    }
+
+    const [profileResult, conversationsResult, draftResult] = await Promise.allSettled([
+      requestFetch<ApiSuccessResponse<ProfileSummaryResponse>>('/api/profile'),
+      chatStore.fetchConversations(8, requestFetch),
+      documentsStore.loadCurrentDraft(requestFetch),
+    ])
+
+    return {
+      profileSummary: profileResult.status === 'fulfilled' ? profileResult.value.data : null,
+      partialFailures: [profileResult, conversationsResult, draftResult].some(
+        (result) => result.status === 'rejected',
+      ),
+    }
+  },
+  {
+    default: () => ({
+      profileSummary: null,
+      partialFailures: false,
+    }),
+  },
+)
+
+const profileSummary = computed(() => homeOverview.value?.profileSummary ?? null)
+const firstName = computed(() => user.value?.fullName?.split(' ')[0] || 'docente')
+const totalConfirmedProducts = computed(() => profileSummary.value?.totalOwnProducts ?? 0)
+const activeDraftCount = computed(
+  () => profileSummary.value?.latestDrafts.length ?? (documentsStore.draftProduct ? 1 : 0),
+)
+const recentConversationCount = computed(() => chatStore.conversations.length)
+const latestConversation = computed(() => chatStore.conversations[0] ?? null)
+
+const activeDraft = computed(() =>
+  documentsStore.draftProduct && documentsStore.workspaceStage !== 'confirmed'
+    ? documentsStore.draftProduct
+    : null,
+)
+
+const processingDocument = computed(() => {
+  const tracked = documentsStore.activeTrackedDocument
+
+  if (!tracked) {
+    return null
+  }
+
+  return ['pending', 'processing'].includes(tracked.processingStatus) ? tracked : null
+})
+
+const baseMetrics = computed<HomePriorityMetric[]>(() => [
+  {
+    label: 'Confirmados',
+    value: String(totalConfirmedProducts.value),
+    note:
+      totalConfirmedProducts.value > 0
+        ? 'Ya puedes consultarlos y seguirlos.'
+        : 'Aún no hay base activa.',
+  },
+  {
+    label: 'Borradores',
+    value: String(activeDraftCount.value),
+    note: activeDraftCount.value > 0 ? 'Hay trabajo abierto.' : 'No hay borradores abiertos.',
+  },
+  {
+    label: 'Consultas',
+    value: String(recentConversationCount.value),
+    note:
+      recentConversationCount.value > 0
+        ? 'Tienes una conversación reciente.'
+        : 'Aún no has guardado consultas.',
+  },
+])
+
+const priorityState = computed<HomePriorityState>(() => {
+  const candidates: HomePriorityState[] = []
+
+  if (activeDraft.value && documentsStore.workspaceStage === 'ready') {
+    const title = getAcademicProductTitle(activeDraft.value.product) || 'Tu borrador más reciente'
+
+    candidates.push({
+      kind: 'draft_ready',
+      score: 100,
+      eyebrow: 'Ahora',
+      statusLabel: 'Listo para confirmar',
+      statusTone: 'primary',
+      title: 'Tu documento ya está listo.',
+      summary: `Revisa "${title}" y súmalo a tu base hoy.`,
+      primaryAction: {
+        label: 'Validar y confirmar',
+        to: '/workspace-documents',
+        icon: 'i-lucide-badge-check',
+      },
+      secondaryAction: {
+        label: 'Abrir chat',
+        to: '/chat',
+        icon: 'i-lucide-sparkles',
+      },
+      metrics: baseMetrics.value,
+      focusEyebrow: 'Documento abierto',
+      focusTitle: 'Solo falta una revisión breve.',
+      focusValue: title,
+      focusMeta: 'Si entras ahora, puedes dejarlo confirmado en una sola pasada.',
+      signals: [
+        {
+          label: 'Estado',
+          value: 'Listo',
+          note: 'Los datos principales ya están completos.',
+          icon: 'i-lucide-file-check',
+        },
+        {
+          label: 'Impacto',
+          value: 'Se suma a tu base',
+          note: 'Quedará disponible en el tablero y en futuras consultas.',
+          icon: 'i-lucide-arrow-up-right',
+        },
+      ],
+    })
+  }
+
+  if (activeDraft.value && ['draft', 'review'].includes(documentsStore.workspaceStage)) {
+    const title = getAcademicProductTitle(activeDraft.value.product) || 'Tu borrador abierto'
+
+    candidates.push({
+      kind: 'draft_review',
+      score: 90,
+      eyebrow: 'Sigue aquí',
+      statusLabel: 'Revisión en curso',
+      statusTone: 'earth',
+      title: 'Tu borrador sigue abierto.',
+      summary: `Continúa "${title}" y deja cerrada la revisión.`,
+      primaryAction: {
+        label: 'Continuar revisión',
+        to: '/workspace-documents',
+        icon: 'i-lucide-file-pen-line',
+      },
+      secondaryAction: {
+        label: 'Ver tablero',
+        to: '/dashboard',
+        icon: 'i-lucide-chart-column-big',
+      },
+      metrics: baseMetrics.value,
+      focusEyebrow: 'Borrador activo',
+      focusTitle: 'Terminar esto vale más que abrir algo nuevo.',
+      focusValue: title,
+      focusMeta: 'Una pasada corta puede dejarlo listo para confirmar.',
+      signals: [
+        {
+          label: 'Estado',
+          value: 'Falta revisar',
+          note: 'Todavía hay datos por validar antes de confirmarlo.',
+          icon: 'i-lucide-file-warning',
+        },
+        {
+          label: 'Siguiente paso',
+          value: 'Cerrar revisión',
+          note: 'Volverás al punto exacto donde conviene seguir.',
+          icon: 'i-lucide-crosshair',
+        },
+      ],
+    })
+  }
+
+  if (processingDocument.value) {
+    candidates.push({
+      kind: 'document_processing',
+      score: 80,
+      eyebrow: 'En curso',
+      statusLabel: 'Leyendo documento',
+      statusTone: 'neutral',
+      title: 'Tu documento se está preparando.',
+      summary: `SIPAc está leyendo "${processingDocument.value.originalFilename}".`,
+      primaryAction: {
+        label: 'Ver progreso',
+        to: '/workspace-documents',
+        icon: 'i-lucide-loader-circle',
+      },
+      secondaryAction: {
+        label: 'Ir al chat',
+        to: '/chat',
+        icon: 'i-lucide-sparkles',
+      },
+      metrics: baseMetrics.value,
+      focusEyebrow: 'Lectura activa',
+      focusTitle: 'Ya hay trabajo en marcha.',
+      focusValue: processingDocument.value.originalFilename,
+      focusMeta: 'Cuando termine, podrás revisar la ficha y dejarla lista.',
+      signals: [
+        {
+          label: 'Estado',
+          value: 'En proceso',
+          note: 'Aún no conviene cargar otra acción sobre este archivo.',
+          icon: 'i-lucide-hourglass',
+        },
+        {
+          label: 'Después',
+          value: 'Revisar ficha',
+          note: 'Cuando termine, podrás validar el resultado sin empezar de cero.',
+          icon: 'i-lucide-scan-search',
+        },
+      ],
+    })
+  }
+
+  if (latestConversation.value) {
+    candidates.push({
+      kind: 'conversation_resume',
+      score: 72,
+      eyebrow: 'Chat activo',
+      statusLabel: 'Conversación reciente',
+      statusTone: 'primary',
+      title: 'Sigue tu última conversación.',
+      summary: `Vuelve a "${latestConversation.value.title}" y continúa desde ahí.`,
+      primaryAction: {
+        label: 'Abrir conversación',
+        to: `/chat?id=${latestConversation.value.id}`,
+        icon: 'i-lucide-sparkles',
+      },
+      secondaryAction: {
+        label: 'Subir nuevo documento',
+        to: '/workspace-documents',
+        icon: 'i-lucide-folder-up',
+      },
+      metrics: baseMetrics.value,
+      focusEyebrow: 'Último chat',
+      focusTitle: 'Ya tienes un hilo abierto.',
+      focusValue: latestConversation.value.title,
+      focusMeta: `${latestConversation.value.messageCount} mensajes guardados para seguir sin volver a empezar.`,
+      signals: [
+        {
+          label: 'Último movimiento',
+          value: formatRelativeDate(latestConversation.value.lastMessageAt),
+          note: 'El hilo sigue reciente y listo para continuar.',
+          icon: 'i-lucide-history',
+        },
+        {
+          label: 'Al abrir',
+          value: 'Sigues desde ahí',
+          note: 'Recuperas mensajes y referencias sin volver a empezar.',
+          icon: 'i-lucide-arrow-up-right',
+        },
+      ],
+    })
+  }
+
+  if (totalConfirmedProducts.value > 0) {
+    candidates.push({
+      kind: 'confirmed_base',
+      score: 48,
+      eyebrow: 'Panorama',
+      statusLabel: 'Base confirmada',
+      statusTone: 'neutral',
+      title: 'Tu base ya está activa.',
+      summary: 'El tablero ya puede mostrarte avance, vacíos y próximos pasos.',
+      primaryAction: {
+        label: 'Abrir tablero',
+        to: '/dashboard',
+        icon: 'i-lucide-chart-column-big',
+      },
+      secondaryAction: {
+        label: 'Abrir chat',
+        to: '/chat',
+        icon: 'i-lucide-sparkles',
+      },
+      metrics: baseMetrics.value,
+      focusEyebrow: 'Base activa',
+      focusTitle: 'Ya puedes leer tu panorama.',
+      focusValue: `${totalConfirmedProducts.value} documentos confirmados`,
+      focusMeta: 'Entrar al tablero te ayuda a decidir dónde seguir.',
+      signals: [
+        {
+          label: 'Mejor vista',
+          value: 'Tablero personal',
+          note: 'Aquí verás mejor el estado general que entrando módulo por módulo.',
+          icon: 'i-lucide-chart-no-axes-column-increasing',
+        },
+        {
+          label: 'Después',
+          value: 'Priorizar mejor',
+          note: 'Podrás decidir qué revisar, confirmar o consultar.',
+          icon: 'i-lucide-compass',
+        },
+      ],
+    })
+  }
+
+  candidates.push({
+    kind: 'new_user',
+    score: 12,
+    eyebrow: 'Primer paso',
+    statusLabel: homePending.value ? 'Preparando espacio' : 'Listo para empezar',
+    statusTone: 'neutral',
+    title: 'Empieza por tu primer documento.',
+    summary: 'Es la forma más rápida de crear una base útil desde el inicio.',
+    primaryAction: {
+      label: 'Subir primer documento',
+      to: '/workspace-documents',
+      icon: 'i-lucide-folder-up',
+    },
+    secondaryAction: {
+      label: 'Abrir chat',
+      to: '/chat',
+      icon: 'i-lucide-sparkles',
+    },
+    metrics: baseMetrics.value,
+    focusEyebrow: 'Inicio',
+    focusTitle: 'Todavía no hay trabajo cargado.',
+    focusValue: 'Iniciar una carga guiada',
+    focusMeta: 'Después de la primera carga, este inicio empezará a orientarte mejor.',
+    signals: [
+      {
+        label: 'Mejor entrada',
+        value: 'Documentos',
+        note: 'Es la forma más directa de construir una base real.',
+        icon: 'i-lucide-folder-plus',
+      },
+      {
+        label: 'Después',
+        value: 'Primer borrador',
+        note: 'Después de eso, el inicio ya podrá sugerirte un siguiente paso.',
+        icon: 'i-lucide-flag',
+      },
+    ],
+  })
+
+  return candidates.sort((left, right) => right.score - left.score)[0]!
+})
+
+const railItems = computed<HomeRailItem[]>(() => {
+  const items: HomeRailItem[] = [
+    {
+      label: 'Siguiente foco',
+      value:
+        priorityState.value.kind === 'conversation_resume'
+          ? 'Chat'
+          : priorityState.value.kind === 'confirmed_base'
+            ? 'Tablero'
+            : 'Documentos',
+      note:
+        priorityState.value.kind === 'conversation_resume'
+          ? 'Tu mejor entrada hoy es seguir la última conversación.'
+          : priorityState.value.kind === 'confirmed_base'
+            ? 'Hoy conviene mirar el panorama antes de abrir otro frente.'
+            : 'Hoy conviene cerrar trabajo abierto antes de crear algo nuevo.',
+      icon:
+        priorityState.value.kind === 'conversation_resume'
+          ? 'i-lucide-sparkles'
+          : priorityState.value.kind === 'confirmed_base'
+            ? 'i-lucide-chart-column-big'
+            : 'i-lucide-file-check',
+      tone:
+        priorityState.value.kind === 'conversation_resume'
+          ? 'primary'
+          : priorityState.value.kind === 'confirmed_base'
+            ? 'neutral'
+            : 'earth',
+    },
+    {
+      label: 'Último movimiento',
+      value: latestConversation.value
+        ? formatRelativeDate(latestConversation.value.lastMessageAt)
+        : activeDraft.value
+          ? formatRelativeDate(activeDraft.value.product.updatedAt)
+          : 'Sin actividad',
+      note: latestConversation.value
+        ? 'Tu conversación más reciente sigue disponible.'
+        : activeDraft.value
+          ? 'Tu borrador más reciente sigue abierto.'
+          : 'Cuando empieces a trabajar, aquí verás lo último que moviste.',
+      icon: latestConversation.value ? 'i-lucide-history' : 'i-lucide-clock-3',
+      tone: latestConversation.value || activeDraft.value ? 'neutral' : 'neutral',
+    },
+    {
+      label: 'Base activa',
+      value: totalConfirmedProducts.value > 0 ? String(totalConfirmedProducts.value) : 'Vacía',
+      note:
+        totalConfirmedProducts.value > 0
+          ? 'Ya tienes material confirmado para consultar y seguir.'
+          : 'Todavía no hay documentos confirmados en tu base.',
+      icon: 'i-lucide-folder-check',
+      tone: totalConfirmedProducts.value > 0 ? 'primary' : 'neutral',
+    },
+  ]
+
+  return items
+})
+
+const continuationItems = computed<HomeContinuationItem[]>(() => {
+  const items: HomeContinuationItem[] = []
+  const activeDraftId = activeDraft.value?.product._id
+
+  if (priorityState.value.kind === 'draft_ready') {
+    items.push({
+      id: 'priority-draft-ready',
+      eyebrow: 'Ahora',
+      title: 'Confirma el documento que ya está listo.',
+      reason: 'Es el paso más corto para sumar otro registro a tu base.',
+      outcome: 'Entrarás directo a la revisión final.',
+      meta: activeDraft.value ? formatRelativeDate(activeDraft.value.product.updatedAt) : 'hoy',
+      icon: 'i-lucide-badge-check',
+      to: '/workspace-documents',
+      tone: 'primary',
+    })
+  } else if (priorityState.value.kind === 'draft_review') {
+    items.push({
+      id: 'priority-draft-review',
+      eyebrow: 'Ahora',
+      title: 'Termina el borrador que ya dejaste abierto.',
+      reason: 'Cerrar esto vale más que abrir otro frente.',
+      outcome: 'Volverás justo al punto que falta revisar.',
+      meta: activeDraft.value ? formatRelativeDate(activeDraft.value.product.updatedAt) : 'hoy',
+      icon: 'i-lucide-file-pen-line',
+      to: '/workspace-documents',
+      tone: 'earth',
+    })
+  } else if (priorityState.value.kind === 'document_processing' && processingDocument.value) {
+    items.push({
+      id: 'priority-processing',
+      eyebrow: 'Ahora',
+      title: 'Sigue el documento que ya está en lectura.',
+      reason: 'Ya hay trabajo en marcha; no conviene duplicarlo.',
+      outcome: 'Verás el avance actual y el siguiente paso.',
+      meta: processingDocument.value.originalFilename,
+      icon: 'i-lucide-loader-circle',
+      to: '/workspace-documents',
+      tone: 'neutral',
+    })
+  } else if (priorityState.value.kind === 'conversation_resume' && latestConversation.value) {
+    items.push({
+      id: 'priority-conversation',
+      eyebrow: 'Ahora',
+      title: latestConversation.value.title,
+      reason: 'Ya tienes una conversación abierta y lista para seguir.',
+      outcome: 'Entrarás al hilo con su historial completo.',
+      meta: `${latestConversation.value.messageCount} mensajes · ${formatRelativeDate(latestConversation.value.lastMessageAt)}`,
+      icon: 'i-lucide-sparkles',
+      to: `/chat?id=${latestConversation.value.id}`,
+      tone: 'primary',
+    })
+  } else if (priorityState.value.kind === 'confirmed_base') {
+    items.push({
+      id: 'priority-dashboard',
+      eyebrow: 'Ahora',
+      title: 'Abre tu tablero y revisa el panorama.',
+      reason: 'Tu base ya tiene suficiente material para orientar el siguiente paso.',
+      outcome: 'Entrarás al tablero con una vista más clara del avance.',
+      meta: `${totalConfirmedProducts.value} documentos confirmados`,
+      icon: 'i-lucide-chart-column-big',
+      to: '/dashboard',
+      tone: 'neutral',
+    })
+  }
+
+  if (latestConversation.value && priorityState.value.kind !== 'conversation_resume') {
+    items.push({
+      id: `conversation-${latestConversation.value.id}`,
+      eyebrow: 'Chat reciente',
+      title: latestConversation.value.title,
+      reason: 'Sigue disponible para retomarlo sin empezar de cero.',
+      outcome: 'Vuelves al hilo sin reconstruir la consulta.',
+      meta: `${latestConversation.value.messageCount} mensajes · ${formatRelativeDate(latestConversation.value.lastMessageAt)}`,
+      icon: 'i-lucide-sparkles',
+      to: `/chat?id=${latestConversation.value.id}`,
+      tone: 'primary',
+    })
+  }
+
+  for (const draft of profileSummary.value?.latestDrafts ?? []) {
+    if (draft._id === activeDraftId) {
+      continue
+    }
+
+    items.push({
+      id: `draft-${draft._id}`,
+      eyebrow: 'Borrador reciente',
+      title: draft.title || `Borrador de ${formatProductType(draft.productType)}`,
+      reason: 'Sigue abierto y puede cerrarse con una revisión breve.',
+      outcome: 'Vuelves al flujo de documentos.',
+      meta: `${formatProductType(draft.productType)} · ${formatRelativeDate(draft.updatedAt)}`,
+      icon: 'i-lucide-file-pen-line',
+      to: '/workspace-documents',
+      tone: 'earth',
+    })
+  }
+
+  if (items.length === 0 && totalConfirmedProducts.value > 0) {
+    items.push({
+      id: 'confirmed-base',
+      eyebrow: 'Base activa',
+      title: 'Tu base ya puede orientar el siguiente paso.',
+      reason: 'Ya tienes suficiente material para leer avance y vacíos.',
+      outcome: 'Verás un panorama claro en el tablero.',
+      meta: `${totalConfirmedProducts.value} documentos confirmados`,
+      icon: 'i-lucide-chart-column-big',
+      to: '/dashboard',
+      tone: 'neutral',
+    })
+  }
+
+  return items.slice(0, 4)
+})
+
+const featuredContinuation = computed(() => continuationItems.value[0] ?? null)
+const continuationQueue = computed(() => continuationItems.value.slice(1, 4))
+
+const dockActions = computed<HomeDockAction[]>(() => [
+  {
+    title: 'Chat',
+    outcome: latestConversation.value
+      ? 'Sigue tu última conversación.'
+      : 'Haz consultas y vuelve a ellas después.',
+    to: latestConversation.value ? `/chat?id=${latestConversation.value.id}` : '/chat',
+    icon: 'i-lucide-sparkles',
+    label: latestConversation.value ? 'Activo' : 'Consulta',
+    tone: 'primary',
+    active: priorityState.value.kind === 'conversation_resume',
+  },
+  {
+    title: 'Documentos',
+    outcome: activeDraft.value
+      ? 'Sigue el borrador que ya dejaste abierto.'
+      : processingDocument.value
+        ? 'Revisa el avance del documento que está en lectura.'
+        : 'Carga, revisa y confirma nuevos documentos.',
+    to: '/workspace-documents',
+    icon: 'i-lucide-folder-up',
+    label: activeDraft.value || processingDocument.value ? 'En curso' : 'Revisión',
+    tone: 'earth',
+    active: ['draft_ready', 'draft_review', 'document_processing'].includes(
+      priorityState.value.kind,
+    ),
+  },
+  {
+    title: 'Dashboard',
+    outcome:
+      totalConfirmedProducts.value > 0
+        ? 'Lee tu panorama y decide dónde seguir.'
+        : 'Aquí verás más valor cuando tu base crezca.',
+    to: '/dashboard',
+    icon: 'i-lucide-chart-column-big',
+    label: totalConfirmedProducts.value > 0 ? 'Listo' : 'Panorama',
+    tone: 'neutral',
+    active: priorityState.value.kind === 'confirmed_base',
+  },
+  {
+    title: 'Perfil',
+    outcome: 'Actualiza tu cuenta y revisa tu actividad reciente.',
+    to: '/profile',
+    icon: 'i-lucide-user-round',
+    label: 'Cuenta',
+    tone: 'neutral',
+  },
+])
 
 const adminHighlights = computed(() => [
   {
     title: 'Usuarios registrados',
     value: usersStore.meta?.total ?? usersStore.users.length,
     icon: 'i-lucide-users-round',
+    trend: '+12%',
+    trendUp: true,
   },
   {
     title: 'Cuentas activas',
     value: usersStore.users.filter((candidate) => candidate.isActive).length,
     icon: 'i-lucide-shield-check',
+    trend: 'estable',
+    trendUp: null,
   },
   {
     title: 'Docentes visibles',
     value: usersStore.users.filter((candidate) => candidate.role === 'docente').length,
     icon: 'i-lucide-graduation-cap',
+    trend: '+3',
+    trendUp: true,
   },
 ])
 
 const adminPreviewUsers = computed(() => usersStore.users.slice(0, 5))
 
-function fillPrompt(prompt: string) {
-  selectedPrompt.value = prompt
+function enterMotion(delay = 0, distance = 18) {
+  const transition = prefersReducedMotion.value
+    ? { duration: 0.01, delay: 0 }
+    : { duration: 0.42, delay, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] }
+
+  return {
+    initial: {
+      opacity: 0,
+      y: prefersReducedMotion.value ? 0 : distance,
+    },
+    animate: { opacity: 1, y: 0 },
+    transition,
+  }
 }
 
-onMounted(async () => {
-  if (isAdmin.value) {
-    await usersStore.fetchUsers({ page: 1, limit: 6 })
+function getGreeting() {
+  const hour = new Date().getHours()
+  if (hour < 12) return `Buenos días, ${firstName.value}`
+  if (hour < 18) return `Buenas tardes, ${firstName.value}`
+  return `Buenas noches, ${firstName.value}`
+}
+
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .slice(0, 2)
+    .map((chunk) => chunk[0])
+    .join('')
+    .toUpperCase()
+}
+
+function formatProductType(productType: ProductType) {
+  return (
+    {
+      article: 'Artículo',
+      thesis: 'Tesis',
+      conference_paper: 'Ponencia',
+      certificate: 'Certificado',
+      research_project: 'Proyecto',
+      book: 'Libro',
+      book_chapter: 'Capítulo',
+      technical_report: 'Informe',
+      software: 'Software',
+      patent: 'Patente',
+    }[productType] ?? productType
+  )
+}
+
+function formatRelativeDate(dateString: string) {
+  const timestamp = new Date(dateString).getTime()
+
+  if (Number.isNaN(timestamp)) {
+    return 'hoy'
   }
-})
+
+  const diffMs = timestamp - Date.now()
+  const diffMinutes = Math.round(diffMs / (1000 * 60))
+  const diffHours = Math.round(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
+  const formatter = new Intl.RelativeTimeFormat('es', { numeric: 'auto' })
+
+  if (Math.abs(diffMinutes) < 60) {
+    return formatter.format(diffMinutes, 'minute')
+  }
+
+  if (Math.abs(diffHours) < 24) {
+    return formatter.format(diffHours, 'hour')
+  }
+
+  return formatter.format(diffDays, 'day')
+}
+
+function getAcademicProductTitle(product: AcademicProductPublic) {
+  return product.manualMetadata.title || product.extractedEntities.title?.value || ''
+}
 </script>
 
 <template>
-  <div class="space-y-8">
-    <section
-      class="panel-surface hero-wash fade-up overflow-hidden px-6 py-7 sm:px-8 sm:py-8"
-      :class="isAdmin ? '' : 'relative'"
-    >
-      <div
-        v-if="!isAdmin"
-        class="pointer-events-none absolute -top-16 right-10 hidden size-44 rounded-full bg-sipac-200/40 blur-3xl lg:block"
-        aria-hidden="true"
-      />
-
-      <div class="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_22rem]">
-        <div class="min-w-0 space-y-5">
-          <div class="section-chip">
-            <UIcon
-              :name="isAdmin ? 'i-lucide-shield-check' : 'i-lucide-sparkles'"
-              class="size-3.5"
-              aria-hidden="true"
-            />
-            {{ isAdmin ? 'Operación segura' : 'Workspace con IA' }}
-          </div>
-
-          <div class="space-y-3">
-            <h1 class="font-display text-4xl font-semibold text-text sm:text-5xl">
-              {{
-                isAdmin
-                  ? 'Gobierno operativo de SIPAc con claridad institucional.'
-                  : `Hola, ${user?.fullName?.split(' ')[0] || 'docente'}. Tu trabajo empieza aquí.`
-              }}
-            </h1>
-            <p class="max-w-3xl text-base leading-7 text-text-muted sm:text-lg">
-              {{
-                isAdmin
-                  ? 'Supervisa cuentas, fortalece la trazabilidad y mantén una experiencia segura para toda la comunidad académica.'
-                  : 'Consulta evidencias con apoyo de IA, prepara la carga documental y mantén la productividad académica con una interfaz clara, ágil y amigable.'
-              }}
-            </p>
-          </div>
-
-          <div class="flex flex-wrap gap-3">
-            <SipacBadge color="primary" variant="subtle" size="lg">
-              {{ isAdmin ? 'Administración institucional' : 'Consulta asistida' }}
-            </SipacBadge>
-            <SipacBadge color="neutral" variant="outline" size="lg">
-              {{ user?.program || 'Universidad de Córdoba' }}
-            </SipacBadge>
-          </div>
-
-          <div class="flex flex-wrap gap-3">
-            <SipacButton
-              v-if="!isAdmin"
-              to="/#workspace-ia"
-              icon="i-lucide-sparkles"
-              size="lg"
-              class="shadow-[0_20px_36px_-22px_rgba(18,63,40,0.6)]"
-            >
-              Ir al workspace IA
-            </SipacButton>
-            <SipacButton
-              v-if="!isAdmin"
-              to="/workspace-documents"
-              icon="i-lucide-folder-up"
-              color="neutral"
-              variant="soft"
-              size="lg"
-            >
-              Abrir workspace documental
-            </SipacButton>
-            <SipacButton v-if="isAdmin" to="/admin/users" icon="i-lucide-users-round" size="lg">
-              Gestionar usuarios
-            </SipacButton>
-            <SipacButton
-              v-if="isAdmin"
-              to="/profile"
-              icon="i-lucide-user-round"
-              color="neutral"
-              variant="soft"
-              size="lg"
-            >
-              Ajustar mi cuenta
-            </SipacButton>
-          </div>
-        </div>
-
-        <div class="space-y-4">
-          <div class="panel-muted p-4">
-            <p class="text-[0.7rem] font-semibold tracking-[0.18em] text-text-soft uppercase">
-              {{ isAdmin ? 'Estado general' : 'Enfoque de trabajo' }}
-            </p>
-            <div class="mt-3 space-y-3">
-              <div class="flex items-start gap-3">
-                <span
-                  class="mt-1 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-sipac-100 text-sipac-700"
-                >
-                  <UIcon
-                    :name="isAdmin ? 'i-lucide-waypoints' : 'i-lucide-message-square-diff'"
-                    class="size-4.5"
-                    aria-hidden="true"
-                  />
-                </span>
-                <div>
-                  <p class="font-semibold text-text">
-                    {{ isAdmin ? 'Operación prioritaria' : 'Consulta inteligente primero' }}
-                  </p>
-                  <p class="text-sm leading-6 text-text-muted">
-                    {{
-                      isAdmin
-                        ? 'La vista administrativa pone primero el control de usuarios, la lectura rápida y la toma de decisiones claras.'
-                        : 'La interfaz privilegia el flujo conversacional y deja la carga documental como segundo paso natural.'
-                    }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="flex items-start gap-3">
-                <span
-                  class="mt-1 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-earth-100 text-earth-700"
-                >
-                  <UIcon
-                    :name="isAdmin ? 'i-lucide-shield' : 'i-lucide-folder-lock'"
-                    class="size-4.5"
-                    aria-hidden="true"
-                  />
-                </span>
-                <div>
-                  <p class="font-semibold text-text">Trabajo confiable</p>
-                  <p class="text-sm leading-6 text-text-muted">
-                    La experiencia evita ruido innecesario y deja visibles solo las acciones que
-                    realmente ayudan al usuario.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+  <div class="space-y-8 lg:space-y-9">
+    <UAlert
+      v-if="homeOverview?.partialFailures && !isAdmin"
+      color="warning"
+      variant="subtle"
+      icon="i-lucide-circle-alert"
+      title="Parte del inicio no se actualizó por completo"
+      description="Puedes seguir trabajando, pero algunas señales podrían tardar un poco más en reflejarse."
+    />
 
     <template v-if="!isAdmin">
-      <section class="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.9fr)]">
-        <div id="workspace-ia" class="panel-surface fade-up stagger-1 space-y-5 p-6 sm:p-7">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p class="section-chip">Consulta asistida</p>
-              <h2 class="mt-3 font-display text-3xl font-semibold text-text">
-                Workspace IA para explorar producción académica
-              </h2>
-              <p class="mt-2 max-w-2xl text-sm leading-6 text-text-muted">
-                La interfaz deja lista la conversación futura: prompts orientados a repositorio,
-                filtros naturales y continuidad con el procesamiento documental real.
-              </p>
-            </div>
+      <motion.section v-bind="enterMotion(0, 20)">
+        <div class="grid gap-5 xl:grid-cols-[minmax(0,1.52fr)_22rem]">
+          <HomeWorkstage
+            :eyebrow="priorityState.eyebrow"
+            :status-label="priorityState.statusLabel"
+            :status-tone="priorityState.statusTone"
+            :title="priorityState.title"
+            :summary="priorityState.summary"
+            :primary-action="priorityState.primaryAction"
+            :secondary-action="priorityState.secondaryAction"
+            :metrics="priorityState.metrics"
+            :focus-eyebrow="priorityState.focusEyebrow"
+            :focus-title="priorityState.focusTitle"
+            :focus-value="priorityState.focusValue"
+            :focus-meta="priorityState.focusMeta"
+            :signals="priorityState.signals"
+          />
 
-            <!-- <SipacBadge color="primary" variant="subtle" size="lg"> Consulta guiada </SipacBadge> -->
-          </div>
-
-          <div class="panel-muted space-y-4 p-4 sm:p-5">
-            <div class="rounded-[1.4rem] border border-border/70 bg-white/80 p-4">
-              <p class="text-sm font-semibold text-text">Prompt recomendado</p>
-              <p class="mt-2 text-sm leading-6 text-text-muted">{{ selectedPrompt }}</p>
-            </div>
-
-            <div class="flex flex-wrap gap-2">
-              <SipacButton
-                v-for="prompt in quickPrompts"
-                :key="prompt"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                @click="fillPrompt(prompt)"
-              >
-                {{ prompt }}
-              </SipacButton>
-            </div>
-
-            <UAlert
-              color="primary"
-              variant="outline"
-              icon="i-lucide-messages-square"
-              title="Próximo módulo conversacional"
-              description="El workspace IA ya quedó encuadrado para consultas sobre autores, fechas, temas e institución usando lenguaje natural."
+          <motion.div v-bind="enterMotion(0.08, 22)">
+            <HomePulsePanel
+              title="Tu jornada en breve."
+              description="Tres señales rápidas para decidir dónde conviene entrar primero."
+              :items="railItems"
             />
-          </div>
+          </motion.div>
+        </div>
+      </motion.section>
 
-          <div class="grid gap-4 md:grid-cols-3">
-            <div class="panel-muted p-4">
-              <p class="text-xs font-semibold tracking-[0.16em] text-text-soft uppercase">
-                Consultas combinadas
-              </p>
-              <p class="mt-2 text-sm leading-6 text-text-muted">
-                Rango de fechas, autor, tema e institución en lenguaje natural.
-              </p>
-            </div>
-            <div class="panel-muted p-4">
-              <p class="text-xs font-semibold tracking-[0.16em] text-text-soft uppercase">
-                Contexto conversacional
-              </p>
-              <p class="mt-2 text-sm leading-6 text-text-muted">
-                Follow-ups sin perder el hilo del análisis documental.
-              </p>
-            </div>
-            <div class="panel-muted p-4">
-              <p class="text-xs font-semibold tracking-[0.16em] text-text-soft uppercase">
-                Enlaces verificables
-              </p>
-              <p class="mt-2 text-sm leading-6 text-text-muted">
-                Salida pensada para abrir o descargar documentos asociados.
-              </p>
-            </div>
+      <motion.section v-bind="enterMotion(0.14, 24)">
+        <HomeActivityFeed
+          title="Sigue donde lo dejaste"
+          description="Aquí aparece lo más útil para retomar primero."
+          :featured="featuredContinuation"
+          :queue="continuationQueue"
+          :loading="homePending"
+        />
+      </motion.section>
+
+      <motion.section
+        v-bind="enterMotion(0.2, 26)"
+        class="panel-surface home-dock-shell px-5 py-5 sm:px-6"
+      >
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div class="space-y-1">
+            <p class="text-[0.68rem] font-semibold tracking-[0.18em] text-text-soft uppercase">
+              Dock de trabajo
+            </p>
+            <h2 class="font-display text-2xl font-semibold text-text">
+              Entra al espacio correcto.
+            </h2>
+            <p class="max-w-2xl text-sm leading-6 text-text-muted">
+              Usa cada módulo sin perder de vista tu prioridad principal.
+            </p>
           </div>
         </div>
 
-        <div id="workspace-documentos">
-          <DashboardDocumentsWorkspace />
+        <div class="mt-6 grid gap-3 lg:grid-cols-2 2xl:grid-cols-4">
+          <HomeWorkspaceLauncher
+            v-for="action in dockActions"
+            :key="action.title"
+            :title="action.title"
+            :outcome="action.outcome"
+            :to="action.to"
+            :icon="action.icon"
+            :label="action.label"
+            :tone="action.tone"
+            :active="action.active"
+          />
         </div>
-      </section>
-
-      <section class="grid gap-4 md:grid-cols-3">
-        <SipacCard interactive>
-          <template #header>
-            <div class="flex items-center gap-3">
-              <span
-                class="flex size-11 items-center justify-center rounded-2xl bg-sipac-50 text-sipac-700"
-              >
-                <UIcon name="i-lucide-user-round" class="size-5" aria-hidden="true" />
-              </span>
-              <div>
-                <h3 class="font-semibold text-text">Mi perfil</h3>
-                <p class="text-sm text-text-muted">Cuenta, programa y contraseña</p>
-              </div>
-            </div>
-          </template>
-
-          <p class="text-sm leading-6 text-text-muted">
-            Mantén actualizados los datos personales y refuerza el acceso con un flujo claro de
-            credenciales.
-          </p>
-
-          <template #footer>
-            <SipacButton to="/profile" variant="ghost" color="neutral">Ir al perfil</SipacButton>
-          </template>
-        </SipacCard>
-
-        <SipacCard interactive>
-          <template #header>
-            <div class="flex items-center gap-3">
-              <span
-                class="flex size-11 items-center justify-center rounded-2xl bg-earth-50 text-earth-700"
-              >
-                <UIcon name="i-lucide-book-open-text" class="size-5" aria-hidden="true" />
-              </span>
-              <div>
-                <h3 class="font-semibold text-text">Contexto académico</h3>
-                <p class="text-sm text-text-muted">Diseñado para acreditación y trazabilidad</p>
-              </div>
-            </div>
-          </template>
-
-          <p class="text-sm leading-6 text-text-muted">
-            La experiencia visual privilegia evidencias, claridad de lectura y preparación para
-            reportes institucionales.
-          </p>
-        </SipacCard>
-
-        <SipacCard interactive>
-          <template #header>
-            <div class="flex items-center gap-3">
-              <span
-                class="flex size-11 items-center justify-center rounded-2xl bg-sipac-50 text-sipac-700"
-              >
-                <UIcon name="i-lucide-shield-check" class="size-5" aria-hidden="true" />
-              </span>
-              <div>
-                <h3 class="font-semibold text-text">Seguridad visible</h3>
-                <p class="text-sm text-text-muted">Estados, cola y avisos sin perder claridad</p>
-              </div>
-            </div>
-          </template>
-
-          <p class="text-sm leading-6 text-text-muted">
-            La carga documental ahora vive en un espacio propio, con estados claros y corrección
-            guiada antes de guardar.
-          </p>
-        </SipacCard>
-      </section>
+      </motion.section>
     </template>
 
     <template v-else>
-      <section class="grid gap-4 lg:grid-cols-3">
-        <SipacCard v-for="highlight in adminHighlights" :key="highlight.title" interactive>
-          <template #header>
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <p class="text-xs font-semibold tracking-[0.16em] text-text-soft uppercase">
-                  {{ highlight.title }}
-                </p>
-                <p class="mt-2 text-3xl font-semibold tabular-nums text-text">
-                  {{ highlight.value }}
+      <ExperiencePageHero
+        :eyebrow="getGreeting()"
+        title="Administra SIPAc con una vista clara de la operacion."
+        description="Supervisa cuentas, actividad reciente y accesos criticos sin perder el contexto del dia."
+        icon="i-lucide-compass"
+      >
+        <template #badges>
+          <SipacBadge color="primary" variant="subtle" size="lg">
+            <UIcon name="i-lucide-check-circle" class="size-3.5" />
+            Administrador
+          </SipacBadge>
+          <SipacBadge color="neutral" variant="outline" size="lg">
+            {{ user?.program || 'Universidad de Cordoba' }}
+          </SipacBadge>
+        </template>
+
+        <template #actions>
+          <SipacButton to="/admin/users" icon="i-lucide-users-round" size="lg">
+            Gestionar usuarios
+          </SipacButton>
+          <SipacButton
+            to="/profile"
+            icon="i-lucide-settings"
+            color="neutral"
+            variant="soft"
+            size="lg"
+          >
+            Configuracion
+          </SipacButton>
+        </template>
+
+        <template #aside>
+          <ExperienceContextPanel
+            eyebrow="Resumen del dia"
+            title="Prioriza lo que requiere atencion."
+            description="Empieza por usuarios si hay cambios pendientes y entra al dashboard si necesitas una lectura global."
+            icon="i-lucide-activity"
+            tone="neutral"
+          >
+            <div class="space-y-3">
+              <div class="rounded-xl bg-white/75 p-3">
+                <p class="text-sm font-semibold text-text">Actividad reciente</p>
+                <p class="mt-1 text-sm leading-6 text-text-muted">
+                  Revisa quien entro, que cambio y si hay cuentas que requieren seguimiento.
                 </p>
               </div>
-
-              <span
-                class="flex size-12 items-center justify-center rounded-2xl bg-sipac-50 text-sipac-700"
-              >
-                <UIcon :name="highlight.icon" class="size-5" aria-hidden="true" />
-              </span>
+              <div class="rounded-xl bg-white/75 p-3">
+                <p class="text-sm font-semibold text-text">Panel institucional</p>
+                <p class="mt-1 text-sm leading-6 text-text-muted">
+                  Manten una lectura rapida del estado del sistema antes de pasar a acciones
+                  especificas.
+                </p>
+              </div>
             </div>
-          </template>
-        </SipacCard>
+          </ExperienceContextPanel>
+        </template>
+      </ExperiencePageHero>
+
+      <section class="grid gap-4 lg:grid-cols-3">
+        <ExperienceStatCard
+          v-for="(highlight, index) in adminHighlights"
+          :key="highlight.title"
+          :class="`fade-up stagger-${index + 1}`"
+          :label="highlight.title"
+          :value="highlight.value"
+          :icon="highlight.icon"
+          :caption="highlight.trendUp === null ? highlight.trend : 'Tendencia reciente'"
+          :trend="highlight.trendUp !== null ? highlight.trend : ''"
+        />
       </section>
 
-      <section class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
-        <SipacCard>
+      <section class="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
+        <SipacCard class="fade-up stagger-2">
           <template #header>
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p class="section-chip">Usuarios recientes</p>
-                <h2 class="mt-3 font-display text-3xl font-semibold text-text">
-                  Visibilidad rápida sobre la operación
-                </h2>
-                <p class="mt-2 text-sm leading-6 text-text-muted">
-                  La home administrativa prioriza claridad, estado y acceso directo a gestión de
-                  cuentas.
+                <h2 class="font-display text-2xl font-semibold text-text">Usuarios recientes</h2>
+                <p class="mt-1 text-sm text-text-muted">
+                  Vista rapida de las ultimas cuentas registradas.
                 </p>
               </div>
-
               <SipacButton
                 to="/admin/users"
                 icon="i-lucide-arrow-right"
@@ -375,24 +939,33 @@ onMounted(async () => {
                 color="neutral"
                 variant="soft"
               >
-                Abrir gestión de usuarios
+                Ver todos
               </SipacButton>
             </div>
           </template>
 
           <div v-if="usersStore.loading" class="grid gap-3">
-            <USkeleton v-for="index in 4" :key="index" class="h-16 rounded-2xl" />
+            <div
+              v-for="index in 4"
+              :key="index"
+              class="h-16 rounded-2xl skeleton-shimmer bg-surface-muted"
+            />
           </div>
 
           <div v-else-if="adminPreviewUsers.length" class="space-y-3">
             <div
               v-for="account in adminPreviewUsers"
               :key="account._id"
-              class="panel-muted flex items-center justify-between gap-4 p-4"
+              class="flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-surface-muted/50 p-4 transition-colors hover:bg-surface-muted"
             >
-              <div class="min-w-0">
-                <p class="truncate font-semibold text-text">{{ account.fullName }}</p>
-                <p class="truncate text-sm text-text-muted">{{ account.email }}</p>
+              <div class="flex items-center gap-3">
+                <span class="avatar-initials size-10 text-sm">
+                  {{ getInitials(account.fullName) }}
+                </span>
+                <div class="min-w-0">
+                  <p class="truncate font-semibold text-text">{{ account.fullName }}</p>
+                  <p class="truncate text-sm text-text-muted">{{ account.email }}</p>
+                </div>
               </div>
 
               <div class="flex shrink-0 items-center gap-2">
@@ -412,38 +985,33 @@ onMounted(async () => {
           <UEmpty
             v-else
             icon="i-lucide-users-round"
-            title="No se encontraron usuarios"
-            description="Cuando la carga administrativa esté disponible, aquí verás un resumen rápido de cuentas."
+            title="Sin usuarios todavia"
+            description="Cuando se registren usuarios, apareceran aqui."
           />
         </SipacCard>
 
-        <div class="space-y-6">
-          <SipacCard>
-            <template #header>
-              <div class="flex items-center gap-3">
-                <span
-                  class="flex size-11 items-center justify-center rounded-2xl bg-earth-50 text-earth-700"
-                >
-                  <UIcon name="i-lucide-building-2" class="size-5" aria-hidden="true" />
-                </span>
-                <div>
-                  <h3 class="font-semibold text-text">Operación institucional</h3>
-                  <p class="text-sm text-text-muted">Administración seria, no pesada</p>
-                </div>
-              </div>
-            </template>
+        <div class="space-y-4 fade-up stagger-3">
+          <ExperienceContextPanel
+            eyebrow="Panel de administracion"
+            title="Actua con contexto, no a ciegas."
+            description="Usa esta vista para detectar movimientos importantes antes de entrar a una seccion especifica."
+            icon="i-lucide-info"
+            tone="earth"
+          />
 
-            <div class="space-y-3 text-sm leading-6 text-text-muted">
-              <p>
-                Las acciones visibles están organizadas para facilitar decisiones rápidas y reducir
-                confusiones.
-              </p>
-              <p>
-                La creación y la edición permanecen separadas para mantener una operación más
-                ordenada.
-              </p>
-            </div>
-          </SipacCard>
+          <ExperienceContextPanel
+            eyebrow="Actividad reciente"
+            title="Consulta el registro cuando necesites contexto."
+            description="El historial te ayuda a entender que paso, quien actuo y que conviene revisar despues."
+            icon="i-lucide-activity"
+            tone="primary"
+          >
+            <template #footer>
+              <SipacButton to="/admin/audit-logs" variant="ghost" color="neutral" size="sm">
+                Ver registro completo
+              </SipacButton>
+            </template>
+          </ExperienceContextPanel>
         </div>
       </section>
     </template>

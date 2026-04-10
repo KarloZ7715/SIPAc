@@ -5,11 +5,30 @@ import type { DatabaseId } from './database'
 export const CHAT_MODEL_PROVIDERS = ['cerebras', 'gemini', 'groq', 'openrouter', 'nvidia'] as const
 export type ChatModelProvider = (typeof CHAT_MODEL_PROVIDERS)[number]
 
+/** Título de proveedor en el selector de modelos (sin IDs técnicos). */
+export const CHAT_PROVIDER_DISPLAY_NAME: Record<ChatModelProvider, string> = {
+  cerebras: 'Cerebras',
+  gemini: 'Google',
+  groq: 'Groq',
+  nvidia: 'NVIDIA',
+  openrouter: 'OpenRouter',
+}
+
+/** Orden de secciones en el desplegable de modelos (proveedores no listados van al final, por nombre). */
+export const CHAT_MODEL_PROVIDER_SECTION_ORDER: ChatModelProvider[] = [
+  'cerebras',
+  'groq',
+  'nvidia',
+  'openrouter',
+  'gemini',
+]
+
 export interface ChatMessageMetadata {
   createdAt?: number
   provider?: ChatModelProvider
   model?: string
   finishReason?: string
+  stoppedByUser?: boolean
   totalTokens?: number
   retrievalStrategy?: ChatSearchStrategy
 }
@@ -111,6 +130,8 @@ export interface ChatConversationSummaryPublic {
   title: string
   messageCount: number
   lastMessagePreview?: string
+  /** Última actividad con mensajes (max metadata.createdAt); no cambia al solo abrir el chat. */
+  lastMessageAt: string
   createdAt: string
   updatedAt: string
 }

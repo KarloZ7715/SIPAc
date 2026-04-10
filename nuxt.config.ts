@@ -13,7 +13,6 @@ if (!isTest) {
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
-  devtools: { enabled: !isTest },
   modules,
   css: ['~/assets/css/main.css'],
 
@@ -111,6 +110,8 @@ export default defineNuxtConfig({
     },
   },
 
+  ...(isTest ? {} : { devtools: { enabled: true } }),
+
   sentry: enableSentry
     ? {
         org: process.env.SENTRY_ORG ?? 'carlos-cc',
@@ -124,4 +125,8 @@ export default defineNuxtConfig({
         client: 'hidden',
       }
     : undefined,
+
+  devtools: {
+    enabled: true,
+  },
 })

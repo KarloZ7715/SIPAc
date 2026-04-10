@@ -13,6 +13,7 @@ type ChatConversationResponse = ApiSuccessResponse<{
 }>
 type ChatProvidersApiResponse = ApiSuccessResponse<ChatProvidersResponse>
 type ChatDeleteResponse = ApiSuccessResponse<{ message: string }>
+type StoreFetch = <T>(request: string, options?: Parameters<typeof $fetch>[1]) => Promise<T>
 
 export const useChatStore = defineStore('chat', () => {
   const conversations = ref<ChatConversationSummaryPublic[]>([])
@@ -23,11 +24,11 @@ export const useChatStore = defineStore('chat', () => {
   const providersLoading = ref(false)
   const deletingConversationId = ref<string | null>(null)
 
-  async function fetchConversations(limit = 20) {
+  async function fetchConversations(limit = 20, fetcher: StoreFetch = $fetch) {
     conversationsLoading.value = true
 
     try {
-      const response = await $fetch<ChatConversationListResponse>('/api/chat/conversations', {
+      const response = await fetcher<ChatConversationListResponse>('/api/chat/conversations', {
         query: { limit },
       })
 
@@ -45,6 +46,9 @@ export const useChatStore = defineStore('chat', () => {
       const response = await $fetch<ChatConversationResponse>(`/api/chat/conversations/${id}`)
       activeConversation.value = response.data.conversation
       return activeConversation.value
+    } catch (error) {
+      activeConversation.value = null
+      throw error
     } finally {
       conversationLoading.value = false
     }

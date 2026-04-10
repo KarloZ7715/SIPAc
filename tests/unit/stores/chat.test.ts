@@ -29,6 +29,7 @@ describe('useChatStore', () => {
             lastMessagePreview: 'Encontré 2 coincidencias',
             createdAt: '2026-03-23T10:00:00.000Z',
             updatedAt: '2026-03-23T10:05:00.000Z',
+            lastMessageAt: '2026-03-23T10:05:00.000Z',
           },
         ],
       },
@@ -39,6 +40,34 @@ describe('useChatStore', () => {
     expect(store.conversations).toHaveLength(1)
     expect(store.conversations[0]?.id).toBe('chat-1')
     expect(store.conversationsLoading).toBe(false)
+  })
+
+  it('permite inyectar un fetcher para SSR autenticado', async () => {
+    const store = useChatStore()
+    const requestFetchMock = vi.fn().mockResolvedValueOnce({
+      success: true,
+      data: {
+        conversations: [
+          {
+            id: 'chat-ssr-1',
+            title: 'Carga inicial autenticada',
+            messageCount: 1,
+            lastMessagePreview: 'Contexto listo',
+            createdAt: '2026-03-23T10:00:00.000Z',
+            updatedAt: '2026-03-23T10:05:00.000Z',
+            lastMessageAt: '2026-03-23T10:05:00.000Z',
+          },
+        ],
+      },
+    })
+
+    await store.fetchConversations(8, requestFetchMock)
+
+    expect(requestFetchMock).toHaveBeenCalledWith('/api/chat/conversations', {
+      query: { limit: 8 },
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(store.conversations[0]?.id).toBe('chat-ssr-1')
   })
 
   it('carga una conversación y la limpia al eliminarla', async () => {
@@ -54,6 +83,7 @@ describe('useChatStore', () => {
           lastMessagePreview: 'Encontré 2 coincidencias',
           createdAt: '2026-03-23T10:00:00.000Z',
           updatedAt: '2026-03-23T10:05:00.000Z',
+          lastMessageAt: '2026-03-23T10:05:00.000Z',
           messages: [],
         },
       },
@@ -67,6 +97,7 @@ describe('useChatStore', () => {
         lastMessagePreview: 'Encontré 2 coincidencias',
         createdAt: '2026-03-23T10:00:00.000Z',
         updatedAt: '2026-03-23T10:05:00.000Z',
+        lastMessageAt: '2026-03-23T10:05:00.000Z',
       },
       {
         id: 'chat-2',
@@ -75,6 +106,7 @@ describe('useChatStore', () => {
         lastMessagePreview: 'Sin resultados',
         createdAt: '2026-03-23T09:00:00.000Z',
         updatedAt: '2026-03-23T09:01:00.000Z',
+        lastMessageAt: '2026-03-23T09:01:00.000Z',
       },
     ]
 
@@ -95,5 +127,31 @@ describe('useChatStore', () => {
     expect(store.conversations.map((conversation) => conversation.id)).toEqual(['chat-2'])
     expect(store.activeConversation).toBeNull()
     expect(store.deletingConversationId).toBeNull()
+  })
+
+  it('limpia la conversación activa si fetchConversation falla', async () => {
+    const store = useChatStore()
+    store.activeConversation = {
+      id: 'chat-previo',
+      title: 'Sesión previa',
+      messageCount: 1,
+      lastMessagePreview: 'Previo',
+      createdAt: '2026-03-23T10:00:00.000Z',
+      updatedAt: '2026-03-23T10:05:00.000Z',
+      lastMessageAt: '2026-03-23T10:05:00.000Z',
+      messages: [],
+    }
+
+    fetchMock.mockRejectedValueOnce({
+      statusCode: 500,
+      message: 'boom',
+    })
+
+    await expect(store.fetchConversation('chat-error')).rejects.toMatchObject({
+      statusCode: 500,
+    })
+
+    expect(store.activeConversation).toBeNull()
+    expect(store.conversationLoading).toBe(false)
   })
 })

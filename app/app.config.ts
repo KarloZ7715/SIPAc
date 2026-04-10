@@ -230,6 +230,12 @@ export default defineAppConfig({
         base: 'relative inline-flex items-center rounded-[1.1rem] border border-border/75 bg-white/94 text-text transition-[background-color,border-color,box-shadow,color] duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70',
         content:
           'max-h-60 rounded-[1.2rem] border border-border/70 bg-white/97 shadow-[0_24px_50px_-32px_rgba(17,46,29,0.18)] backdrop-blur-md overflow-hidden flex flex-col',
+        viewport:
+          'relative divide-y divide-border-muted/80 scroll-py-1 overflow-y-auto flex-1 text-text',
+        group: 'p-1 isolate',
+        label:
+          'w-full flex items-center px-2 py-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-sipac-800',
+        separator: 'my-1 h-px bg-border-muted',
         item: 'group relative flex items-start rounded-xl text-text transition-colors before:absolute before:inset-0 before:-z-[1] before:rounded-xl before:transition-colors data-highlighted:before:bg-sipac-50/90',
         itemLeadingIcon: 'text-text-soft group-data-highlighted:text-sipac-700',
         placeholder: 'truncate text-text-soft',
