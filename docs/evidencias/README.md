@@ -39,6 +39,7 @@ Cada documento de evidencia debería contener, cuando aplique, las siguientes se
 | `2026-03-05_m7-seguridad-auditoria-base.md`                     | Infraestructura base de seguridad, validación de entorno y auditoría                       |
 | `2026-03-06_base-interfaz-navegacion-experiencia.md`            | Consolidación de la interfaz base, navegación protegida y experiencia de usuario           |
 | `2026-03-06_consolidacion-tecnica-alineacion-arquitectonica.md` | Consolidación técnica del proyecto, tooling de calidad y alineación arquitectónica         |
+| `2026-03-07_estrategia-multi-proveedor-llm.md`                  | Estrategia de resiliencia por múltiples proveedores LLM y criterios de fallback operativo  |
 | `2026-03-14_m2-carga-documentos.md`                             | Implementación de carga documental, validación binaria, GridFS y arranque de pipeline      |
 | `2026-03-14_m3-ocr-pipeline.md`                                 | Implementación OCR con extracción PDF nativa, fallback visual y telemetría técnica         |
 | `2026-03-14_m4-ner-extraccion-entidades.md`                     | Extracción NER estructurada con fallback de modelos, evidencia por anchors y trazabilidad  |
@@ -46,6 +47,8 @@ Cada documento de evidencia debería contener, cuando aplique, las siguientes se
 | `2026-03-14_m8-notificaciones-dashboard-base.md`                | Notificaciones in-app y correo best-effort integradas al pipeline documental               |
 | `2026-03-15_refuerzo-ner-ocr-metadatos.md`                      | Hardening transversal OCR/NER: validación semántica, retry por error, quality gates y eval |
 | `2026-03-20_compendios-segmentacion-multi-obra.md`              | Compendios PDF: segmentación multi-obra + N productos por archivo, env, UX y migración     |
+| `2026-03-29_m9-chat-grounded-consolidacion.md`                  | Consolidación de M9: chat grounded multi-proveedor, fallback resiliente y persistencia     |
+| `2026-04-09_rediseno-ui-ux-fase-en-desarrollo.md`               | Avance UI/UX en desarrollo: shell, navegación y coherencia visual en consolidación         |
 
 ## 4. Evidencias complementarias recomendadas
 
@@ -92,6 +95,9 @@ evidencias/
 ├── 2026-03-05_m7-seguridad-auditoria-base.md
 ├── 2026-03-06_base-interfaz-navegacion-experiencia.md
 ├── 2026-03-06_consolidacion-tecnica-alineacion-arquitectonica.md
+├── 2026-03-07_estrategia-multi-proveedor-llm.md
+├── 2026-03-29_m9-chat-grounded-consolidacion.md
+├── 2026-04-09_rediseno-ui-ux-fase-en-desarrollo.md
 ├── semana-02/
 │   ├── capturas-ui/
 │   ├── capturas-api/
