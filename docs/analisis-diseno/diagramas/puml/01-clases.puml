@@ -205,15 +205,30 @@ package "Auditoría y Notificaciones (M7/M8)" as pkg_audit #F3E5F5 {
   class ChatConversation <<collection: chat_conversations>> {
     - _id : ObjectId
     --
+    - chatId : String
     - userId : ObjectId → User
     - title : String
     - messages : ChatMessage[]
     - isActive : Boolean
+    - lastAccessedAt : Date
     --
     - createdAt : Date
     - updatedAt : Date
     __
-    {TTL: 180 días}
+    {Unique: (userId, chatId)}
+    {TTL: 180 días (solo isActive=true)}
+  }
+
+  class ChatRateLimitBucket <<collection: chat_rate_limit_buckets>> {
+    - _id : String
+    --
+    - scope : String
+    - userId : String
+    - windowStartedAt : Date
+    - expiresAt : Date
+    - count : Number
+    __
+    {TTL por expiresAt}
   }
 
 }
@@ -239,6 +254,7 @@ User "1" -down- "0..*" AuditLog : Acciones\nregistradas >
 User "1" -down- "0..*" Notification : Notificaciones\nrecibidas >
 UploadedFile "1" -- "0..1" AcademicProduct : Archivo fuente\ndel producto >
 User "1" -down- "0..*" ChatConversation : Conversaciones\ndel chat >
+User "1" -down- "0..*" ChatRateLimitBucket : Buckets de\nrate limit chat >
 
 note as N_DISC
   **Patrón Discriminator** de Mongoose:
@@ -248,5 +264,14 @@ note as N_DISC
   atributos de la clase base.
 end note
 N_DISC .. pkg_disc
+
+note as N_COLL
+  Los nombres de colección mostrados
+  son aliases lógicos de documentación.
+  En runtime, Mongoose puede usar
+  pluralización por defecto si no se
+  define `collection` explícita.
+end note
+N_COLL .. pkg_audit
 
 @enduml

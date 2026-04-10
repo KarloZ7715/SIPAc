@@ -17,7 +17,8 @@
 | 1.6     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación al estado real de endpoints: previsualización autenticada de upload implementada y módulo M5A marcado como parcial (draft por ID sí, listado global aún pendiente)                                                                                            |
 | 1.7     | 2026-03-20 | Carlos A. Canabal Cordero | Compendios multi-obra: `POST /api/upload` con `nerForceSingleDocument`; `GET /api/upload/:id/status` con `academicProductIds`, `sourceWorkCount`, `nerForceSingleDocument`; `DELETE /api/upload/:id` afecta todos los productos del archivo.                             |
 | 1.8     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación a endpoints implementados en sesión: `GET /api/products`, `DELETE /api/products/:id`, `GET /api/profile` con agregados, `GET /api/dashboard`, `GET /api/audit-logs`, `GET /api/notifications` con `unreadCount` y rate limiting específico en `auth`          |
-| 1.9     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado de M9: endpoints `/api/chat/*`, catálogo de proveedores/modelos, historial persistido, stream grounded y rate limiting específico en chat                                                                                               |
+| 1.9     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado de M9: endpoints `/api/chat/*`, catálogo de proveedores/modelos, historial persistido, stream grounded y rate limiting específico en chat                                                                                              |
+| 2.0     | 2026-04-09 | Carlos A. Canabal Cordero | Ajuste fino de M9 a estado real: saneamiento estricto de mensajes/tool parts, persistencia de `stoppedByUser`, orden de fallback `Cerebras -> NVIDIA -> Groq -> OpenRouter`, `disabledOptions` vacío y rate limiting persistente en colección dedicada                   |
 
 ---
 
@@ -132,15 +133,15 @@
 
 ## 10. M9 — Chat Inteligente (`/api/chat/`)
 
-| Método | Ruta                          | Rol requerido | Request Body / Query                                        | Respuesta                                                         | Errores posibles   | RF asociados    | Estado       |
-| ------ | ----------------------------- | ------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- | ------------------ | --------------- | ------------ |
+| Método | Ruta                          | Rol requerido | Request Body / Query                                       | Respuesta                                                        | Errores posibles   | RF asociados    | Estado       |
+| ------ | ----------------------------- | ------------- | ---------------------------------------------------------- | ---------------------------------------------------------------- | ------------------ | --------------- | ------------ |
 | POST   | `/api/chat`                   | Autenticado   | `{ id, messages[], trigger?, messageId?, selectedModel? }` | `UIMessageStream` grounded con metadata de modelo y tool outputs | 400, 401, 429, 500 | RF-090 a RF-099 | Implementado |
-| GET    | `/api/chat/providers`         | Autenticado   | —                                                           | `{ defaultChain[], manualOptions[], disabledOptions[] }`         | 401                | RF-090          | Implementado |
-| GET    | `/api/chat/conversations`     | Autenticado   | —                                                           | `{ conversations[] }`                                            | 401                | RF-100          | Implementado |
-| GET    | `/api/chat/conversations/:id` | Autenticado   | —                                                           | `{ conversation }`                                               | 401, 404           | RF-099, RF-100  | Implementado |
-| DELETE | `/api/chat/conversations/:id` | Autenticado   | —                                                           | `{ deleted: true }`                                              | 401, 404           | RF-100          | Implementado |
+| GET    | `/api/chat/providers`         | Autenticado   | —                                                          | `{ defaultChain[], manualOptions[], disabledOptions[] }`         | 401                | RF-090          | Implementado |
+| GET    | `/api/chat/conversations`     | Autenticado   | Query: `limit?`                                            | `{ conversations[] }` + `meta { total, limit, hasMore }`         | 401                | RF-100          | Implementado |
+| GET    | `/api/chat/conversations/:id` | Autenticado   | —                                                          | `{ conversation }`                                               | 401, 404           | RF-099, RF-100  | Implementado |
+| DELETE | `/api/chat/conversations/:id` | Autenticado   | —                                                          | `{ message }`                                                    | 401, 404           | RF-100          | Implementado |
 
-> **Nota técnica:** `POST /api/chat` usa `streamText` del Vercel AI SDK con tool calling, saneamiento previo de historial, sondeo de arranque del stream y fallback automático por candidato. El tool `searchRepositoryProducts` concentra la recuperación grounded híbrida sobre productos `confirmed`, con búsqueda estructurada exacta, ampliación diagnóstica y recuperación por texto OCR/nativo cuando aplica. La cadena automática vigente del chat es `qwen-3-235b-a22b-instruct-2507` (Cerebras) → candidatos NVIDIA → candidatos OpenRouter → candidatos Groq; `Gemini` queda expuesto solo como opción deshabilitada por política grounded vigente.
+> **Nota técnica:** `POST /api/chat` usa `streamText` + `createUIMessageStream` del Vercel AI SDK con `stopWhen: stepCountIs(3)`, sondeo de arranque del stream y fallback automático por candidato. El endpoint sanea historial (`sanitizeChatMessages`), elimina partes `reasoning*` incompatibles en ciertos proveedores y persiste respuestas abortadas marcando `stoppedByUser`. El tool `searchRepositoryProducts` concentra la recuperación grounded híbrida sobre productos `confirmed` (búsqueda estructurada exacta + ampliación diagnóstica + texto OCR/nativo cuando aplica). La cadena automática vigente del chat es `qwen-3-235b-a22b-instruct-2507` (Cerebras) → candidatos NVIDIA → candidatos Groq → candidatos OpenRouter; `Gemini` se conserva solo en catálogo manual experimental. `GET /api/chat/providers` retorna actualmente `disabledOptions: []`.
 
 ---
 
@@ -172,10 +173,12 @@
 
 ## 13. Rate Limiting
 
-| Scope                     | Límite                  | Aplica a                                | RF/RNF asociado                             | Estado                                                             |
-| ------------------------- | ----------------------- | --------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
-| Global por IP             | 150 tokens / 5 min      | Todos los endpoints                     | RNF-009                                     | Implementado (`nuxt-security`)                                     |
-| Tamaño de request         | 2 MB body / 8 MB upload | Todos los endpoints                     | RF-023                                      | Implementado (`nuxt-security`)                                     |
-| Autenticación por IP      | 10 req/min              | `/api/auth/register`, `/api/auth/login` | RF-082                                      | Implementado (`server/utils/auth-rate-limit.ts`)                   |
-| Procesamiento por usuario | 15 documentos/hora      | `/api/upload`                           | Cuota proveedores IA del pipeline documental | Pendiente (configurado en runtimeConfig, sin enforcement granular) |
-| Chat por usuario          | 30 req/hora             | `/api/chat`                             | Cuota proveedores IA multi-proveedor         | Implementado (`server/utils/chat-rate-limit.ts`)                   |
+| Scope                     | Límite                  | Aplica a                                | RF/RNF asociado                              | Estado                                                                       |
+| ------------------------- | ----------------------- | --------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------- |
+| Global por IP             | 150 tokens / 5 min      | Todos los endpoints                     | RNF-009                                      | Implementado (`nuxt-security`)                                               |
+| Tamaño de request         | 2 MB body / 8 MB upload | Todos los endpoints                     | RF-023                                       | Implementado (`nuxt-security`)                                               |
+| Autenticación por IP      | 10 req/min              | `/api/auth/register`, `/api/auth/login` | RF-082                                       | Implementado (`server/utils/auth-rate-limit.ts`)                             |
+| Procesamiento por usuario | 15 documentos/hora      | `/api/upload`                           | Cuota proveedores IA del pipeline documental | Pendiente (configurado en runtimeConfig, sin enforcement granular)           |
+| Chat por usuario          | 30 req/hora             | `/api/chat`                             | Cuota proveedores IA multi-proveedor         | Implementado (`server/utils/chat-rate-limit.ts` + `chat_rate_limit_buckets`) |
+
+> **Nota de nomenclatura:** `chat_rate_limit_buckets` se usa aquí como alias lógico; la colección física en Mongo depende de la convención de pluralización de Mongoose (`chatratelimitbuckets`) al no declararse `collection` explícita.

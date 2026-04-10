@@ -23,7 +23,7 @@
 | 1.9     | 2026-03-13 | Carlos A. Canabal Cordero | Alineación al fallback NER vigente con Groq y Gemini, y compatibilidad de structured outputs con esquema estricto (campos requeridos y valores nulos explícitos cuando aplique)                                                                                                                                |
 | 2.0     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación de estados RF con implementación real: carga sin `productType` obligatorio, M5A parcial con flujo de borrador/revisión, y actualización de notas de rate limiting y dependencias                                                                                                                    |
 | 2.1     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado en sesión: cierre de M2, M5A, M6, M7 y M8; activación de M5B base con dashboard operativo; perfil con agregados; auditoría admin-only; rate limiting específico en `/api/auth/*`; notificaciones por polling con conteo no leído                                             |
-| 2.2     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado de M9: chat grounded en `/chat`, recuperación híbrida (filtros + diagnóstico + OCR/nativo), historial persistido, enlaces autenticados a documentos, selector manual temporal para docentes y rate limiting específico en `/api/chat`                                         |
+| 2.2     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado de M9: chat grounded en `/chat`, recuperación híbrida (filtros + diagnóstico + OCR/nativo), historial persistido, enlaces autenticados a documentos, selector manual temporal para docentes y rate limiting específico en `/api/chat`                                        |
 
 ---
 
@@ -37,25 +37,25 @@ El sistema está orientado a la **Maestría en Innovación Educativa con Tecnolo
 
 ## 2. Glosario de Términos
 
-| Término                  | Definición                                                                                                                                                                                            |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **RF**                   | Requisito Funcional — comportamiento concreto que el sistema debe exhibir                                                                                                                             |
-| **RNF**                  | Requisito No Funcional — atributo de calidad del sistema (rendimiento, seguridad, etc.)                                                                                                               |
-| **OCR**                  | Optical Character Recognition — extracción de texto desde imágenes y PDFs escaneados                                                                                                                  |
-| **NLP**                  | Natural Language Processing — procesamiento de lenguaje natural                                                                                                                                       |
-| **NER**                  | Named Entity Recognition — identificación de entidades en texto (personas, lugares, fechas)                                                                                                           |
-| **Producto Académico**   | Cualquier output intelectual verificable: artículo, ponencia, tesis, certificado, etc.                                                                                                                |
-| **Documento Probatorio** | Archivo (PDF/imagen) que certifica la existencia de un producto académico                                                                                                                             |
-| **Pipeline**             | Secuencia automatizada de pasos de procesamiento: carga → OCR → NER → almacenamiento                                                                                                                  |
-| **JWT**                  | JSON Web Token — mecanismo de autenticación sin estado                                                                                                                                                |
-| **Rol**                  | Nivel de acceso y permisos asignado a un usuario del sistema                                                                                                                                          |
-| **Vercel AI SDK**        | Librería TypeScript oficial de Vercel para integrar LLMs y modelos multimodales; en el estado actual usa `generateText` con `Output.object` para structured outputs                                   |
-| **Structured outputs**   | Estrategia del Vercel AI SDK para obtener salidas validadas contra un esquema Zod mediante `generateText` + `Output.object`                                                                           |
-| **Zod**                  | Librería TypeScript de validación de esquemas; define la forma exacta de los datos estructurados que el pipeline debe retornar                                                                        |
-| **pdfjs-dist**           | Librería npm oficial de Mozilla para extraer texto de PDFs nativos (con texto seleccionable) sin necesidad de OCR ni LLM                                                                              |
+| Término                  | Definición                                                                                                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **RF**                   | Requisito Funcional — comportamiento concreto que el sistema debe exhibir                                                                                                                               |
+| **RNF**                  | Requisito No Funcional — atributo de calidad del sistema (rendimiento, seguridad, etc.)                                                                                                                 |
+| **OCR**                  | Optical Character Recognition — extracción de texto desde imágenes y PDFs escaneados                                                                                                                    |
+| **NLP**                  | Natural Language Processing — procesamiento de lenguaje natural                                                                                                                                         |
+| **NER**                  | Named Entity Recognition — identificación de entidades en texto (personas, lugares, fechas)                                                                                                             |
+| **Producto Académico**   | Cualquier output intelectual verificable: artículo, ponencia, tesis, certificado, etc.                                                                                                                  |
+| **Documento Probatorio** | Archivo (PDF/imagen) que certifica la existencia de un producto académico                                                                                                                               |
+| **Pipeline**             | Secuencia automatizada de pasos de procesamiento: carga → OCR → NER → almacenamiento                                                                                                                    |
+| **JWT**                  | JSON Web Token — mecanismo de autenticación sin estado                                                                                                                                                  |
+| **Rol**                  | Nivel de acceso y permisos asignado a un usuario del sistema                                                                                                                                            |
+| **Vercel AI SDK**        | Librería TypeScript oficial de Vercel para integrar LLMs y modelos multimodales; en el estado actual usa `generateText` con `Output.object` para structured outputs                                     |
+| **Structured outputs**   | Estrategia del Vercel AI SDK para obtener salidas validadas contra un esquema Zod mediante `generateText` + `Output.object`                                                                             |
+| **Zod**                  | Librería TypeScript de validación de esquemas; define la forma exacta de los datos estructurados que el pipeline debe retornar                                                                          |
+| **pdfjs-dist**           | Librería npm oficial de Mozilla para extraer texto de PDFs nativos (con texto seleccionable) sin necesidad de OCR ni LLM                                                                                |
 | **Gemini 2.5 Flash**     | Modelo de Google usado actualmente como proveedor multimodal OCR y como candidato del pipeline NER; en Chat queda fuera de la cadena automática normal y solo se conserva como referencia deshabilitada |
-| **Mistral OCR 3**        | Motor OCR de alta precisión de Mistral AI (99,54 % en español); proveedor opcional activable vía variable de entorno; plan de pago ($0,002/página)                                                    |
-| **MVP**                  | Minimum Viable Product (Producto Mínimo Viable) — versión más básica pero funcional del sistema que ya cumple su propósito principal y puede ser entregada; agrupa los requisitos de prioridad `Alta` |
+| **Mistral OCR 3**        | Motor OCR de alta precisión de Mistral AI (99,54 % en español); proveedor opcional activable vía variable de entorno; plan de pago ($0,002/página)                                                      |
+| **MVP**                  | Minimum Viable Product (Producto Mínimo Viable) — versión más básica pero funcional del sistema que ya cumple su propósito principal y puede ser entregada; agrupa los requisitos de prioridad `Alta`   |
 
 ---
 
@@ -110,7 +110,7 @@ mindmap
       Normalización de texto
     M4 NLP / NER
       generateText + Output.object
-      gemini flash -> groq 120b -> gemini flash-lite -> groq 20b
+      gemini family -> nvidia -> openrouter -> groq
       Extracción de entidades
       Revisión manual
       Retry por score bajo
@@ -136,7 +136,7 @@ mindmap
     M9 Chat Inteligente
       Interfaz conversacional
       Recuperación grounded híbrida
-      Tool calling con cadena cerebras -> nvidia/openrouter -> groq
+      Tool calling con cadena cerebras -> nvidia -> groq -> openrouter
       Historial de conversaciones
       Enlaces a documentos
 ```
@@ -333,8 +333,8 @@ mindmap
 
 > Semana 8 del cronograma · 30 Mar 2026 (Módulo aislado, trabajo continuo)
 
-| ID     | Descripción                                                                                                                                                                           | Prioridad | Estado    |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | --------- |
+| ID     | Descripción                                                                                                                                                                           | Prioridad | Estado     |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
 | RF-090 | El sistema debe proveer una interfaz de chat conversacional donde el usuario pueda formular consultas en lenguaje natural sobre los documentos académicos almacenados en el sistema   | Alta      | Completado |
 | RF-091 | El sistema debe permitir, a través del chat, buscar documentos académicos por rango de fechas de publicación                                                                          | Alta      | Completado |
 | RF-092 | El sistema debe permitir, a través del chat, buscar documentos académicos por autor o autores                                                                                         | Alta      | Completado |
@@ -354,23 +354,23 @@ mindmap
 
 ## 8. Requisitos No Funcionales
 
-| ID      | Descripción                                                                                                                                                        | Categoría      | Criterio de Aceptación                                                                                            |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------- |
-| RNF-001 | La interfaz debe ser completamente responsiva y funcional en dispositivos móviles, tabletas y escritorio                                                           | Usabilidad     | Verificado en viewport 375px, 768px y 1280px                                                                      |
-| RNF-002 | El tiempo de respuesta del pipeline completo (OCR → NER) no debe superar los 30 segundos por documento bajo condiciones normales de uso                            | Rendimiento    | Medido con documentos PDF de hasta 20 MB en entorno de desarrollo                                                 |
-| RNF-003 | Las contraseñas deben almacenarse cifradas con bcrypt usando un mínimo de 10 salt rounds                                                                           | Seguridad      | Inspección directa de la BD: ningún campo de contraseña debe estar en texto plano                                 |
-| RNF-004 | Los tokens JWT deben tener un tiempo de expiración máximo de 8 horas                                                                                               | Seguridad      | Verificado en la configuración del módulo de autenticación                                                        |
-| RNF-005 | El sistema debe operar correctamente en los navegadores Chrome, Firefox y Edge en sus versiones actuales                                                           | Compatibilidad | Pruebas manuales en los tres navegadores                                                                          |
-| RNF-006 | El código fuente debe gestionarse en un repositorio Git con commits organizados por módulo y mensajes descriptivos                                                 | Mantenibilidad | Inspección del historial de Git                                                                                   |
-| RNF-007 | El sistema debe operar exclusivamente bajo HTTPS en el ambiente de producción                                                                                      | Seguridad      | Verificado mediante inspección del certificado SSL en el ambiente de despliegue                                   |
-| RNF-008 | El servidor debe configurar CORS para aceptar peticiones únicamente desde el dominio autorizado de la aplicación                                                   | Seguridad      | Verificado mediante petición cross-origin desde un origen no autorizado: debe retornar error 403                  |
-| RNF-009 | El sistema debe implementar rate limiting global de máximo 100 peticiones por minuto por IP en todos los endpoints                                                 | Seguridad      | Verificado mediante prueba de carga: petición 101 debe retornar código HTTP 429                                   |
-| RNF-010 | La interfaz debe cumplir con el nivel A de las pautas de accesibilidad WCAG 2.1 (contraste mínimo, etiquetas en formularios, navegación por teclado)               | Accesibilidad  | Verificado con herramienta axe o Lighthouse Accessibility                                                         |
-| RNF-011 | El sistema debe estar disponible un mínimo del 95% del tiempo durante el horario laboral (7:00–19:00, lunes a viernes)                                             | Disponibilidad | Medido durante el período de pruebas de la semana 9                                                               |
-| RNF-012 | La base de datos debe contar con un mecanismo de respaldo (backup) al menos cada 24 horas                                                                          | Confiabilidad  | Verificado mediante la existencia y ejecución del script de backup                                                |
-| RNF-013 | Los módulos de autenticación y procesamiento de documentos deben contar con pruebas de integración que cubran los flujos principales                               | Mantenibilidad | Evidenciado por la existencia de archivos de prueba y su ejecución exitosa                                        |
+| ID      | Descripción                                                                                                                                                        | Categoría      | Criterio de Aceptación                                                                                             |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| RNF-001 | La interfaz debe ser completamente responsiva y funcional en dispositivos móviles, tabletas y escritorio                                                           | Usabilidad     | Verificado en viewport 375px, 768px y 1280px                                                                       |
+| RNF-002 | El tiempo de respuesta del pipeline completo (OCR → NER) no debe superar los 30 segundos por documento bajo condiciones normales de uso                            | Rendimiento    | Medido con documentos PDF de hasta 20 MB en entorno de desarrollo                                                  |
+| RNF-003 | Las contraseñas deben almacenarse cifradas con bcrypt usando un mínimo de 10 salt rounds                                                                           | Seguridad      | Inspección directa de la BD: ningún campo de contraseña debe estar en texto plano                                  |
+| RNF-004 | Los tokens JWT deben tener un tiempo de expiración máximo de 8 horas                                                                                               | Seguridad      | Verificado en la configuración del módulo de autenticación                                                         |
+| RNF-005 | El sistema debe operar correctamente en los navegadores Chrome, Firefox y Edge en sus versiones actuales                                                           | Compatibilidad | Pruebas manuales en los tres navegadores                                                                           |
+| RNF-006 | El código fuente debe gestionarse en un repositorio Git con commits organizados por módulo y mensajes descriptivos                                                 | Mantenibilidad | Inspección del historial de Git                                                                                    |
+| RNF-007 | El sistema debe operar exclusivamente bajo HTTPS en el ambiente de producción                                                                                      | Seguridad      | Verificado mediante inspección del certificado SSL en el ambiente de despliegue                                    |
+| RNF-008 | El servidor debe configurar CORS para aceptar peticiones únicamente desde el dominio autorizado de la aplicación                                                   | Seguridad      | Verificado mediante petición cross-origin desde un origen no autorizado: debe retornar error 403                   |
+| RNF-009 | El sistema debe implementar rate limiting global de máximo 100 peticiones por minuto por IP en todos los endpoints                                                 | Seguridad      | Verificado mediante prueba de carga: petición 101 debe retornar código HTTP 429                                    |
+| RNF-010 | La interfaz debe cumplir con el nivel A de las pautas de accesibilidad WCAG 2.1 (contraste mínimo, etiquetas en formularios, navegación por teclado)               | Accesibilidad  | Verificado con herramienta axe o Lighthouse Accessibility                                                          |
+| RNF-011 | El sistema debe estar disponible un mínimo del 95% del tiempo durante el horario laboral (7:00–19:00, lunes a viernes)                                             | Disponibilidad | Medido durante el período de pruebas de la semana 9                                                                |
+| RNF-012 | La base de datos debe contar con un mecanismo de respaldo (backup) al menos cada 24 horas                                                                          | Confiabilidad  | Verificado mediante la existencia y ejecución del script de backup                                                 |
+| RNF-013 | Los módulos de autenticación y procesamiento de documentos deben contar con pruebas de integración que cubran los flujos principales                               | Mantenibilidad | Evidenciado por la existencia de archivos de prueba y su ejecución exitosa                                         |
 | RNF-014 | El tiempo de respuesta del chat de IA no debe superar los 15 segundos por consulta bajo condiciones normales de uso                                                | Rendimiento    | Medido con consultas típicas grounded en entorno de desarrollo con un proveedor LLM habilitado y streaming estable |
-| RNF-015 | El sistema debe soportar el almacenamiento de archivos de hasta 20 MB directamente en MongoDB GridFS sin degradación perceptible en los tiempos de carga de página | Rendimiento    | Medido con archivos de 20 MB: tiempo de upload < 10 s y tiempo de descarga/preview < 5 s en entorno de desarrollo |
+| RNF-015 | El sistema debe soportar el almacenamiento de archivos de hasta 20 MB directamente en MongoDB GridFS sin degradación perceptible en los tiempos de carga de página | Rendimiento    | Medido con archivos de 20 MB: tiempo de upload < 10 s y tiempo de descarga/preview < 5 s en entorno de desarrollo  |
 
 ---
 

@@ -16,7 +16,8 @@
 | 1.5     | 2026-03-14 | Carlos A. Canabal Cordero | Alineación al estado real del modelo: `productType` opcional en `uploaded_files`, discriminadores extendidos a 10 tipos en `academic_products`, evidencia por entidad (`anchors`) y trazabilidad de intentos NER (`nerAttemptTrace`)                                   |
 | 1.6     | 2026-03-20 | Carlos A. Canabal Cordero | Compendios multi-obra: `segmentIndex`, `segmentLabel`, `segmentBounds` en `academic_products`; índice único parcial `ux_source_file_segment` `{ sourceFile, segmentIndex }`; `nerForceSingleDocument` y `sourceWorkCount` en `uploaded_files`                          |
 | 1.7     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación a consultas operativas vigentes: repositorio global sobre productos `confirmed`, agregados de dashboard excluyendo borradores y nota de `unreadCount` derivado en notificaciones                                                                            |
-| 1.8     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado de M9: colección `chat_conversations` operativa, índices de actividad/TTL y persistencia de mensajes tipados del chat grounded                                                                                                                  |
+| 1.8     | 2026-03-23 | Carlos A. Canabal Cordero | Alineación al estado implementado de M9: colección `chat_conversations` operativa, índices de actividad/TTL y persistencia de mensajes tipados del chat grounded                                                                                                       |
+| 1.9     | 2026-04-09 | Carlos A. Canabal Cordero | Ajustes de M9 en persistencia: `chat_conversations` con unicidad compuesta `{ userId, chatId }` (migración `scripts/migrate-chat-conversation-index.mjs`) y nueva colección `chat_rate_limit_buckets` para rate limiting persistente con TTL por ventana               |
 
 ---
 
@@ -1070,6 +1071,8 @@ notificationSchema.index(
 
 ### 3.6 `chat_conversations` — Historial de conversaciones del chat (M9)
 
+> **Nota de nomenclatura:** en esta documentación se usa `chat_conversations` como nombre lógico. En ejecución, al no fijar `collection` explícita en el esquema, Mongoose usa su pluralización por defecto (`chatconversations`).
+
 #### Interfaz TypeScript
 
 ```typescript
@@ -1094,7 +1097,6 @@ const chatConversationSchema = new Schema<IChatConversation>(
     chatId: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       maxlength: 120,
     },
@@ -1133,6 +1135,7 @@ const chatConversationSchema = new Schema<IChatConversation>(
 
 ```typescript
 chatConversationSchema.index({ userId: 1, updatedAt: -1 }, { name: 'idx_user_updated' })
+chatConversationSchema.index({ userId: 1, chatId: 1 }, { unique: true, name: 'ux_user_chat' })
 chatConversationSchema.index(
   { lastAccessedAt: 1 },
   {
@@ -1143,13 +1146,63 @@ chatConversationSchema.index(
 )
 ```
 
-| Índice                            | Tipo                  | Soporta (RF)                                                                  |
-| --------------------------------- | --------------------- | ----------------------------------------------------------------------------- |
-| `{ chatId: 1 }`                   | Único                 | Recuperación estable de la conversación por id lógico compartido con la UI    |
-| `{ userId: 1, updatedAt: -1 }`    | Compuesto             | RF-100: listado de conversaciones del usuario ordenadas por actividad          |
+| Índice                            | Tipo                  | Soporta (RF)                                                                    |
+| --------------------------------- | --------------------- | ------------------------------------------------------------------------------- |
+| `{ userId: 1, chatId: 1 }`        | Único compuesto       | Aislamiento de conversaciones por usuario y recuperación estable por `chatId`   |
+| `{ userId: 1, updatedAt: -1 }`    | Compuesto             | RF-100: listado de conversaciones del usuario ordenadas por actividad           |
 | `{ lastAccessedAt: 1 }` + parcial | TTL (180 días aprox.) | Limpieza automática de conversaciones activas inactivas sin intervención manual |
 
 > **Nota operativa:** `messages` persiste mensajes UI del chat, incluyendo metadata del modelo seleccionado, tool outputs grounded y trazabilidad de estrategia de recuperación. Antes de guardar y antes de procesar, el servicio sanea mensajes vacíos o inválidos para evitar historiales corruptos.
+
+> **Migración aplicada en código:** se elimina el índice legado único por `chatId` y se crea `ux_user_chat` mediante `scripts/migrate-chat-conversation-index.mjs` para evitar colisiones entre usuarios distintos.
+
+---
+
+### 3.7 `chat_rate_limit_buckets` — Ventanas de rate limit para chat (M9)
+
+> **Nota de nomenclatura:** `chat_rate_limit_buckets` es el nombre lógico del diseño. En ejecución, Mongoose crea/usa la colección física `chatratelimitbuckets` al no declararse `collection` explícita.
+
+#### Interfaz TypeScript
+
+```typescript
+export interface IChatRateLimitBucket {
+  _id: string // `${scope}:${userId}:${windowStartedAt}`
+  scope: string
+  userId: string
+  windowStartedAt: Date
+  expiresAt: Date
+  count: number
+}
+```
+
+#### Esquema Mongoose
+
+```typescript
+const chatRateLimitBucketSchema = new Schema<IChatRateLimitBucket>(
+  {
+    _id: { type: String, required: true, trim: true },
+    scope: { type: String, required: true, trim: true, index: true },
+    userId: { type: String, required: true, trim: true, index: true },
+    windowStartedAt: { type: Date, required: true },
+    expiresAt: { type: Date, required: true },
+    count: { type: Number, required: true, default: 0, min: 0 },
+  },
+  {
+    timestamps: false,
+    versionKey: false,
+  },
+)
+
+chatRateLimitBucketSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'ttl_expires_at' })
+```
+
+| Índice          | Tipo   | Soporta (RF)                                             |
+| --------------- | ------ | -------------------------------------------------------- |
+| `{ expiresAt }` | TTL    | Limpieza automática por ventana de rate limit vencida    |
+| `{ scope }`     | Simple | Segmentación por ámbito (`chat`, futuros scopes)         |
+| `{ userId }`    | Simple | Consulta y depuración de buckets por usuario autenticado |
+
+> **Nota operativa:** `server/utils/chat-rate-limit.ts` actualiza estos buckets con `findOneAndUpdate` (`$inc` + `$setOnInsert`) y expone `X-RateLimit-Limit`, `X-RateLimit-Remaining` y `Retry-After` en la respuesta de `/api/chat`.
 
 ---
 
@@ -1211,7 +1264,7 @@ erDiagram
 
     CHAT_CONVERSATIONS {
         ObjectId _id PK
-        string chatId UK
+      string chatId "UK con userId"
         ObjectId userId FK
         string title
         array messages
@@ -1219,11 +1272,21 @@ erDiagram
         Date lastAccessedAt
     }
 
+    CHAT_RATE_LIMIT_BUCKETS {
+      string _id PK
+      string scope
+      string userId
+      Date windowStartedAt
+      Date expiresAt
+      number count
+    }
+
     USERS ||--o{ UPLOADED_FILES : "uploadedBy"
     USERS ||--o{ ACADEMIC_PRODUCTS : "owner"
     USERS ||--o{ AUDIT_LOGS : "userId"
     USERS ||--o{ NOTIFICATIONS : "recipientId"
     USERS ||--o{ CHAT_CONVERSATIONS : "userId"
+    USERS ||--o{ CHAT_RATE_LIMIT_BUCKETS : "userId"
     UPLOADED_FILES ||--o{ ACADEMIC_PRODUCTS : "sourceFile + segmentIndex"
 ```
 
@@ -1633,14 +1696,15 @@ await AcademicProduct.find({ isDeleted: true })
 
 ## 10. Resumen de Colecciones e Índices
 
-| Colección            | Documentos esperados          | Índices                    | Patrón de acceso primario                                              |
-| -------------------- | ----------------------------- | -------------------------- | ---------------------------------------------------------------------- |
-| `users`              | Decenas (~50-100)             | 3                          | Login por email, listado por rol                                       |
-| `uploaded_files`     | Centenas (~500-2000)          | 2                          | Listado por usuario, cola de procesamiento                             |
-| `academic_products`  | Centenas (~500-2000)          | 3 (incluye texto completo) | Listado por owner+tipo, búsqueda full-text, aggregation para dashboard |
-| `audit_logs`         | Miles (crecimiento ilimitado) | 2                          | Consulta por recurso/acción, timeline por usuario                      |
-| `notifications`      | Centenas (TTL auto-limpia)    | 2 (incluye TTL)            | No leídas por usuario, limpieza automática a 90 días                   |
-| `chat_conversations` | Decenas a centenas (TTL)      | 3 (incluye TTL parcial)    | Historial por usuario, recuperación por `chatId`, limpieza por inactividad |
+| Colección                 | Documentos esperados          | Índices                    | Patrón de acceso primario                                                  |
+| ------------------------- | ----------------------------- | -------------------------- | -------------------------------------------------------------------------- |
+| `users`                   | Decenas (~50-100)             | 3                          | Login por email, listado por rol                                           |
+| `uploaded_files`          | Centenas (~500-2000)          | 2                          | Listado por usuario, cola de procesamiento                                 |
+| `academic_products`       | Centenas (~500-2000)          | 3 (incluye texto completo) | Listado por owner+tipo, búsqueda full-text, aggregation para dashboard     |
+| `audit_logs`              | Miles (crecimiento ilimitado) | 2                          | Consulta por recurso/acción, timeline por usuario                          |
+| `notifications`           | Centenas (TTL auto-limpia)    | 2 (incluye TTL)            | No leídas por usuario, limpieza automática a 90 días                       |
+| `chat_conversations`      | Decenas a centenas (TTL)      | 3 (incluye TTL parcial)    | Historial por usuario, recuperación por `chatId`, limpieza por inactividad |
+| `chat_rate_limit_buckets` | Alta rotación (TTL corto)     | 3 (incluye TTL)            | Control persistente de cuota por usuario/scope en `/api/chat`              |
 
 ---
 
@@ -1650,6 +1714,7 @@ await AcademicProduct.find({ isDeleted: true })
 - **Índice de texto completo en español:** Configurado con `default_language: 'spanish'` y pesos diferenciados, permite búsqueda semántica básica sin motores externos.
 - **TTL en notificaciones:** La limpieza automática evita crecimiento descontrolado de la colección de notificaciones.
 - **TTL en conversaciones del chat:** Implementado con índice parcial sobre `lastAccessedAt`; elimina conversaciones activas inactivas después de ~180 días para controlar crecimiento.
+- **TTL en buckets de rate limit del chat:** La colección `chat_rate_limit_buckets` elimina automáticamente ventanas vencidas y evita dependencia de memoria local del proceso Node.
 - **Paginación del repositorio:** En diseño se consideran estrategias de paginación para escalar consultas; en endpoints actualmente implementados predomina `page/limit`.
 - **Soft delete + pre-find hooks:** Los documentos eliminados lógicamente no aparecen en consultas normales pero se preservan para auditoría y recuperación.
 - **Lean queries en lecturas:** Todas las consultas de lectura usan `.lean()` para evitar la hidratación completa de Mongoose y reducir la huella de memoria.
