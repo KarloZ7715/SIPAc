@@ -8,7 +8,6 @@ const chatConversationSchema = new Schema<IChatConversation>(
     chatId: {
       type: String,
       required: [true, 'La conversación debe tener un identificador de chat'],
-      unique: true,
       trim: true,
       maxlength: 120,
     },
@@ -49,6 +48,7 @@ const chatConversationSchema = new Schema<IChatConversation>(
 )
 
 chatConversationSchema.index({ userId: 1, updatedAt: -1 }, { name: 'idx_user_updated' })
+chatConversationSchema.index({ userId: 1, chatId: 1 }, { unique: true, name: 'ux_user_chat' })
 chatConversationSchema.index(
   { lastAccessedAt: 1 },
   {

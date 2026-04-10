@@ -1,21 +1,19 @@
 import type { InferUIMessageChunk, UIMessage } from 'ai'
 
 const SUCCESSFUL_STREAM_CHUNK_TYPES = new Set([
-  'start',
-  'start-step',
+  // No se consideran éxito: start/start-step/finish por sí solos.
+  // Debe existir contenido o actividad útil (texto, tool, source o archivo).
   'text-start',
   'text-delta',
-  'reasoning-start',
   'tool-input-start',
   'tool-input-available',
   'tool-output-available',
   'source-url',
   'source-document',
   'file',
-  'finish',
 ])
 
-export const DEFAULT_CHAT_STREAM_PROBE_TIMEOUT_MS = 15000
+export const DEFAULT_CHAT_STREAM_PROBE_TIMEOUT_MS = 5000
 
 class StreamProbeTimeoutError extends Error {
   constructor(timeoutMs: number) {
@@ -81,9 +79,12 @@ export async function probeUiMessageStream<T extends UIMessage>(
       const { done, value } = await readChunkWithTimeout(reader, timeoutMs)
 
       if (done) {
+        void outputStream
+          .cancel('El proveedor finalizó el stream sin contenido útil')
+          .catch(() => {})
         return {
-          ok: true,
-          stream: outputStream,
+          ok: false,
+          errorText: 'El proveedor finalizó el stream sin contenido útil',
         }
       }
 

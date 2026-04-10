@@ -32,7 +32,9 @@ export const chatSearchToolInputSchema = z.object({
   dateTo: z.string().trim().max(32).optional(),
   yearFrom: z.number().int().min(1900).max(2100).optional(),
   yearTo: z.number().int().min(1900).max(2100).optional(),
-  limit: z.number().int().min(1).max(8).optional(),
+  // Se permite un techo más amplio para tolerar tool calls fuera de rango.
+  // La ejecución real siempre se acota en executeGroundedRepositoryRetrieval (safeLimit <= 8).
+  limit: z.number().int().min(1).max(50).optional(),
 })
 
 function compactText(values: Array<string | undefined>) {
@@ -48,8 +50,12 @@ export function createRepositorySearchToolExecutor() {
     input: ChatSearchToolInput,
   ): Promise<ChatSearchToolOutput> {
     const output = await executeGroundedRepositoryRetrieval(input)
+    const cacheKey = JSON.stringify({
+      toolCallKey: output.toolCallKey,
+      question: input.question.trim().replace(/\s+/g, ' ').toLowerCase(),
+    })
 
-    const cached = toolCache.get(output.toolCallKey)
+    const cached = toolCache.get(cacheKey)
     if (cached) {
       return {
         ...cached,
@@ -57,28 +63,25 @@ export function createRepositorySearchToolExecutor() {
       }
     }
 
-    toolCache.set(output.toolCallKey, output)
+    toolCache.set(cacheKey, output)
     return output
   }
 }
 
 export function buildChatSystemPrompt() {
   return [
-    'Eres el asistente de búsqueda académica de SIPAc.',
-    'Tu alcance está restringido al repositorio confirmado del sistema.',
-    'No debes inventar documentos, autores, fechas ni conclusiones no respaldadas por resultados de herramienta.',
-    'Tu trabajo es recuperar evidencia grounded y explicar lo que realmente existe en SIPAc.',
-    'Antes de responder preguntas sobre el repositorio, utiliza la herramienta searchRepositoryProducts.',
-    'Haz una búsqueda principal por turno. Solo si la herramienta devuelve evidencia insuficiente o cero resultados, permite una única ampliación diagnóstica.',
-    'No repitas tool calls equivalentes dentro del mismo turno.',
-    'Si la herramienta encuentra resultados relacionados pero no exactos, explícalo sin afirmar falsamente que no existe nada.',
-    'Si la evidencia encontrada es insuficiente o nula, dilo explícitamente.',
-    'Responde en español claro y profesional.',
-    'Cuando existan resultados, resume primero y luego cita los documentos hallados de forma organizada.',
-    'La salida final debe distinguir entre coincidencia exacta, resultado relacionado y ausencia de evidencia.',
-    `Usa etiquetas humanas para los tipos: ${compactText(
+    'Eres el asistente de consulta académica de SIPAc para docentes.',
+    'Solo puedes basarte en los documentos académicos confirmados disponibles en el repositorio compartido de SIPAc; no inventes obras, autores ni fechas.',
+    'Antes de afirmar qué hay o no hay, usa la herramienta searchRepositoryProducts para comprobarlo.',
+    'Haz una búsqueda principal por turno. Si no hay resultados o son pocos, puedes hacer una sola búsqueda adicional más amplia, sin repetir la misma consulta.',
+    'Si aparecen resultados parecidos pero no exactamente lo pedido, dilo con claridad y sin dramatizar.',
+    'Si no hay nada que mostrar, dilo de forma breve y sugiere reformular la pregunta.',
+    'Responde en español claro, cercano y profesional; evita tecnicismos de sistemas (indexación, OCR, pipelines, repositorio técnico). Habla de documentos, archivos o trabajos académicos.',
+    'Cuando haya resultados, resume y luego enumera los documentos de forma ordenada.',
+    'Distingue con naturalidad entre “coincide con lo que pidió”, “es parecido o relacionado” y “no hay nada que mostrar”.',
+    `Para tipos de obra usa estas etiquetas: ${compactText(
       Object.entries(chatProductTypeLabels).map(([key, label]) => `${key}=${label}`),
     ).join(', ')}.`,
-    'No uses conocimiento general como sustituto de la evidencia del repositorio.',
+    'No sustituyas los resultados de la herramienta con conocimiento general ni suposiciones.',
   ].join(' ')
 }

@@ -29,7 +29,7 @@ function resolveGeminiPipelineModelIds(env: EnvConfig): string[] {
 const NER_NVIDIA_MODEL_IDS_ORDERED = [
   'z-ai/glm4.7',
   'deepseek-ai/deepseek-v3.1-terminus',
-  'deepseek-ai/deepseek-v3.1',
+  // deepseek-ai/deepseek-v3.1 se excluye por bad request recurrente en chat.
   'mistralai/mistral-large-3-675b-instruct-2512',
   'deepseek-ai/deepseek-v3.2',
 ] as const
@@ -38,8 +38,19 @@ const NER_OPENROUTER_MODEL_IDS_ORDERED = [
   'minimax/minimax-m2.5:free',
   'openai/gpt-oss-120b:free',
 ] as const
-const CHAT_OPENROUTER_MODEL_IDS_ORDERED = [...NER_OPENROUTER_MODEL_IDS_ORDERED] as const
-const CHAT_NVIDIA_MODEL_IDS_ORDERED = [...NER_NVIDIA_MODEL_IDS_ORDERED] as const
+
+/** Modelos extra solo en chat (no alteran la cadena NER). */
+const CHAT_OPENROUTER_MODEL_IDS_ORDERED = [
+  ...NER_OPENROUTER_MODEL_IDS_ORDERED,
+  'google/gemma-4-31b-it:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'z-ai/glm-4.5-air:free',
+] as const
+
+const CHAT_NVIDIA_MODEL_IDS_ORDERED = [
+  ...NER_NVIDIA_MODEL_IDS_ORDERED,
+  'moonshotai/kimi-k2-instruct-0905',
+] as const
 const CHAT_GROQ_MODEL_IDS_ORDERED = [GROQ_GPT_OSS_120B_MODEL_ID, GROQ_GPT_OSS_20B_MODEL_ID] as const
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
@@ -265,16 +276,6 @@ export function getChatModelCandidates(): StructuredModelCandidate[] {
     }
   }
 
-  if (openrouter) {
-    for (const modelId of CHAT_OPENROUTER_MODEL_IDS_ORDERED) {
-      pushCandidate(seen, candidates, {
-        name: 'openrouter',
-        modelId,
-        model: openrouter(modelId),
-      })
-    }
-  }
-
   if (groq) {
     pushCandidate(seen, candidates, {
       name: 'groq',
@@ -289,6 +290,16 @@ export function getChatModelCandidates(): StructuredModelCandidate[] {
       modelId: GROQ_GPT_OSS_20B_MODEL_ID,
       model: groq(GROQ_GPT_OSS_20B_MODEL_ID),
     })
+  }
+
+  if (openrouter) {
+    for (const modelId of CHAT_OPENROUTER_MODEL_IDS_ORDERED) {
+      pushCandidate(seen, candidates, {
+        name: 'openrouter',
+        modelId,
+        model: openrouter(modelId),
+      })
+    }
   }
 
   return candidates

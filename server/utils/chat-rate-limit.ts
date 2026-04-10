@@ -1,49 +1,59 @@
 import { setHeader } from 'h3'
 import type { H3Event } from 'h3'
+import ChatRateLimitBucket from '~~/server/models/ChatRateLimitBucket'
 import { createRateLimitError } from './errors'
 
-interface ChatRateLimitBucket {
-  count: number
-  resetAt: number
+function resolveRateLimitWindow(now: number, intervalMs: number) {
+  const windowStartedAt = now - (now % intervalMs)
+  const resetAt = windowStartedAt + intervalMs
+
+  return {
+    bucketId: `${windowStartedAt}`,
+    windowStartedAt,
+    resetAt,
+  }
 }
 
-const chatRateLimitBuckets = new Map<string, ChatRateLimitBucket>()
-
-export function resetChatRateLimitBuckets() {
-  chatRateLimitBuckets.clear()
+export async function resetChatRateLimitBuckets() {
+  await ChatRateLimitBucket.deleteMany({})
 }
 
-export function enforceChatRateLimit(
+export async function enforceChatRateLimit(
   event: H3Event,
   userId: string,
   scope = 'chat',
   maxRequests = 30,
   intervalMs = 60 * 60 * 1000,
 ) {
-  const key = `${scope}:${userId}`
   const now = Date.now()
-  const current = chatRateLimitBuckets.get(key)
+  const { bucketId, resetAt, windowStartedAt } = resolveRateLimitWindow(now, intervalMs)
+  const current = await ChatRateLimitBucket.findOneAndUpdate(
+    {
+      _id: `${scope}:${userId}:${bucketId}`,
+    },
+    {
+      $inc: { count: 1 },
+      $setOnInsert: {
+        scope,
+        userId,
+        windowStartedAt: new Date(windowStartedAt),
+        expiresAt: new Date(resetAt),
+      },
+    },
+    {
+      upsert: true,
+      returnDocument: 'after',
+      setDefaultsOnInsert: true,
+    },
+  )
 
-  if (!current || current.resetAt <= now) {
-    chatRateLimitBuckets.set(key, {
-      count: 1,
-      resetAt: now + intervalMs,
-    })
-
-    setHeader(event, 'X-RateLimit-Limit', maxRequests)
-    setHeader(event, 'X-RateLimit-Remaining', Math.max(0, maxRequests - 1))
-    return
-  }
-
-  current.count += 1
-  chatRateLimitBuckets.set(key, current)
-
-  const remaining = Math.max(0, maxRequests - current.count)
+  const currentCount = typeof current?.count === 'number' ? current.count : 1
+  const remaining = Math.max(0, maxRequests - currentCount)
   setHeader(event, 'X-RateLimit-Limit', maxRequests)
   setHeader(event, 'X-RateLimit-Remaining', remaining)
 
-  if (current.count > maxRequests) {
-    const retryAfterSeconds = Math.max(1, Math.ceil((current.resetAt - now) / 1000))
+  if (currentCount > maxRequests) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - now) / 1000))
     setHeader(event, 'Retry-After', retryAfterSeconds)
     throw createRateLimitError(retryAfterSeconds)
   }

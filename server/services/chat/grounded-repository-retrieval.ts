@@ -9,6 +9,7 @@ import type {
   ChatSearchToolOutput,
   ProductType,
 } from '~~/app/types'
+import { formatChatProductType } from '~~/app/utils/chat-formatters'
 import AcademicProduct from '~~/server/models/AcademicProduct'
 import UploadedFile from '~~/server/models/UploadedFile'
 import {
@@ -311,6 +312,10 @@ function buildToolCallKey(filters: ChatSearchFilters) {
     yearFrom: filters.yearFrom ?? null,
     yearTo: filters.yearTo ?? null,
   })
+}
+
+function userRequestedRelatedResults(question: string) {
+  return /(relacionad[oa]s?|similares?|alternativ[oa]s?|si no hay|si no existe)/i.test(question)
 }
 
 function buildProductFieldDescriptors(product: AcademicProductPublic): RepositoryFieldDescriptor[] {
@@ -768,7 +773,9 @@ async function runOcrFullTextSearch(
   if (candidateFiles.length === 0) {
     return {
       products: [],
-      notes: ['No hubo coincidencias en texto OCR/nativo para ampliar la búsqueda.'],
+      notes: [
+        'No hubo coincidencias al revisar el texto completo de los archivos para ampliar la búsqueda.',
+      ],
       droppedFilters: [],
     }
   }
@@ -792,14 +799,18 @@ async function runOcrFullTextSearch(
   if (scoredFiles.length === 0) {
     return {
       products: [],
-      notes: ['Se intentó una ampliación por OCR, pero ninguna evidencia superó el umbral mínimo.'],
+      notes: [
+        'Se intentó ampliar la búsqueda leyendo más a fondo los archivos, pero no hubo coincidencias suficientes.',
+      ],
       droppedFilters: [],
     }
   }
 
   const sourceFileIds = scoredFiles.map((item) => item.sourceFileId)
   const droppedFilters: Array<keyof ChatSearchFilters> = []
-  const notes = ['Se realizó una ampliación por texto OCR/nativo del archivo.']
+  const notes = [
+    'Se amplió la búsqueda revisando también el texto completo dentro de los archivos.',
+  ]
 
   const exactProducts = await AcademicProduct.find(
     {
@@ -817,7 +828,7 @@ async function runOcrFullTextSearch(
   if (finalProducts.length === 0 && normalizedFilters.productType) {
     droppedFilters.push('productType')
     notes.push(
-      'No se hallaron coincidencias OCR con el tipo solicitado; se probó una ampliación sin restringir por tipo.',
+      'No hubo coincidencias con el tipo de documento pedido al revisar el texto de los archivos; se probó una búsqueda más amplia sin ese filtro.',
     )
 
     finalProducts = await AcademicProduct.find(
@@ -891,7 +902,7 @@ export async function executeGroundedRepositoryRetrieval(
     notes: ['La búsqueda estructurada exacta no encontró coincidencias.'],
   }
 
-  if (normalizedFilters.productType) {
+  if (normalizedFilters.productType && userRequestedRelatedResults(input.question)) {
     diagnosticInfo.broadened = true
     diagnosticInfo.droppedFilters.push('productType')
     diagnosticInfo.notes.push(
@@ -943,7 +954,8 @@ export async function executeGroundedRepositoryRetrieval(
   }
 
   const ocrSearch = await runOcrFullTextSearch(normalizedFilters, input.question, safeLimit)
-  diagnosticInfo.broadened = true
+  const ocrBroadened = ocrSearch.droppedFilters.length > 0 || ocrSearch.products.length > 0
+  diagnosticInfo.broadened = diagnosticInfo.broadened || ocrBroadened
   diagnosticInfo.droppedFilters.push(...ocrSearch.droppedFilters)
   diagnosticInfo.notes.push(...ocrSearch.notes)
 
@@ -953,7 +965,7 @@ export async function executeGroundedRepositoryRetrieval(
       normalizedFilters,
       'ocr_full_text',
       normalizedFilters.productType
-        ? `La coincidencia se recuperó por evidencia OCR/nativa y puede no corresponder al tipo ${normalizedFilters.productType}.`
+        ? `Este resultado apareció al buscar también dentro del texto del archivo; puede no ser exactamente una ${formatChatProductType(normalizedFilters.productType).toLowerCase()}.`
         : undefined,
     )
 
