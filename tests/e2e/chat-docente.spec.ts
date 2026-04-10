@@ -207,9 +207,13 @@ test.describe('Chat IA docente', () => {
     await loginPasswordInput.fill(docentePassword)
     await page.getByRole('button', { name: 'Iniciar sesión' }).click()
 
-    await expect(page).toHaveURL(/\/$/)
+    // El redirect post-login puede ir a "/" o "/dashboard" según estado de sesión.
+    await page.waitForURL((url) => !/^\/login\/?$/.test(url.pathname), {
+      timeout: 15_000,
+    })
+    await expect(page).toHaveURL(/\/(?:$|dashboard\/?$)/)
     await page.waitForLoadState('networkidle')
-    await expect(page.getByText('Workspace docente')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'SIPAc Workspace docente' })).toBeVisible()
 
     await page.getByRole('link', { name: 'Chat IA' }).click()
     await expect(page).toHaveURL(/\/chat/)
