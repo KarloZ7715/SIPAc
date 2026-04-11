@@ -4,17 +4,24 @@ const desktopSidebarCollapsed = useState<boolean>('sipac-desktop-sidebar-collaps
 const layoutHydrated = ref(false)
 const route = useRoute()
 const isChatRoute = computed(() => route.path.startsWith('/chat'))
+const isWorkspaceDocumentsRoute = computed(() => route.path === '/workspace-documents')
 const contentWidthClass = computed(() => {
   if (isChatRoute.value) {
     return 'max-w-none w-full'
   }
-  return route.path === '/' ? 'max-w-[96rem] xl:px-10' : 'max-w-7xl'
+  if (route.path === '/' || isWorkspaceDocumentsRoute.value) {
+    return 'max-w-[96rem] xl:px-10'
+  }
+  return 'max-w-7xl'
 })
 const contentSpacingClass = computed(() => {
   if (isChatRoute.value) {
     return 'py-0'
   }
-  return route.path === '/' ? 'py-4 lg:py-5' : 'py-5 lg:py-6'
+  if (route.path === '/' || isWorkspaceDocumentsRoute.value) {
+    return 'py-4 lg:py-5'
+  }
+  return 'py-5 lg:py-6'
 })
 const mainHorizontalPaddingClass = computed(() =>
   isChatRoute.value ? 'px-3 sm:px-4 lg:px-5' : 'px-4 sm:px-6 lg:px-8',

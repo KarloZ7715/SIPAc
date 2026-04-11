@@ -146,6 +146,12 @@ export default defineAppConfig({
           class:
             'border border-border bg-white/80 text-text hover:bg-surface-muted focus-visible:ring-2 focus-visible:ring-sipac-300',
         },
+        {
+          color: 'neutral',
+          variant: 'solid',
+          class:
+            'bg-slate-900 text-white shadow-[0_18px_30px_-20px_rgba(15,23,42,0.35)] hover:bg-slate-800 active:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sipac-400',
+        },
       ],
     },
     formField: {
@@ -241,6 +247,56 @@ export default defineAppConfig({
         placeholder: 'truncate text-text-soft',
         value: 'truncate text-text',
         trailingIcon: 'text-text-soft',
+      },
+      variants: {
+        variant: {
+          outline: 'text-text bg-white/94 ring ring-inset ring-border/75',
+          soft: 'text-text bg-surface-muted/92 ring ring-inset ring-border/65 hover:bg-white/92',
+          subtle: 'text-text bg-white/90 ring ring-inset ring-border/70',
+          ghost: 'text-text bg-transparent hover:bg-surface-muted/65',
+          none: 'text-text bg-transparent',
+        },
+      },
+      compoundVariants: [
+        {
+          color: 'neutral',
+          variant: ['outline', 'subtle', 'soft'],
+          class:
+            'focus:ring-2 focus:ring-inset focus:ring-sipac-300 hover:ring-sipac-200/70 focus:border-sipac-300',
+        },
+        {
+          color: 'primary',
+          variant: ['outline', 'subtle', 'soft'],
+          class:
+            'focus:ring-2 focus:ring-inset focus:ring-sipac-300 hover:ring-sipac-200/70 focus:border-sipac-300',
+        },
+      ],
+      defaultVariants: {
+        color: 'neutral',
+        variant: 'outline',
+      },
+    },
+    selectMenu: {
+      slots: {
+        base: 'relative inline-flex items-center rounded-[1.1rem] border border-border/75 bg-white/94 text-text transition-[background-color,border-color,box-shadow,color] duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70',
+        leadingIcon: 'text-text-soft',
+        trailingIcon: 'text-text-soft',
+        placeholder: 'truncate text-text-soft',
+        value: 'truncate text-text',
+        arrow: 'text-text-soft',
+        content:
+          'max-h-60 rounded-[1.2rem] border border-border/70 bg-white/97 text-text shadow-[0_24px_50px_-32px_rgba(17,46,29,0.18)] backdrop-blur-md overflow-hidden flex flex-col ring-0',
+        viewport:
+          'relative divide-y divide-border-muted/80 scroll-py-1 overflow-y-auto flex-1 text-text',
+        group: 'p-1 isolate',
+        empty: 'px-3 py-2 text-center text-sm text-text-muted',
+        label:
+          'w-full flex items-center px-2 py-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-sipac-800',
+        separator: 'my-1 h-px bg-border-muted',
+        item: 'group relative flex w-full items-start rounded-xl text-text transition-colors before:absolute before:inset-0 before:-z-[1] before:rounded-xl before:transition-colors data-highlighted:before:bg-sipac-50/90',
+        itemLeadingIcon: 'text-text-soft group-data-highlighted:text-sipac-700',
+        itemDescription: 'text-text-muted',
+        input: 'border-b border-border/70 bg-white/95',
       },
       variants: {
         variant: {

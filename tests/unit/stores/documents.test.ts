@@ -129,7 +129,10 @@ describe('useDocumentsStore', () => {
 
     await store.loadCurrentDraft(requestFetchMock)
 
-    expect(requestFetchMock).toHaveBeenCalledWith('/api/products/drafts/current')
+    expect(requestFetchMock).toHaveBeenCalledWith(
+      '/api/products/drafts/current',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
     expect(fetchMock).not.toHaveBeenCalled()
     expect(store.activeUploadId).toBe('upload-1')
     expect(store.workspaceStage).toBe('ready')

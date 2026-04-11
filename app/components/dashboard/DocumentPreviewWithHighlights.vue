@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DocumentAnchor } from '~~/app/types'
-import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+/** Debe coincidir con el bundle `legacy/build/pdf.mjs`; mezclar con `build/` rompe pdf.js 5.x en runtime. */
+import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 
 interface HighlightGroup {
   key: string
@@ -40,6 +41,7 @@ const containerWidth = ref(0)
 const canvasRefs = new Map<number, HTMLCanvasElement>()
 const pageRefs = new Map<number, HTMLElement>()
 const renderedPageNumbers = new Set<number>()
+const renderInFlight = new Set<number>()
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let pdfDocument: any | null = null
 let pageObserver: IntersectionObserver | null = null
@@ -81,6 +83,24 @@ function inferMimeTypeFromPreviewUrl(url: string | null): string {
   return ''
 }
 
+function pdfUrlNeedsCredentials(url: string): boolean {
+  if (url.startsWith('blob:') || url.startsWith('data:')) {
+    return false
+  }
+  try {
+    if (url.startsWith('/')) {
+      return url.startsWith('/api/')
+    }
+    if (import.meta.client && typeof window !== 'undefined') {
+      const parsed = new URL(url, window.location.origin)
+      return parsed.origin === window.location.origin && parsed.pathname.startsWith('/api/')
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
 const resolvedMimeType = computed(() => {
   const explicitMime = normalizeMimeType(props.mimeType)
   if (explicitMime) {
@@ -93,11 +113,17 @@ const resolvedMimeType = computed(() => {
 const isImage = computed(() => resolvedMimeType.value.startsWith('image'))
 const isPdf = computed(() => resolvedMimeType.value === 'application/pdf')
 const canRenderPreview = computed(() => isImage.value || isPdf.value)
-const shouldUseNativePdfEmbed = computed(() => isPdf.value && useNativePdfEmbed.value)
-const previewSourceKey = computed(() => `${props.previewUrl ?? ''}|${resolvedMimeType.value}`)
-const lastPreviewSourceKey = ref('')
 
 const hasAnyAnchors = computed(() => props.groups.some((group) => group.anchors.length > 0))
+
+/** Incluye modo resaltados para re-render si la URL no cambia pero sí los grupos. */
+const previewSourceKey = computed(
+  () => `${props.previewUrl ?? ''}|${resolvedMimeType.value}|${hasAnyAnchors.value ? 'h' : 'n'}`,
+)
+const lastPreviewSourceKey = ref('')
+
+/** Solo iframe como último recurso (pdf.js falló); nunca por defecto — iframe+blob falla en Firefox/Safari. */
+const shouldUseNativePdfEmbed = computed(() => isPdf.value && useNativePdfEmbed.value)
 
 const normalizedGroups = computed(() =>
   props.groups.map((group) => ({
@@ -182,7 +208,8 @@ function ensurePageObserver() {
       },
       {
         root: viewerContainer.value,
-        threshold: 0.1,
+        threshold: 0.01,
+        rootMargin: '80px 0px 120px 0px',
       },
     )
   }
@@ -253,6 +280,32 @@ function requestPreviewExpand() {
   emit('previewExpand')
 }
 
+async function loadPdfWithPdfJs(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pdfjs: any,
+  url: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  const withCreds = pdfUrlNeedsCredentials(url)
+  try {
+    return await pdfjs.getDocument({
+      url,
+      isEvalSupported: false,
+      ...(withCreds ? { withCredentials: true } : {}),
+    }).promise
+  } catch (firstErr) {
+    if (!import.meta.client || (!url.startsWith('blob:') && !url.startsWith('/api/'))) {
+      throw firstErr
+    }
+    const res = await fetch(url, { credentials: withCreds ? 'include' : 'same-origin' })
+    if (!res.ok) {
+      throw firstErr
+    }
+    const data = await res.arrayBuffer()
+    return pdfjs.getDocument({ data, isEvalSupported: false }).promise
+  }
+}
+
 async function renderPdfDocument(url: string) {
   const renderToken = ++activeRenderToken
   renderingPdf.value = true
@@ -261,16 +314,14 @@ async function renderPdfDocument(url: string) {
   totalPdfPages.value = null
   useNativePdfEmbed.value = false
   renderedPageNumbers.clear()
+  renderInFlight.clear()
   pdfDocument = null
 
   try {
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
     pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerSrc
-    const loadingTask = pdfjs.getDocument({
-      url,
-      isEvalSupported: false,
-    })
-    const pdf = await loadingTask.promise
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdf: any = await loadPdfWithPdfJs(pdfjs, url)
 
     const pages: RenderedPage[] = []
     const maxPages = pdf.numPages
@@ -302,6 +353,20 @@ async function renderPdfDocument(url: string) {
 
     if (pages.length === 0) {
       useNativePdfEmbed.value = true
+    } else {
+      // Pintar ya las primeras páginas: si solo confiamos en IntersectionObserver,
+      // a veces no dispara (contenedor en 0px, transiciones, umbral) y el lienzo queda en blanco.
+      await nextTick()
+      if (renderToken !== activeRenderToken) {
+        return
+      }
+      const eagerPageCount = Math.min(pages.length, 3)
+      for (let p = 1; p <= eagerPageCount; p += 1) {
+        if (renderToken !== activeRenderToken) {
+          return
+        }
+        await renderSinglePage(p)
+      }
     }
   } catch (error) {
     pdfError.value = error instanceof Error ? error.message : 'No se pudo renderizar el documento.'
@@ -314,7 +379,7 @@ async function renderPdfDocument(url: string) {
 }
 
 async function resolveCanvasForPage(pageNumber: number): Promise<HTMLCanvasElement | null> {
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
     await nextTick()
 
     const canvas = canvasRefs.get(pageNumber)
@@ -340,33 +405,42 @@ async function renderSinglePage(pageNumber: number) {
     return
   }
 
-  const page = await pdfDocument.getPage(pageNumber)
-  if (renderToken !== activeRenderToken) {
+  if (renderInFlight.has(pageNumber)) {
     return
   }
 
-  const viewport = page.getViewport({ scale: pageMeta.scale })
+  renderInFlight.add(pageNumber)
+  try {
+    const page = await pdfDocument.getPage(pageNumber)
+    if (renderToken !== activeRenderToken) {
+      return
+    }
 
-  const canvas = await resolveCanvasForPage(pageNumber)
-  if (!canvas) {
-    return
+    const viewport = page.getViewport({ scale: pageMeta.scale })
+
+    const canvas = await resolveCanvasForPage(pageNumber)
+    if (!canvas) {
+      return
+    }
+
+    const context = canvas.getContext('2d')
+    if (!context) {
+      return
+    }
+
+    canvas.width = Math.floor(viewport.width)
+    canvas.height = Math.floor(viewport.height)
+
+    await page.render({ canvasContext: context, viewport }).promise
+
+    if (renderToken !== activeRenderToken) {
+      return
+    }
+
+    renderedPageNumbers.add(pageNumber)
+  } finally {
+    renderInFlight.delete(pageNumber)
   }
-
-  const context = canvas.getContext('2d')
-  if (!context) {
-    return
-  }
-
-  canvas.width = Math.floor(viewport.width)
-  canvas.height = Math.floor(viewport.height)
-
-  await page.render({ canvasContext: context, viewport }).promise
-
-  if (renderToken !== activeRenderToken) {
-    return
-  }
-
-  renderedPageNumbers.add(pageNumber)
 }
 
 function updateContainerWidth(width: number) {
@@ -459,6 +533,7 @@ watch(
     pdfError.value = null
     totalPdfPages.value = null
     renderedPageNumbers.clear()
+    renderInFlight.clear()
     canvasRefs.clear()
     pageRefs.clear()
     if (pageObserver) {
@@ -513,7 +588,7 @@ watch(
 </script>
 
 <template>
-  <div ref="viewerContainer" class="document-viewer-shell">
+  <div ref="viewerContainer" class="document-viewer-shell" data-testid="document-preview-shell">
     <div v-if="!previewUrl" class="document-viewer-empty">
       <UIcon name="i-lucide-file-search" class="size-8 text-sipac-700" />
       <p class="font-semibold text-text">Sube un archivo para visualizarlo aquí.</p>
@@ -646,11 +721,11 @@ watch(
   overflow: auto;
   scrollbar-gutter: stable both-edges;
   max-height: min(70vh, 44rem);
-  min-height: 18rem;
   border: 1px solid rgb(196 214 202 / 0.85);
   border-radius: 1.2rem;
   background: linear-gradient(180deg, rgb(252 255 253 / 0.9), rgb(242 248 244 / 0.92));
-  padding: 0.75rem;
+  /* Sin padding superior: el panel exterior ya alinea con la ficha; evita “doble aire” encima del PDF/imagen */
+  padding: 0 0.75rem 0.75rem;
   scrollbar-width: thin;
   scrollbar-color: rgb(209 213 219 / 0.55) transparent;
 }
@@ -684,14 +759,14 @@ watch(
 }
 
 .pdf-preview-shell {
-  display: grid;
-  gap: 1rem;
+  display: block;
 }
 
 .pdf-pages-stack {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
-  justify-content: center;
+  align-items: stretch;
 }
 
 .pdf-embed-fallback {
@@ -769,9 +844,8 @@ watch(
 
 @media (max-width: 640px) {
   .document-viewer-shell {
-    padding: 0.6rem;
+    padding: 0 0.6rem 0.6rem;
     max-height: 62vh;
-    min-height: 16rem;
   }
 }
 

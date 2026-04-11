@@ -7,6 +7,7 @@ const notificationsStore = useNotificationsStore()
 const mobileSidebarOpen = useState<boolean>('sipac-mobile-sidebar-open')
 const isHomeSpecial = computed(() => route.path === '/' && !isAdmin.value)
 const isChatSpecial = computed(() => route.path.startsWith('/chat'))
+const isWorkspaceDocumentsSpecial = computed(() => route.path === '/workspace-documents')
 
 const showNotifications = ref(false)
 let stopNotificationsFocusRefresh: (() => void) | undefined
@@ -61,15 +62,6 @@ const routeMeta = computed(() => {
       title: 'Chat con respaldo documental',
       description:
         'Haz preguntas en lenguaje natural y revisa los documentos que sustentan cada respuesta.',
-    }
-  }
-
-  if (route.path === '/workspace-documents') {
-    return {
-      eyebrow: 'Revisión guiada',
-      title: 'Carga y valida documentos',
-      description:
-        'Sube un archivo, revisa la ficha sugerida y guarda el resultado final con tranquilidad.',
     }
   }
 
@@ -179,14 +171,18 @@ onBeforeUnmount(() => {
   <header
     class="border-b backdrop-blur-md"
     :class="
-      isHomeSpecial || isChatSpecial
+      isHomeSpecial || isChatSpecial || isWorkspaceDocumentsSpecial
         ? 'border-border/35 bg-white/68 supports-[backdrop-filter]:bg-white/58'
         : 'border-border/50 bg-white/85'
     "
   >
     <div
       class="mx-auto flex w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8"
-      :class="isHomeSpecial || isChatSpecial ? 'max-w-[96rem] py-3.5 xl:px-10' : 'max-w-7xl py-4'"
+      :class="
+        isHomeSpecial || isChatSpecial || isWorkspaceDocumentsSpecial
+          ? 'max-w-[96rem] py-3.5 xl:px-10'
+          : 'max-w-7xl py-4'
+      "
     >
       <div class="flex min-w-0 items-start gap-3">
         <SipacButton
@@ -232,6 +228,27 @@ onBeforeUnmount(() => {
           <p class="mt-2 text-sm leading-6 text-text-muted">
             Haz preguntas como lo harías con un colega; las respuestas se apoyan en los documentos
             que ya subiste a SIPAc.
+          </p>
+        </div>
+
+        <div v-else-if="isWorkspaceDocumentsSpecial" class="min-w-0">
+          <div class="flex flex-wrap items-center gap-3">
+            <p class="text-[0.68rem] font-semibold tracking-[0.22em] text-text-soft uppercase">
+              {{ isAdmin ? 'Centro administrativo' : 'Workspace docente' }}
+            </p>
+            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
+            <SipacBadge color="primary" variant="subtle" size="sm" class="gap-1">
+              <UIcon name="i-lucide-folder-up" class="size-3" />
+              Carga y revisión
+            </SipacBadge>
+            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
+            <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
+              {{ todayLabel }}
+            </SipacBadge>
+          </div>
+          <p class="mt-2 text-sm leading-6 text-text-muted">
+            Sube un PDF o una imagen, revisa la ficha que te proponemos y confirma cuando esté
+            lista.
           </p>
         </div>
 

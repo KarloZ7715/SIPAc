@@ -24,6 +24,9 @@ export default defineNuxtConfig({
     server: {
       allowedHosts: ['localhost', '127.0.0.1', '.trycloudflare.com'],
     },
+    optimizeDeps: {
+      include: ['pdfjs-dist/legacy/build/pdf.mjs', 'motion-v', 'ai', '@ai-sdk/vue'],
+    },
   },
 
   runtimeConfig: {
@@ -92,6 +95,8 @@ export default defineNuxtConfig({
       crossOriginEmbedderPolicy: false,
       contentSecurityPolicy: {
         'img-src': ["'self'", 'data:', 'https:'],
+        // Vista previa PDF en iframe (blob: / misma app) en workspace.
+        'frame-src': ["'self'", 'blob:', 'data:'],
       },
     },
     rateLimiter: {

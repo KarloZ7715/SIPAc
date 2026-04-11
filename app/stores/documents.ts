@@ -18,6 +18,10 @@ type ProductsListResponse = ApiSuccessResponse<AcademicProductPublic[]>
 type DeleteProductResponse = ApiSuccessResponse<{ deleted: boolean }>
 type StoreFetch = <T>(request: string, options?: Parameters<typeof $fetch>[1]) => Promise<T>
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
 export interface RepositoryFilters {
   productType?: ProductType
   year?: string
@@ -77,6 +81,10 @@ export const useDocumentsStore = defineStore('documents', () => {
   const workspaceStage = ref<WorkspaceStage>('empty')
   const workspaceDetectedMetadata = reactive<WorkspaceMetadataDraft>(createEmptyWorkspaceMetadata())
   let pollTimer: ReturnType<typeof setInterval> | null = null
+  /** Encadenamiento de cargas de borrador: evita que una respuesta antigua pise estado nuevo. */
+  let draftLoadGeneration = 0
+  let draftLoadAbort: AbortController | null = null
+  const pollConsecutiveFailures = ref(0)
 
   const activeDocuments = computed(() =>
     documents.value.filter((document) =>
@@ -316,11 +324,23 @@ export const useDocumentsStore = defineStore('documents', () => {
       return
     }
 
-    await Promise.all(
-      activeDocuments.value.map((document) =>
-        refreshDocumentStatus(document._id).catch(() => undefined),
-      ),
+    const outcomes = await Promise.all(
+      activeDocuments.value.map(async (document) => {
+        try {
+          await refreshDocumentStatus(document._id)
+          return 'ok' as const
+        } catch {
+          return 'fail' as const
+        }
+      }),
     )
+
+    if (outcomes.includes('ok')) {
+      pollConsecutiveFailures.value = 0
+      return
+    }
+
+    pollConsecutiveFailures.value += 1
   }
 
   async function deleteDocument(documentId: string) {
@@ -336,10 +356,20 @@ export const useDocumentsStore = defineStore('documents', () => {
   }
 
   async function loadCurrentDraft(fetcher: StoreFetch = $fetch) {
+    const gen = ++draftLoadGeneration
+    draftLoadAbort?.abort()
+    draftLoadAbort = new AbortController()
+    const { signal } = draftLoadAbort
     loadingDraft.value = true
 
     try {
-      const response = await fetcher<ProductDraftResponse>('/api/products/drafts/current')
+      const response = await fetcher<ProductDraftResponse>('/api/products/drafts/current', {
+        signal,
+      })
+
+      if (gen !== draftLoadGeneration) {
+        return null
+      }
 
       if (!response.data.draft) {
         if (!workspaceDraftFile.value) {
@@ -351,16 +381,33 @@ export const useDocumentsStore = defineStore('documents', () => {
 
       applyDraftSnapshot(response.data.draft)
       return response.data.draft
+    } catch (error) {
+      if (isAbortError(error)) {
+        return null
+      }
+      throw error
     } finally {
-      loadingDraft.value = false
+      if (gen === draftLoadGeneration) {
+        loadingDraft.value = false
+      }
     }
   }
 
   async function loadDraftProduct(productId: string) {
+    const gen = ++draftLoadGeneration
+    draftLoadAbort?.abort()
+    draftLoadAbort = new AbortController()
+    const { signal } = draftLoadAbort
     loadingDraft.value = true
 
     try {
-      const response = await $fetch<ProductDraftResponse>(`/api/products/${productId}`)
+      const response = await $fetch<ProductDraftResponse>(`/api/products/${productId}`, {
+        signal,
+      })
+
+      if (gen !== draftLoadGeneration) {
+        return null
+      }
 
       if (!response.data.draft) {
         return null
@@ -368,8 +415,15 @@ export const useDocumentsStore = defineStore('documents', () => {
 
       applyDraftSnapshot(response.data.draft)
       return response.data.draft
+    } catch (error) {
+      if (isAbortError(error)) {
+        return null
+      }
+      throw error
     } finally {
-      loadingDraft.value = false
+      if (gen === draftLoadGeneration) {
+        loadingDraft.value = false
+      }
     }
   }
 
@@ -602,6 +656,7 @@ export const useDocumentsStore = defineStore('documents', () => {
     workspaceDraftProductType,
     workspaceStage,
     workspaceDetectedMetadata,
+    pollConsecutiveFailures,
     uploadDocument,
     refreshDocumentStatus,
     pollActiveStatuses,

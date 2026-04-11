@@ -3,6 +3,8 @@
 @import 'tailwindcss';
 @import '@nuxt/ui';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* Brand */
   --color-sipac-50: #f4fbf6;
@@ -197,6 +199,29 @@
 
 @layer base {
   :root {
+    color-scheme: light;
+  }
+
+  :root,
+  .dark {
+    --ui-text-dimmed: var(--color-text-soft);
+    --ui-text-muted: var(--color-text-muted);
+    --ui-text-toned: var(--color-text-muted);
+    --ui-text: var(--color-text);
+    --ui-text-highlighted: var(--color-text);
+    --ui-text-inverted: #fff;
+    --ui-bg: #fff;
+    --ui-bg-muted: var(--color-surface-muted);
+    --ui-bg-elevated: var(--color-surface-elevated);
+    --ui-bg-accented: var(--color-surface-contrast);
+    --ui-bg-inverted: var(--color-sipac-900);
+    --ui-border: var(--color-border);
+    --ui-border-muted: var(--color-border-muted);
+    --ui-border-accented: var(--color-border);
+    --ui-border-inverted: #fff;
+  }
+
+  html.dark {
     color-scheme: light;
   }
 
@@ -789,6 +814,12 @@
       opacity 180ms ease;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .stage-progress-bar {
+      transition: none;
+    }
+  }
+
   .stage-pill {
     @apply flex items-center gap-3 rounded-[1rem] border border-border/70 bg-white/82 px-3 py-2;
     transition:
@@ -877,6 +908,16 @@
     transform-origin: left center;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .loader-orbit::before {
+      animation: none;
+    }
+
+    .analysis-pulse-bar {
+      animation: none;
+    }
+  }
+
   .analysis-step-dot {
     margin-top: 0.55rem;
     display: inline-flex;
@@ -889,46 +930,45 @@
   }
 
   .analysis-highlights-shell {
-    --analysis-highlight-row-height: 5.5rem;
-    --analysis-highlight-gap: 0.75rem;
+    --analysis-highlight-row-height: 4.75rem;
+    --analysis-highlight-gap: 0.65rem;
     position: relative;
     overflow: hidden;
-    min-height: calc(
-      (var(--analysis-highlight-row-height) * var(--analysis-highlights-capacity, 4)) +
-        (var(--analysis-highlight-gap) * (var(--analysis-highlights-capacity, 4) - 1))
-    );
+    min-height: 0;
   }
 
   .analysis-highlights-list {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: var(--analysis-highlight-gap);
-    align-content: start;
   }
 
   .analysis-highlight-card {
     min-height: var(--analysis-highlight-row-height);
-    will-change: transform, opacity;
+    flex-shrink: 0;
   }
 
   .analysis-highlight-card-leaving {
     pointer-events: none;
-    position: absolute;
-    inset-inline: 0;
-    z-index: 0;
+    opacity: 0.55;
   }
 
-  .analysis-highlight-move,
+  /* Sin animación de “move”: evita solapes entre la última tarjeta y la que vuelve a entrar. */
+  .analysis-highlight-move {
+    transition: none;
+  }
+
   .analysis-highlight-enter-active,
   .analysis-highlight-leave-active {
     transition:
-      opacity 260ms var(--ease-sipac),
-      transform 260ms var(--ease-sipac);
+      opacity 220ms var(--ease-sipac),
+      transform 220ms var(--ease-sipac);
   }
 
   .analysis-highlight-enter-from,
   .analysis-highlight-leave-to {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(8px);
   }
 
   .soft-rise-enter-active,
