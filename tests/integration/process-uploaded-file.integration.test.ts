@@ -325,7 +325,7 @@ describe('processUploadedFile integration', () => {
     )
   })
 
-  it('continues processing non-academic classification and notifies with warning', async () => {
+  it('rechaza procesamiento cuando la clasificación es no académica con confianza suficiente', async () => {
     const uploadedFile = createUploadedFileDoc()
     mockUploadedFileFindById.mockResolvedValue(uploadedFile)
     mockAtomicUploadedFileUpdates(uploadedFile)
@@ -345,49 +345,22 @@ describe('processUploadedFile integration', () => {
       classificationSource: 'llm',
     })
 
-    mockExtractAcademicEntities.mockResolvedValue({
-      productType: 'article',
-      documentClassification: 'non_academic',
-      classificationConfidence: 0.83,
-      classificationRationale: 'No academico',
-      classificationSource: 'llm',
-      authors: [],
-      title: undefined,
-      institution: undefined,
-      date: undefined,
-      keywords: [],
-      doi: undefined,
-      eventOrJournal: undefined,
-      extractionSource: 'pdfjs_native',
-      extractionConfidence: 0.4,
-      evidenceCoverage: 0.3,
-      nerProvider: 'gemini',
-      nerModel: 'gemini-2.5-flash',
-      nerAttemptTrace: [],
-      extractedAt: new Date('2026-03-13T01:00:00.000Z'),
-    })
-
-    mockAcademicProductFindOne.mockResolvedValue(null)
-    mockAcademicProductCreate.mockResolvedValue({
-      _id: { toString: () => 'product-1' },
-    })
-
     await processUploadedFile('upload-1')
 
-    expect(uploadedFile.processingStatus).toBe('completed')
-    expect(mockAcademicProductCreate).toHaveBeenCalledTimes(1)
+    expect(mockExtractAcademicEntities).not.toHaveBeenCalled()
+    expect(mockAcademicProductCreate).not.toHaveBeenCalled()
     expect(mockNotifyDocumentProcessing).toHaveBeenCalledWith(
       expect.objectContaining({
-        status: 'completed',
+        status: 'error',
         uploadedFileId: 'upload-1',
-        warningMessage: expect.stringContaining('no academico'),
+        errorMessage: expect.stringContaining('no encaja'),
       }),
     )
 
     expect(mockLogPipelineEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         stage: 'processing',
-        event: 'classification_warning_non_academic',
+        event: 'rejected_document_classification',
       }),
     )
   })
@@ -545,7 +518,9 @@ describe('processUploadedFile integration', () => {
     expect(mockNotifyDocumentProcessing).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'completed',
-        warningMessage: expect.stringContaining('calidad OCR se mantiene baja'),
+        warningMessage: expect.stringContaining(
+          'lectura automática del archivo sigue viéndose poco clara',
+        ),
       }),
     )
     expect(

@@ -17,6 +17,7 @@ import { notifyDocumentProcessing } from '~~/server/services/notifications/notif
 import { validateEnv } from '~~/server/utils/env'
 import { classifyPipelineError, logPipelineEvent } from '~~/server/utils/pipeline-observability'
 import { normalizePublicationLanguageForMongo } from '~~/server/utils/publication-language'
+import { getWorkspaceClassificationRejectionMessage } from '~~/server/utils/workspace-classification-gate'
 
 function getRuntimeConfigSafe(): Record<string, unknown> {
   try {
@@ -418,7 +419,7 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
 
         if (selectedQuality.status === 'poor') {
           processingWarnings.push(
-            'La calidad OCR se mantiene baja despues del reintento; revisa y corrige metadatos manualmente.',
+            'La lectura automática del archivo sigue viéndose poco clara; te conviene repasar y corregir los datos a mano.',
           )
 
           logPipelineEvent({
@@ -437,7 +438,7 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
           })
         } else if (selectedQuality.status === 'fair') {
           processingWarnings.push(
-            'La calidad OCR mejorada es regular; verifica que no falten datos importantes.',
+            'La lectura del archivo quedó aceptable, pero no perfecta; revisa que no falte nada importante.',
           )
         }
       }
@@ -507,6 +508,59 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
     )
 
     const classificationProfile = await classifyDocumentForNer(ocrResult.text)
+    const classificationRejection =
+      getWorkspaceClassificationRejectionMessage(classificationProfile)
+
+    if (classificationRejection) {
+      await UploadedFile.findOneAndUpdate(
+        {
+          _id: uploadedFileId,
+          isDeleted: false,
+        },
+        {
+          $set: {
+            rawExtractedText: ocrResult.text,
+            ocrProvider: ocrResult.provider,
+            ocrModel: ocrResult.modelId ?? null,
+            ocrConfidence: ocrResult.confidence ?? null,
+            documentClassification: classificationProfile.documentClassification,
+            documentClassificationSource: classificationProfile.classificationSource,
+            classificationConfidence: classificationProfile.classificationConfidence,
+            classificationRationale: classificationProfile.classificationRationale,
+            processingStatus: 'error',
+            processingError: classificationRejection,
+            processingCompletedAt: new Date(),
+          },
+        },
+      )
+
+      logPipelineEvent({
+        traceId,
+        documentId: uploadedFileId,
+        stage: 'processing',
+        event: 'rejected_document_classification',
+        durationMs: Date.now() - processStart,
+        metadata: {
+          classification: classificationProfile.documentClassification,
+          confidence: classificationProfile.classificationConfidence,
+          productType: classificationProfile.productType,
+        },
+      })
+
+      const rejectedFile = await UploadedFile.findById(uploadedFileId)
+      if (rejectedFile && !rejectedFile.isDeleted) {
+        await notifyDocumentProcessing({
+          recipientId: rejectedFile.uploadedBy.toString(),
+          uploadedFileId: rejectedFile._id.toString(),
+          filename: rejectedFile.originalFilename,
+          status: 'error',
+          errorMessage: classificationRejection,
+        })
+      }
+
+      return
+    }
+
     const segmentCount = segmentation.segments.length
 
     const aggregatedNerTrace: NerAttemptTraceEntry[] = []
@@ -702,30 +756,9 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
 
     const detectedProductType = classificationProfile.productType
 
-    if (
-      classificationProfile.documentClassification === 'non_academic' &&
-      classificationProfile.classificationConfidence >= 0.75
-    ) {
-      processingWarnings.push(
-        'El documento fue clasificado como no academico con alta confianza; valida manualmente su pertinencia.',
-      )
-
-      logPipelineEvent({
-        traceId,
-        documentId: uploadedFileId,
-        stage: 'processing',
-        event: 'classification_warning_non_academic',
-        metadata: {
-          classification: classificationProfile.documentClassification,
-          confidence: classificationProfile.classificationConfidence,
-          action: 'continue_with_manual_review',
-        },
-      })
-    }
-
     if (classificationProfile.documentClassification === 'uncertain') {
       processingWarnings.push(
-        'La clasificacion del documento es incierta; revisa manualmente los metadatos extraidos.',
+        'No quedó del todo claro qué tipo de documento es; conviene que revises tú mismo los datos que extrajimos.',
       )
 
       logPipelineEvent({
@@ -743,7 +776,7 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
 
     if (anyLowConfidence) {
       processingWarnings.push(
-        'La confianza de extraccion es baja en al menos un fragmento; revisa cada borrador.',
+        'En al menos una parte del archivo la extracción salió con poca seguridad; revisa con calma cada borrador.',
       )
 
       logPipelineEvent({
@@ -761,7 +794,7 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
 
     if (anyLowEvidence) {
       processingWarnings.push(
-        'En al menos un fragmento faltan muchas evidencias de campos criticos; verifica manualmente.',
+        'En alguna sección faltan indicios claros de datos clave; conviene que lo revises tú mismo.',
       )
 
       logPipelineEvent({
@@ -779,7 +812,7 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
 
     if (segmentCount > 1) {
       processingWarnings.push(
-        `Se generaron ${segmentCount} borradores desde el mismo archivo (posible compendio). Revisa cada obra por separado.`,
+        `Detectamos ${segmentCount} posibles trabajos distintos dentro del mismo archivo; revisa cada uno por separado.`,
       )
     }
 
