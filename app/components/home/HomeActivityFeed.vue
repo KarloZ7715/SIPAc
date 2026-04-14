@@ -54,8 +54,8 @@ function toneClasses(tone: HomeContinuationItem['tone']) {
 </script>
 
 <template>
-  <section class="home-continuity panel-surface px-5 py-6 sm:px-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <section class="home-continuity panel-surface px-4 py-5 sm:px-5 sm:py-6 md:px-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
       <div class="space-y-1">
         <p class="text-[0.68rem] font-semibold tracking-[0.18em] text-text-soft uppercase">
           Continuidad
@@ -64,14 +64,20 @@ function toneClasses(tone: HomeContinuationItem['tone']) {
         <p class="max-w-2xl text-sm leading-6 text-text-muted">{{ props.description }}</p>
       </div>
 
-      <SipacButton to="/repository" color="neutral" variant="ghost" icon="i-lucide-library-big">
+      <SipacButton
+        to="/repository"
+        color="neutral"
+        variant="ghost"
+        icon="i-lucide-library-big"
+        class="w-full shrink-0 sm:w-auto"
+      >
         Ver repositorio
       </SipacButton>
     </div>
 
     <div
       v-if="props.loading"
-      class="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.12fr)_minmax(18rem,0.88fr)]"
+      class="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.12fr)_minmax(0,22rem)]"
     >
       <div class="skeleton-shimmer h-[18rem] rounded-[1.6rem] border border-border/50" />
       <div class="grid gap-3">
@@ -86,11 +92,11 @@ function toneClasses(tone: HomeContinuationItem['tone']) {
     <div
       v-else-if="props.featured"
       class="mt-6 grid gap-4"
-      :class="props.queue.length > 0 ? 'xl:grid-cols-[minmax(0,1.06fr)_minmax(21rem,0.94fr)]' : ''"
+      :class="props.queue.length > 0 ? 'lg:grid-cols-[minmax(0,1.06fr)_minmax(0,21rem)]' : ''"
     >
       <NuxtLink
         :to="props.featured.to"
-        class="home-featured-item group relative overflow-hidden rounded-[1.7rem] border px-5 py-5 sm:px-6"
+        class="home-featured-item group relative min-w-0 overflow-hidden rounded-[1.7rem] border px-4 py-4 sm:px-5 sm:py-5 sm:px-6"
         :class="toneClasses(props.featured.tone).shell"
       >
         <div class="home-featured-orb" aria-hidden="true" />
@@ -105,7 +111,7 @@ function toneClasses(tone: HomeContinuationItem['tone']) {
                 {{ props.featured.eyebrow }}
               </p>
               <h3
-                class="max-w-xl text-[1.7rem] leading-tight font-semibold text-text sm:text-[2rem]"
+                class="max-w-xl text-[1.45rem] leading-tight font-semibold text-text sm:text-[1.7rem] md:text-[2rem]"
               >
                 {{ props.featured.title }}
               </h3>
@@ -133,7 +139,7 @@ function toneClasses(tone: HomeContinuationItem['tone']) {
             </span>
           </div>
 
-          <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)]">
+          <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,19rem)]">
             <div class="grid gap-3 sm:grid-cols-2">
               <div
                 class="rounded-[1.2rem] border border-white/72 bg-white/72 px-4 py-4 backdrop-blur-sm"
@@ -186,7 +192,7 @@ function toneClasses(tone: HomeContinuationItem['tone']) {
 
       <div
         v-if="props.queue.length > 0"
-        class="grid content-start gap-3 sm:grid-cols-2 xl:grid-cols-1"
+        class="grid content-start gap-3 sm:grid-cols-2 lg:grid-cols-1"
       >
         <NuxtLink
           v-for="item in props.queue"

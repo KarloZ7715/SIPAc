@@ -42,7 +42,9 @@ function toneClasses(tone: HomeRailItem['tone']) {
 </script>
 
 <template>
-  <section class="home-rail panel-surface relative overflow-hidden px-5 py-5 sm:px-6">
+  <section
+    class="home-rail panel-surface relative overflow-hidden px-4 py-4 sm:px-5 sm:py-5 md:px-6"
+  >
     <div class="home-rail-orb" aria-hidden="true" />
 
     <div class="relative space-y-5">
@@ -75,10 +77,12 @@ function toneClasses(tone: HomeRailItem['tone']) {
             </span>
 
             <div class="min-w-0 flex-1">
-              <div class="flex items-center justify-between gap-3">
+              <div
+                class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+              >
                 <p class="text-sm font-semibold text-text">{{ item.label }}</p>
                 <span
-                  class="inline-flex min-w-[2.25rem] items-center justify-center rounded-full px-2.5 py-1 text-sm font-semibold"
+                  class="inline-flex w-fit max-w-full items-center justify-center rounded-full px-2.5 py-1 text-sm font-semibold whitespace-normal text-left sm:min-w-[2.25rem] sm:text-center"
                   :class="[toneClasses(item.tone).value, toneClasses(item.tone).pill]"
                 >
                   {{ item.value }}

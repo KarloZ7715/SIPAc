@@ -40,6 +40,7 @@ jobs:
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GOOGLE_API_KEY_TEST: ${{ secrets.GOOGLE_API_KEY_TEST }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           OCR_PROVIDER: gemini
 
@@ -48,6 +49,7 @@ jobs:
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GOOGLE_API_KEY_TEST: ${{ secrets.GOOGLE_API_KEY_TEST }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           OCR_PROVIDER: gemini
 
@@ -94,6 +96,7 @@ jobs:
           PLAYWRIGHT_E2E_SEEDED_DB: 1
           MONGODB_URI: mongodb://127.0.0.1:27017/sipac_e2e
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GOOGLE_API_KEY_TEST: ${{ secrets.GOOGLE_API_KEY_TEST }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}

@@ -36,7 +36,9 @@ export function evaluateOcrQuality(input: OcrQualityInput): OcrQualityAssessment
   const suspiciousRatio = computeSuspiciousRatio(normalizedText)
   const confidence = typeof input.confidence === 'number' ? clampUnit(input.confidence) : 0.5
   const isVisionProvider = input.provider === 'gemini_vision'
-  const blocksFactor = isVisionProvider ? 1 : Math.min(1, (input.blocksCount ?? 0) / 80)
+  const isOfficeNative = input.provider === 'office_native'
+  const blocksFactor =
+    isVisionProvider || isOfficeNative ? 1 : Math.min(1, (input.blocksCount ?? 0) / 80)
 
   const score = clampUnit(
     Math.min(textLength / 1200, 1) * 0.3 +

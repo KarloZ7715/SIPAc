@@ -64,16 +64,20 @@ export function buildWorkspaceTestingMetricsItems(
   const ocrProviderLabel =
     tracked?.ocrProvider === 'pdfjs_native'
       ? 'PDF.js nativo'
-      : tracked?.ocrProvider === 'gemini_vision'
-        ? 'Gemini Vision'
-        : tracked?.ocrProvider === 'mistral_ocr_3'
-          ? 'Mistral OCR 3 (fuera de MVP)'
-          : 'No disponible'
+      : tracked?.ocrProvider === 'office_native'
+        ? 'Extracción Office (sin OCR)'
+        : tracked?.ocrProvider === 'gemini_vision'
+          ? 'Gemini Vision'
+          : tracked?.ocrProvider === 'mistral_ocr_3'
+            ? 'Mistral OCR 3 (fuera de MVP)'
+            : 'No disponible'
 
   const ocrModelLabel =
     tracked?.ocrProvider === 'pdfjs_native'
       ? 'No aplica (pdfjs nativo)'
-      : (tracked?.ocrModel ?? 'No disponible')
+      : tracked?.ocrProvider === 'office_native'
+        ? 'No aplica (mammoth / SheetJS / ZIP)'
+        : (tracked?.ocrModel ?? 'No disponible')
 
   const nerModelLabel =
     tracked?.nerModel && tracked?.nerProvider

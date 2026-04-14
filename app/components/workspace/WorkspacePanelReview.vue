@@ -217,7 +217,7 @@ watch(
         >
           <div class="rounded-xl border border-border/55 bg-white/90 p-4">
             <h2
-              :id="!isWideReviewLayout ? 'workspace-review-heading' : undefined"
+              id="workspace-review-heading-narrow"
               tabindex="-1"
               class="font-display text-lg font-semibold text-text outline-none focus-visible:ring-2 focus-visible:ring-sipac-500/40"
             >
@@ -315,7 +315,7 @@ watch(
         <div class="min-w-0 space-y-4">
           <div class="rounded-xl border border-border/55 bg-white/90 p-4">
             <h2
-              :id="isWideReviewLayout ? 'workspace-review-heading' : undefined"
+              id="workspace-review-heading-wide"
               tabindex="-1"
               class="font-display text-lg font-semibold text-text outline-none focus-visible:ring-2 focus-visible:ring-sipac-500/40"
             >

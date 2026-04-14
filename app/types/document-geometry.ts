@@ -6,7 +6,7 @@ export interface DocumentAnchor {
   height: number // Normalized percentage 0-1
   confidence: number // 0-1
   sourceText?: string
-  provider: 'pdfjs_native' | 'gemini_vision' | 'mistral_ocr_3'
+  provider: 'pdfjs_native' | 'gemini_vision' | 'mistral_ocr_3' | 'office_native'
 }
 
 export interface ExtractedEntityWithEvidence<T> {

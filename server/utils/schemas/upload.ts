@@ -13,7 +13,8 @@ export const uploadMetadataSchema = z.object({
 
 export const fileValidationSchema = z.object({
   mimeType: z.enum(ALLOWED_MIME_TYPES, {
-    error: 'Tipo de archivo no permitido. Solo se aceptan PDF, JPG y PNG',
+    error:
+      'Tipo de archivo no permitido. Aceptamos PDF, imágenes (JPG/PNG) y Office estructurado (p. ej. .docx, .xlsx, .pptx, ODF)',
   }),
   size: z.number().max(MAX_FILE_SIZE_BYTES, 'El archivo no puede superar los 20 MB'),
 })

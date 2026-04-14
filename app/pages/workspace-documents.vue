@@ -9,6 +9,7 @@ import {
   buildWorkspaceHighlightGroups,
   type WorkspaceHighlightGroup,
 } from '~~/app/utils/workspace-highlight-groups'
+import { getWorkspaceDocumentFormatLabel } from '~~/app/utils/workspace-document-format'
 import { resolveWorkspacePreviewMime } from '~~/app/utils/workspace-preview-mime'
 import {
   buildWorkspaceTestingMetricsItems,
@@ -18,7 +19,7 @@ import {
 useSeoMeta({
   title: 'Documentos de trabajo',
   description:
-    'Sube un PDF o una imagen, revisa la ficha que prepararemos por ti y confirma tu producción académica.',
+    'Sube un PDF, una imagen o un documento Office (.docx, .xlsx, .pptx, ODF…), revisa la ficha y confirma tu producción académica.',
 })
 
 const documentsStore = useDocumentsStore()
@@ -221,7 +222,7 @@ const stepSaveHint = computed(() => {
 const stageSteps = computed(() => [
   {
     label: 'Adjuntar',
-    hint: hasDraft.value ? 'Archivo cargado' : 'Elige un PDF o una imagen',
+    hint: hasDraft.value ? 'Archivo cargado' : 'Elige PDF, imagen u Office',
     active: hasDraft.value,
     complete: ['draft', 'analyzing', 'review', 'ready', 'confirmed'].includes(currentStage.value),
   },
@@ -258,7 +259,7 @@ const taskChromeFileTitle = computed(() =>
 
 const taskChromeFileMeta = computed(() => {
   if (!hasDraft.value) {
-    return 'Puedes usar un PDF o una imagen; cárgalo desde el panel de la izquierda.'
+    return 'Puedes usar PDF, imagen u Office; cárgalo desde el panel de la izquierda.'
   }
   return `${fileExtension.value} · ${formatFileSize(currentFileSize.value)}`
 })
@@ -282,7 +283,9 @@ const summaryRows = computed(() => [
   },
   {
     label: 'Formato',
-    value: hasDraft.value ? (isImageDraft.value ? 'Imagen' : 'Documento') : 'Pendiente',
+    value: hasDraft.value
+      ? getWorkspaceDocumentFormatLabel(currentMimeType.value, isImageDraft.value)
+      : 'Pendiente',
   },
   {
     label: 'Tipo detectado',
@@ -610,7 +613,15 @@ watch(
       }
       reviewLiveMessage.value = 'La ficha ya está lista. Revísala y ajusta lo que necesites.'
       const focusReviewHeading = () => {
-        document.getElementById('workspace-review-heading')?.focus()
+        const narrow = document.getElementById(
+          'workspace-review-heading-narrow',
+        ) as HTMLElement | null
+        const wide = document.getElementById('workspace-review-heading-wide') as HTMLElement | null
+        if (narrow && narrow.offsetParent !== null) {
+          narrow.focus()
+        } else {
+          wide?.focus()
+        }
       }
       nextTick(() => {
         requestAnimationFrame(() => {

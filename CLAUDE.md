@@ -73,6 +73,7 @@ Required:
 - `MONGODB_URI` — MongoDB connection string
 - `JWT_SECRET` — Minimum 32 characters
 - `GOOGLE_API_KEY` — For OCR (Gemini Vision) and NER
+- `GOOGLE_API_KEY_TEST` — Optional; if set, used instead of `GOOGLE_API_KEY` (CI/E2E/Vitest) so tests do not consume the production quota
 
 Optional providers (enable fallback chains):
 

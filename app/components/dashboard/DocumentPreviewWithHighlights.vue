@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DocumentAnchor } from '~~/app/types'
+import { isStructuredOfficeMimeType } from '~~/app/types'
 /** Debe coincidir con el bundle `legacy/build/pdf.mjs`; mezclar con `build/` rompe pdf.js 5.x en runtime. */
 import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 
@@ -112,6 +113,7 @@ const resolvedMimeType = computed(() => {
 
 const isImage = computed(() => resolvedMimeType.value.startsWith('image'))
 const isPdf = computed(() => resolvedMimeType.value === 'application/pdf')
+const isStructuredOffice = computed(() => isStructuredOfficeMimeType(resolvedMimeType.value))
 const canRenderPreview = computed(() => isImage.value || isPdf.value)
 
 const hasAnyAnchors = computed(() => props.groups.some((group) => group.anchors.length > 0))
@@ -631,9 +633,22 @@ watch(
 
     <div v-else class="pdf-preview-shell">
       <div v-if="!canRenderPreview" class="document-viewer-empty">
-        <UIcon name="i-lucide-file-warning" class="size-8 text-amber-600" />
-        <p class="font-semibold text-text">No pudimos identificar el tipo del archivo.</p>
-        <p class="text-sm text-text-muted">Vuelve a cargarlo para mostrar la vista previa.</p>
+        <UIcon
+          :name="isStructuredOffice ? 'i-lucide-file-text' : 'i-lucide-file-warning'"
+          class="size-8"
+          :class="isStructuredOffice ? 'text-sipac-700' : 'text-amber-600'"
+        />
+        <template v-if="isStructuredOffice">
+          <p class="font-semibold text-text">Vista previa no disponible para este Office</p>
+          <p class="text-sm text-text-muted">
+            Extraemos el texto para la ficha y el análisis; aquí no renderizamos Word, Excel ni
+            PowerPoint.
+          </p>
+        </template>
+        <template v-else>
+          <p class="font-semibold text-text">No pudimos identificar el tipo del archivo.</p>
+          <p class="text-sm text-text-muted">Vuelve a cargarlo para mostrar la vista previa.</p>
+        </template>
       </div>
 
       <div v-else-if="!isReadyToRender" class="document-viewer-empty">

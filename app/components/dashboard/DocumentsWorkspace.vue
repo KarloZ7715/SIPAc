@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { WORKSPACE_UPLOAD_ACCEPT } from '~~/app/config/workspace-upload-accept'
+
 const documentsStore = useDocumentsStore()
 const selectedFile = ref<File | null>(null)
 
@@ -29,13 +31,13 @@ watch(selectedFile, async (file) => {
     <div>
       <UFileUpload
         v-model="selectedFile"
-        accept="application/pdf,image/png,image/jpeg"
+        :accept="WORKSPACE_UPLOAD_ACCEPT"
         color="neutral"
         size="xl"
         variant="area"
         layout="list"
-        label="Arrastra un PDF o una imagen"
-        description="PDF, JPG o PNG. Máx 20MB."
+        label="Arrastra PDF, imagen u Office"
+        description="PDF, JPG, PNG, .docx, .xlsx, .pptx, ODF… Máx 20MB."
         class="w-full"
       />
     </div>

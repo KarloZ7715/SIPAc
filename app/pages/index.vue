@@ -767,7 +767,7 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
 </script>
 
 <template>
-  <div class="space-y-8 lg:space-y-9">
+  <div class="space-y-6 sm:space-y-8 lg:space-y-9">
     <UAlert
       v-if="homeOverview?.partialFailures && !isAdmin"
       color="warning"
@@ -779,7 +779,9 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
 
     <template v-if="!isAdmin">
       <motion.section v-bind="enterMotion(0, 20)">
-        <div class="grid gap-5 xl:grid-cols-[minmax(0,1.52fr)_22rem]">
+        <div
+          class="grid gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(16rem,22rem)] lg:items-start"
+        >
           <HomeWorkstage
             :eyebrow="priorityState.eyebrow"
             :status-label="priorityState.statusLabel"
@@ -818,7 +820,7 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
 
       <motion.section
         v-bind="enterMotion(0.2, 26)"
-        class="panel-surface home-dock-shell px-5 py-5 sm:px-6"
+        class="panel-surface home-dock-shell px-4 py-4 sm:px-5 sm:py-5 md:px-6"
       >
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div class="space-y-1">
@@ -834,7 +836,7 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
           </div>
         </div>
 
-        <div class="mt-6 grid gap-3 lg:grid-cols-2 2xl:grid-cols-4">
+        <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 sm:mt-6">
           <HomeWorkspaceLauncher
             v-for="action in dockActions"
             :key="action.title"

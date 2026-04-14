@@ -1,5 +1,10 @@
 import mongoose from 'mongoose'
-import { PRODUCT_REVIEW_STATUSES, PRODUCT_TYPES, type IAcademicProduct } from '~~/app/types'
+import {
+  OCR_PROVIDERS,
+  PRODUCT_REVIEW_STATUSES,
+  PRODUCT_TYPES,
+  type IAcademicProduct,
+} from '~~/app/types'
 import { normalizePublicationLanguageForMongo } from '~~/server/utils/publication-language'
 
 const { Schema, model, models } = mongoose
@@ -15,7 +20,7 @@ const documentAnchorSchema = new Schema(
     sourceText: { type: String },
     provider: {
       type: String,
-      enum: ['pdfjs_native', 'gemini_vision', 'mistral_ocr_3'],
+      enum: [...OCR_PROVIDERS],
       required: true,
     },
   },
@@ -52,7 +57,7 @@ const extractedEntitiesSchema = new Schema(
     extractionSource: {
       type: String,
       required: true,
-      enum: ['pdfjs_native', 'gemini_vision', 'mistral_ocr_3'],
+      enum: [...OCR_PROVIDERS],
     },
     extractionConfidence: {
       type: Number,

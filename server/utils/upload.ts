@@ -61,7 +61,7 @@ export async function detectAllowedMimeType(buffer: Buffer): Promise<AllowedMime
 
   if (!detected || !ALLOWED_MIME_TYPES.includes(detected.mime as AllowedMimeType)) {
     throw createBadRequestError(
-      'Tipo de archivo no permitido. Solo se aceptan PDF, JPG y PNG',
+      'Tipo de archivo no permitido. Aceptamos PDF, imágenes (JPG/PNG) y Office estructurado (p. ej. .docx, .xlsx, .pptx, ODF). Los formatos antiguos .doc/.xls binarios no están soportados.',
       detected ? { detectedMimeType: detected.mime } : undefined,
     )
   }

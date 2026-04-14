@@ -1,7 +1,19 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import mongoose from 'mongoose'
 import User from '../../server/models/User'
+import { buildAcademicPdfBuffer } from './helpers/build-academic-pdf'
+
+const fixturesDir = join(process.cwd(), 'tests/e2e/fixtures')
+
+const academicSnippetHtml = `
+<p>Universidad Nacional de Colombia. Revista Latinoamericana de Educación.</p>
+<p>Autores: María Fernández López y Carlos Andrés Gómez.</p>
+<p>Análisis de inteligencia artificial en educación superior, publicado en 2023.</p>
+<p>DOI: 10.1234/e2e.sipac</p>
+<p>Palabras clave: pedagogía digital, evaluación formativa, tecnología educativa.</p>
+`.trim()
 
 /** PNG 1×1 válido (aceptado por el workspace como imagen). */
 const TINY_PNG = Buffer.from(
@@ -15,9 +27,18 @@ const workspacePassword = 'WorkspaceE2E123!'
 const workspaceFullName = 'Docente Workspace E2E'
 
 const mongodbUri = readEnvValue('MONGODB_URI')
+const googleApiKey =
+  readEnvValue('GOOGLE_API_KEY_TEST').trim() || readEnvValue('GOOGLE_API_KEY').trim()
 const workspaceE2eCiOptIn = /^(1|true)$/i.test(process.env.PLAYWRIGHT_E2E_WORKSPACE ?? '')
+const workspaceFullPipelineCiOptIn = /^(1|true)$/i.test(
+  process.env.PLAYWRIGHT_E2E_WORKSPACE_FULL ?? '',
+)
 const shouldRunWorkspaceE2E =
   Boolean(mongodbUri) && (process.env.CI !== 'true' || workspaceE2eCiOptIn)
+const shouldRunWorkspaceFullPipeline =
+  shouldRunWorkspaceE2E &&
+  Boolean(googleApiKey) &&
+  (process.env.CI !== 'true' || workspaceFullPipelineCiOptIn)
 
 function readEnvValue(name: string): string {
   const directValue = process.env[name]
@@ -84,9 +105,99 @@ async function attachTinyImage(page: Page) {
   })
 }
 
+async function attachWorkspaceFile(
+  page: Page,
+  payload: { name: string; mimeType: string; buffer: Buffer },
+) {
+  const aside = visibleTestId(page, 'workspace-upload-aside')
+  const fileInput = aside.locator('input[type="file"]').first()
+  await fileInput.setInputFiles({
+    name: payload.name,
+    mimeType: payload.mimeType,
+    buffer: payload.buffer,
+  })
+  await expect(
+    visibleTestId(page, 'workspace-draft-card').getByTestId('workspace-action-start-review'),
+  ).toBeVisible({
+    timeout: 20_000,
+  })
+}
+
+async function renderAcademicTextRaster(
+  context: BrowserContext,
+  type: 'png' | 'jpeg',
+): Promise<Buffer> {
+  const temp = await context.newPage()
+  try {
+    await temp.setContent(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
+        body { margin: 24px; font: 18px system-ui, sans-serif; max-width: 720px; line-height: 1.45; color: #111; }
+      </style></head><body>${academicSnippetHtml}</body></html>`,
+      { waitUntil: 'load' },
+    )
+    const bytes = await temp.screenshot({
+      type,
+      fullPage: true,
+    })
+    return Buffer.from(bytes)
+  } finally {
+    await temp.close()
+  }
+}
+
+async function waitForWorkspaceReviewHeading(page: Page) {
+  await expect(
+    page
+      .locator('#workspace-review-heading-wide, #workspace-review-heading-narrow')
+      .filter({ visible: true }),
+  ).toBeVisible({
+    timeout: 280_000,
+  })
+}
+
+async function cancelPersistedWorkspaceFlow(page: Page) {
+  const cancel = page
+    .getByTestId('workspace-action-cancel-process')
+    .filter({ visible: true })
+    .first()
+  if (await cancel.isVisible().catch(() => false)) {
+    await cancel.click()
+    await page.getByRole('button', { name: 'Sí, cancelar' }).click()
+    await expect(
+      page.getByTestId('workspace-action-start-review').filter({ visible: true }),
+    ).toHaveCount(0, { timeout: 30_000 })
+    return
+  }
+
+  const remove = page.getByTestId('workspace-action-remove-file').filter({ visible: true }).first()
+  if (await remove.isVisible().catch(() => false)) {
+    await remove.click()
+  }
+}
+
+async function runWorkspaceFullFlow(
+  page: Page,
+  context: BrowserContext,
+  payload: { name: string; mimeType: string; buffer: Buffer },
+) {
+  await loginAndOpenWorkspace(page)
+  await attachWorkspaceFile(page, payload)
+
+  const uploadPromise = page.waitForResponse(
+    (resp) => resp.url().includes('/api/upload') && resp.request().method() === 'POST' && resp.ok(),
+    { timeout: 60_000 },
+  )
+
+  await page.getByTestId('workspace-action-start-review').filter({ visible: true }).first().click()
+  await uploadPromise
+
+  await waitForWorkspaceReviewHeading(page)
+  await cancelPersistedWorkspaceFlow(page)
+}
+
 test.describe('Workspace documentos — acciones unificadas', () => {
   test.describe.configure({ mode: 'serial' })
-  test.setTimeout(120_000)
+  test.setTimeout(300_000)
 
   test.skip(
     !shouldRunWorkspaceE2E,
@@ -188,5 +299,92 @@ test.describe('Workspace documentos — acciones unificadas', () => {
         .getByRole('region', { name: 'Estado del documento y acciones rápidas' })
         .filter({ visible: true }),
     ).toBeHidden()
+  })
+
+  test('flujo completo: PDF con texto académico llega a la ficha de revisión', async ({
+    page,
+    context,
+  }) => {
+    test.skip(
+      !shouldRunWorkspaceFullPipeline,
+      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER). En CI además PLAYWRIGHT_E2E_WORKSPACE_FULL=1.',
+    )
+    const buffer = buildAcademicPdfBuffer()
+    await runWorkspaceFullFlow(page, context, {
+      name: 'e2e-academic.pdf',
+      mimeType: 'application/pdf',
+      buffer,
+    })
+  })
+
+  test('flujo completo: PNG con texto renderizado llega a la ficha de revisión', async ({
+    page,
+    context,
+  }) => {
+    test.skip(
+      !shouldRunWorkspaceFullPipeline,
+      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER). En CI además PLAYWRIGHT_E2E_WORKSPACE_FULL=1.',
+    )
+    const buffer = await renderAcademicTextRaster(context, 'png')
+    await runWorkspaceFullFlow(page, context, {
+      name: 'e2e-academic.png',
+      mimeType: 'image/png',
+      buffer,
+    })
+  })
+
+  test('flujo completo: JPEG con texto renderizado llega a la ficha de revisión', async ({
+    page,
+    context,
+  }) => {
+    test.skip(
+      !shouldRunWorkspaceFullPipeline,
+      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER). En CI además PLAYWRIGHT_E2E_WORKSPACE_FULL=1.',
+    )
+    const buffer = await renderAcademicTextRaster(context, 'jpeg')
+    await runWorkspaceFullFlow(page, context, {
+      name: 'e2e-academic.jpg',
+      mimeType: 'image/jpeg',
+      buffer,
+    })
+  })
+
+  test('flujo completo: DOCX llega a la ficha de revisión', async ({ page, context }) => {
+    test.skip(
+      !shouldRunWorkspaceFullPipeline,
+      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER). En CI además PLAYWRIGHT_E2E_WORKSPACE_FULL=1.',
+    )
+    const buffer = readFileSync(join(fixturesDir, 'e2e-academic.docx'))
+    await runWorkspaceFullFlow(page, context, {
+      name: 'e2e-academic.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      buffer,
+    })
+  })
+
+  test('flujo completo: PPTX llega a la ficha de revisión', async ({ page, context }) => {
+    test.skip(
+      !shouldRunWorkspaceFullPipeline,
+      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER). En CI además PLAYWRIGHT_E2E_WORKSPACE_FULL=1.',
+    )
+    const buffer = readFileSync(join(fixturesDir, 'e2e-academic.pptx'))
+    await runWorkspaceFullFlow(page, context, {
+      name: 'e2e-academic.pptx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      buffer,
+    })
+  })
+
+  test('flujo completo: XLSX llega a la ficha de revisión', async ({ page, context }) => {
+    test.skip(
+      !shouldRunWorkspaceFullPipeline,
+      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER). En CI además PLAYWRIGHT_E2E_WORKSPACE_FULL=1.',
+    )
+    const buffer = readFileSync(join(fixturesDir, 'e2e-academic.xlsx'))
+    await runWorkspaceFullFlow(page, context, {
+      name: 'e2e-academic.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer,
+    })
   })
 })

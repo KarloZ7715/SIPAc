@@ -18,6 +18,7 @@ import { validateEnv } from '~~/server/utils/env'
 import { classifyPipelineError, logPipelineEvent } from '~~/server/utils/pipeline-observability'
 import { normalizePublicationLanguageForMongo } from '~~/server/utils/publication-language'
 import { getWorkspaceClassificationRejectionMessage } from '~~/server/utils/workspace-classification-gate'
+import { isStructuredOfficeMimeType } from '~~/app/types'
 
 function getRuntimeConfigSafe(): Record<string, unknown> {
   try {
@@ -345,16 +346,28 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
     }
 
     if (ocrQuality.status === 'poor') {
-      if (ocrResult.provider === 'gemini_vision') {
+      const skipVisionQualityRetry =
+        ocrResult.provider === 'gemini_vision' ||
+        ocrResult.provider === 'office_native' ||
+        isStructuredOfficeMimeType(uploadedFile.mimeType)
+
+      if (skipVisionQualityRetry) {
+        const officeCase =
+          ocrResult.provider === 'office_native' ||
+          isStructuredOfficeMimeType(uploadedFile.mimeType)
         processingWarnings.push(
-          'El documento tiene baja legibilidad original; revisa y corrige metadatos manualmente.',
+          officeCase
+            ? 'El texto extraído del Office es breve o incompleto; verifica la ficha.'
+            : 'El documento tiene baja legibilidad original; revisa y corrige metadatos manualmente.',
         )
 
         logPipelineEvent({
           traceId,
           documentId: uploadedFileId,
           stage: 'ocr',
-          event: 'quality_gate_retry_skipped_already_vision',
+          event: officeCase
+            ? 'quality_gate_retry_skipped_structured_office'
+            : 'quality_gate_retry_skipped_already_vision',
           provider: ocrResult.provider,
           modelId: ocrResult.modelId,
           metadata: {

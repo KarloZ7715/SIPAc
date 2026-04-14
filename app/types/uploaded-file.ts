@@ -4,10 +4,56 @@ import type { ProductReviewStatus, ProductType } from './academic-product'
 export const PROCESSING_STATUSES = ['pending', 'processing', 'completed', 'error'] as const
 export type ProcessingStatus = (typeof PROCESSING_STATUSES)[number]
 
-export const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'] as const
+/** OOXML + ODF que `file-type` distingue por firma (sin CFB heredado .doc/.xls). */
+export const STRUCTURED_OFFICE_MIME_TYPES = [
+  'application/vnd.ms-powerpoint.slideshow.macroenabled.12',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'application/vnd.oasis.opendocument.presentation',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.slideshow',
+  'application/vnd.openxmlformats-officedocument.presentationml.template',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.template',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.template',
+  'application/vnd.ms-excel.template.macroenabled.12',
+  'application/vnd.oasis.opendocument.text-template',
+  'application/vnd.oasis.opendocument.spreadsheet-template',
+  'application/vnd.oasis.opendocument.presentation-template',
+  'application/vnd.ms-excel.sheet.macroenabled.12',
+  'application/vnd.ms-word.document.macroenabled.12',
+  'application/vnd.ms-word.template.macroenabled.12',
+  'application/vnd.ms-powerpoint.template.macroenabled.12',
+  'application/vnd.ms-powerpoint.presentation.macroenabled.12',
+] as const
+
+export type StructuredOfficeMimeType = (typeof STRUCTURED_OFFICE_MIME_TYPES)[number]
+
+export const CORE_UPLOAD_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'] as const
+
+export const ALLOWED_MIME_TYPES = [
+  ...CORE_UPLOAD_MIME_TYPES,
+  ...STRUCTURED_OFFICE_MIME_TYPES,
+] as const
 export type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number]
 
-export const OCR_PROVIDERS = ['pdfjs_native', 'gemini_vision', 'mistral_ocr_3'] as const
+export function resolveStructuredOfficeMimeType(mime: string): StructuredOfficeMimeType | null {
+  const base = mime.split(';')[0]?.trim().toLowerCase() ?? ''
+  const hit = STRUCTURED_OFFICE_MIME_TYPES.find((m) => m.toLowerCase() === base)
+  return hit ?? null
+}
+
+export function isStructuredOfficeMimeType(mime: string): boolean {
+  return resolveStructuredOfficeMimeType(mime) != null
+}
+
+export const OCR_PROVIDERS = [
+  'pdfjs_native',
+  'gemini_vision',
+  'mistral_ocr_3',
+  'office_native',
+] as const
 export type OcrProvider = (typeof OCR_PROVIDERS)[number]
 
 export const DOCUMENT_CLASSIFICATIONS = ['academic', 'non_academic', 'uncertain'] as const

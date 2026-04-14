@@ -2,7 +2,13 @@ import { generateText } from 'ai'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { AllowedMimeType, OcrProvider, DocumentAnchor } from '~~/app/types'
+import {
+  isStructuredOfficeMimeType,
+  type AllowedMimeType,
+  type DocumentAnchor,
+  type OcrProvider,
+} from '~~/app/types'
+import { extractOfficeStructuredText } from '~~/server/services/ocr/extract-office-structured-text'
 import { getGoogleVisionModelCandidates } from '~~/server/services/llm/provider'
 import { validateEnv } from '~~/server/utils/env'
 import {
@@ -459,6 +465,62 @@ export async function extractDocumentText(input: OcrExtractionInput): Promise<Oc
       timeoutMs: validateEnv(getRuntimeConfigSafe()).ocrRequestTimeoutMs,
     },
   })
+
+  if (isStructuredOfficeMimeType(input.mimeType) && input.forceProvider !== 'gemini_vision') {
+    const officeStart = Date.now()
+    let text: string
+    try {
+      text = await extractOfficeStructuredText(input.buffer, input.mimeType)
+    } catch (error) {
+      const classified = classifyPipelineError(error)
+      logPipelineEvent({
+        traceId: input.traceId,
+        documentId: input.documentId,
+        stage: 'ocr',
+        event: 'office_structured_failed',
+        provider: 'office_native',
+        durationMs: Date.now() - officeStart,
+        errorType: classified.errorType,
+        errorMessage: classified.errorMessage,
+      })
+      throw error instanceof Error ? error : new Error('Extracción de documento Office fallida')
+    }
+
+    if (!text.trim()) {
+      logPipelineEvent({
+        traceId: input.traceId,
+        documentId: input.documentId,
+        stage: 'ocr',
+        event: 'office_structured_empty',
+        provider: 'office_native',
+        durationMs: Date.now() - officeStart,
+      })
+      throw new Error('No se pudo extraer texto legible del documento Office')
+    }
+
+    const confidence = estimateNativeConfidence(text)
+
+    logPipelineEvent({
+      traceId: input.traceId,
+      documentId: input.documentId,
+      stage: 'ocr',
+      event: 'completed',
+      provider: 'office_native',
+      durationMs: Date.now() - officeStart,
+      metadata: {
+        confidence,
+        textLength: text.length,
+        source: 'office_structured',
+      },
+    })
+
+    return {
+      text: normalizeExtractedText(text),
+      provider: 'office_native',
+      confidence,
+      blocks: [],
+    }
+  }
 
   if (input.mimeType === 'application/pdf' && input.forceProvider !== 'gemini_vision') {
     const nativeStart = Date.now()

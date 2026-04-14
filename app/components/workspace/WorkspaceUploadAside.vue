@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { WorkspaceStage } from '~~/app/stores/documents'
+import { WORKSPACE_UPLOAD_ACCEPT } from '~~/app/config/workspace-upload-accept'
 import { formatFileSize } from '~~/app/utils/format-display'
 
 const pendingSelection = defineModel<File | null>('pendingSelection', { default: null })
@@ -47,19 +48,20 @@ const emit = defineEmits<{
       <p class="section-chip">Subir archivo</p>
       <p class="text-xl font-semibold text-text">Tu documento</p>
       <p class="text-sm leading-6 text-text-muted">
-        Adjunta un PDF o una imagen; en esta misma página lo revisas y lo guardas cuando quieras.
+        Adjunta un PDF, una imagen o un Office (.docx, .xlsx, .pptx, ODF…); en esta misma página lo
+        revisas y lo guardas cuando quieras.
       </p>
     </div>
 
     <UFileUpload
       v-model="pendingSelection"
-      accept="application/pdf,image/png,image/jpeg"
+      :accept="WORKSPACE_UPLOAD_ACCEPT"
       color="neutral"
       :multiple="false"
       variant="area"
       size="lg"
       layout="list"
-      label="Arrastra un PDF o una imagen"
+      label="Arrastra tu documento (PDF, imagen u Office)"
       description="También puedes hacer clic para elegirlo. Puedes cambiarlo mientras no hay una revisión en curso."
       :disabled="uploadInputLocked"
       class="w-full"

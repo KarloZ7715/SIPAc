@@ -1,3 +1,5 @@
+import { resolveGoogleApiKeyFromProcessEnv } from './server/utils/resolve-google-api-key'
+
 const maxUploadFileSizeBytes = 20_971_520
 const maxMultipartRequestSizeBytes = 22_020_096
 const isProduction = process.env.NODE_ENV === 'production'
@@ -34,7 +36,7 @@ export default defineNuxtConfig({
     jwtSecret: process.env.JWT_SECRET ?? '',
     adminEmail: process.env.ADMIN_EMAIL ?? '',
     adminPassword: process.env.ADMIN_PASSWORD ?? '',
-    googleApiKey: process.env.GOOGLE_API_KEY ?? '',
+    googleApiKey: resolveGoogleApiKeyFromProcessEnv(),
     googleGeminiIncludeProModels: process.env.GOOGLE_GEMINI_INCLUDE_PRO_MODELS === 'true',
     groqApiKey: process.env.GROQ_API_KEY ?? '',
     nvidiaApiKey: process.env.NVIDIA_API_KEY ?? '',

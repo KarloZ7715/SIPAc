@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
+import { resolveGoogleApiKeyFromProcessEnv } from './server/utils/resolve-google-api-key'
+
+const resolvedGoogleApiKey = resolveGoogleApiKeyFromProcessEnv()
 
 const projects = process.env.CI
   ? [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
@@ -25,5 +28,9 @@ export default defineConfig({
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      ...process.env,
+      ...(resolvedGoogleApiKey ? { GOOGLE_API_KEY: resolvedGoogleApiKey } : {}),
+    },
   },
 })

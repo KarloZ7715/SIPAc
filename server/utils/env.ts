@@ -32,7 +32,9 @@ const optionalAdminPasswordSchema = z.union([
 const envSchema = z.object({
   mongodbUri: mongodbUriSchema,
   jwtSecret: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
-  googleApiKey: z.string().min(1, 'GOOGLE_API_KEY es requerido'),
+  googleApiKey: z
+    .string()
+    .min(1, 'Define GOOGLE_API_KEY_TEST (pruebas) o GOOGLE_API_KEY (producción)'),
   googleGeminiIncludeProModels: z.boolean().default(false),
   groqApiKey: z.string().optional().default(''),
   nvidiaApiKey: z.string().optional().default(''),
