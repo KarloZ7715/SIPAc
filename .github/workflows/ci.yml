@@ -53,11 +53,8 @@ jobs:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           OCR_PROVIDER: gemini
 
-      - name: Prepare npm audit lockfile
-        run: npm install --package-lock-only --ignore-scripts --no-fund --no-audit
-
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: pnpm audit --audit-level=high
 
   e2e:
     name: E2E
