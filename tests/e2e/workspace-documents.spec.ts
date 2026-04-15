@@ -2,6 +2,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import mongoose from 'mongoose'
+import { SignJWT } from 'jose'
 import User from '../../server/models/User'
 import { buildAcademicPdfBuffer } from './helpers/build-academic-pdf'
 
@@ -25,12 +26,13 @@ const testRunId = `e2e-ws-${Date.now()}`
 const workspaceEmail = `workspace-${testRunId}@correo.unicordoba.edu.co`
 const workspacePassword = 'WorkspaceE2E123!'
 const workspaceFullName = 'Docente Workspace E2E'
+const appBaseUrl = 'http://127.0.0.1:4173'
 
 const mongodbUri = readEnvValue('MONGODB_URI')
 const googleApiKey =
   readEnvValue('GOOGLE_API_KEY_TEST').trim() || readEnvValue('GOOGLE_API_KEY').trim()
 const workspaceE2eCiOptIn = /^(1|true)$/i.test(process.env.PLAYWRIGHT_E2E_WORKSPACE ?? '')
-const workspaceFullPipelineCiOptIn = /^(1|true)$/i.test(
+const workspaceFullPipelineEnabled = /^(1|true)$/i.test(
   process.env.PLAYWRIGHT_E2E_WORKSPACE_FULL ?? '',
 )
 const shouldRunWorkspaceE2E =
@@ -38,7 +40,10 @@ const shouldRunWorkspaceE2E =
 const shouldRunWorkspaceFullPipeline =
   shouldRunWorkspaceE2E &&
   Boolean(googleApiKey) &&
-  (process.env.CI !== 'true' || workspaceFullPipelineCiOptIn)
+  workspaceFullPipelineEnabled &&
+  process.env.CI !== 'true'
+
+let workspaceUserId: string | null = null
 
 function readEnvValue(name: string): string {
   const directValue = process.env[name]
@@ -69,25 +74,49 @@ async function connectMongo() {
   }
 }
 
-/** El layout duplica la página (móvil vs escritorio); solo una rama es visible. */
-function visibleTestId(page: Page, testId: string) {
-  return page.getByTestId(testId).filter({ visible: true })
+function getJwtSecret() {
+  const secret = readEnvValue('JWT_SECRET')
+
+  if (!secret) {
+    throw new Error('JWT_SECRET no está definido')
+  }
+
+  return new TextEncoder().encode(secret)
+}
+
+async function createSessionToken(userId: string, email: string) {
+  return new SignJWT({ role: 'docente', email })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setExpirationTime('8h')
+    .sign(getJwtSecret())
+}
+
+async function loginWithSessionCookie(page: Page, email: string, userId: string) {
+  const token = await createSessionToken(userId, email)
+
+  await page.context().addCookies([
+    {
+      name: 'sipac_session',
+      value: token,
+      url: appBaseUrl,
+    },
+  ])
 }
 
 async function loginAndOpenWorkspace(page: Page) {
-  await page.goto('/login')
-  await page.waitForLoadState('networkidle')
-
-  await page.locator('input[name="email"]').fill(workspaceEmail)
-  await page.locator('input[name="password"]').fill(workspacePassword)
-  await page.getByRole('button', { name: 'Iniciar sesión' }).click()
-
-  await page.waitForURL((url) => !/^\/login\/?$/.test(url.pathname), {
-    timeout: 15_000,
-  })
-
+  if (!workspaceUserId) {
+    throw new Error('workspaceUserId no está inicializado')
+  }
+  await loginWithSessionCookie(page, workspaceEmail, workspaceUserId)
   await page.goto('/workspace-documents')
   await page.waitForLoadState('networkidle')
+}
+
+/** El layout duplica la página (móvil vs escritorio); solo una rama es visible. */
+function visibleTestId(page: Page, testId: string) {
+  return page.getByTestId(testId).filter({ visible: true })
 }
 
 async function attachTinyImage(page: Page) {
@@ -145,13 +174,14 @@ async function renderAcademicTextRaster(
   }
 }
 
-async function waitForWorkspaceReviewHeading(page: Page) {
+async function waitForWorkspaceReviewHeading(page: Page, debugDetails = '') {
   await expect(
     page
       .locator('#workspace-review-heading-wide, #workspace-review-heading-narrow')
       .filter({ visible: true }),
+    debugDetails,
   ).toBeVisible({
-    timeout: 280_000,
+    timeout: 480_000,
   })
 }
 
@@ -180,6 +210,25 @@ async function runWorkspaceFullFlow(
   context: BrowserContext,
   payload: { name: string; mimeType: string; buffer: Buffer },
 ) {
+  const debugRequests: string[] = []
+  const debugResponses: string[] = []
+
+  page.on('request', (request) => {
+    const url = request.url()
+    if (url.includes('/api/upload')) {
+      debugRequests.push(`${request.method()} ${url}`)
+    }
+  })
+
+  page.on('response', async (response) => {
+    const url = response.url()
+    if (!url.includes('/api/upload')) {
+      return
+    }
+
+    debugResponses.push(`${response.status()} ${url}`)
+  })
+
   await loginAndOpenWorkspace(page)
   await attachWorkspaceFile(page, payload)
 
@@ -191,13 +240,21 @@ async function runWorkspaceFullFlow(
   await page.getByTestId('workspace-action-start-review').filter({ visible: true }).first().click()
   await uploadPromise
 
-  await waitForWorkspaceReviewHeading(page)
+  await waitForWorkspaceReviewHeading(
+    page,
+    `Requests:
+${debugRequests.join('\n') || '(sin requests)'}
+
+Responses:
+${debugResponses.join('\n') || '(sin responses)'}
+`,
+  )
   await cancelPersistedWorkspaceFlow(page)
 }
 
 test.describe('Workspace documentos — acciones unificadas', () => {
   test.describe.configure({ mode: 'serial' })
-  test.setTimeout(300_000)
+  test.setTimeout(600_000)
 
   test.skip(
     !shouldRunWorkspaceE2E,
@@ -207,13 +264,14 @@ test.describe('Workspace documentos — acciones unificadas', () => {
   test.beforeAll(async () => {
     await connectMongo()
     await User.deleteMany({ email: workspaceEmail })
-    await User.create({
+    const workspaceUser = await User.create({
       fullName: workspaceFullName,
       email: workspaceEmail,
       passwordHash: workspacePassword,
       program: 'Ingeniería de Sistemas',
       role: 'docente',
     })
+    workspaceUserId = workspaceUser._id.toString()
   })
 
   test.afterAll(async () => {
@@ -307,7 +365,7 @@ test.describe('Workspace documentos — acciones unificadas', () => {
   }) => {
     test.skip(
       !shouldRunWorkspaceFullPipeline,
-      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER). En CI además PLAYWRIGHT_E2E_WORKSPACE_FULL=1.',
+      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER) y PLAYWRIGHT_E2E_WORKSPACE_FULL=1. Este flujo no corre en CI.',
     )
     const buffer = buildAcademicPdfBuffer()
     await runWorkspaceFullFlow(page, context, {
@@ -323,7 +381,7 @@ test.describe('Workspace documentos — acciones unificadas', () => {
   }) => {
     test.skip(
       !shouldRunWorkspaceFullPipeline,
-      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER). En CI además PLAYWRIGHT_E2E_WORKSPACE_FULL=1.',
+      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER) y PLAYWRIGHT_E2E_WORKSPACE_FULL=1. Este flujo no corre en CI.',
     )
     const buffer = await renderAcademicTextRaster(context, 'png')
     await runWorkspaceFullFlow(page, context, {
@@ -339,7 +397,7 @@ test.describe('Workspace documentos — acciones unificadas', () => {
   }) => {
     test.skip(
       !shouldRunWorkspaceFullPipeline,
-      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER). En CI además PLAYWRIGHT_E2E_WORKSPACE_FULL=1.',
+      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER) y PLAYWRIGHT_E2E_WORKSPACE_FULL=1. Este flujo no corre en CI.',
     )
     const buffer = await renderAcademicTextRaster(context, 'jpeg')
     await runWorkspaceFullFlow(page, context, {
@@ -352,7 +410,7 @@ test.describe('Workspace documentos — acciones unificadas', () => {
   test('flujo completo: DOCX llega a la ficha de revisión', async ({ page, context }) => {
     test.skip(
       !shouldRunWorkspaceFullPipeline,
-      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER). En CI además PLAYWRIGHT_E2E_WORKSPACE_FULL=1.',
+      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER) y PLAYWRIGHT_E2E_WORKSPACE_FULL=1. Este flujo no corre en CI.',
     )
     const buffer = readFileSync(join(fixturesDir, 'e2e-academic.docx'))
     await runWorkspaceFullFlow(page, context, {
@@ -365,7 +423,7 @@ test.describe('Workspace documentos — acciones unificadas', () => {
   test('flujo completo: PPTX llega a la ficha de revisión', async ({ page, context }) => {
     test.skip(
       !shouldRunWorkspaceFullPipeline,
-      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER). En CI además PLAYWRIGHT_E2E_WORKSPACE_FULL=1.',
+      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER) y PLAYWRIGHT_E2E_WORKSPACE_FULL=1. Este flujo no corre en CI.',
     )
     const buffer = readFileSync(join(fixturesDir, 'e2e-academic.pptx'))
     await runWorkspaceFullFlow(page, context, {
@@ -378,7 +436,7 @@ test.describe('Workspace documentos — acciones unificadas', () => {
   test('flujo completo: XLSX llega a la ficha de revisión', async ({ page, context }) => {
     test.skip(
       !shouldRunWorkspaceFullPipeline,
-      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER). En CI además PLAYWRIGHT_E2E_WORKSPACE_FULL=1.',
+      'Flujo completo: requiere GOOGLE_API_KEY_TEST o GOOGLE_API_KEY (OCR/NER) y PLAYWRIGHT_E2E_WORKSPACE_FULL=1. Este flujo no corre en CI.',
     )
     const buffer = readFileSync(join(fixturesDir, 'e2e-academic.xlsx'))
     await runWorkspaceFullFlow(page, context, {

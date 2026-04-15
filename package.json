@@ -20,7 +20,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "test:eval:ner": "vitest run tests/evals/ner-field-evals.test.ts",
-    "test:e2e": "playwright test --pass-with-no-tests",
+    "test:e2e": "playwright test --pass-with-no-tests --grep-invert \"flujo completo\"",
+    "test:e2e:full": "PLAYWRIGHT_E2E_WORKSPACE_FULL=1 PLAYWRIGHT_E2E_WORKSPACE=1 playwright test tests/e2e/workspace-documents.spec.ts --project chromium --grep \"flujo completo\" --pass-with-no-tests",
     "test:e2e:install": "playwright install",
     "test:e2e:ui": "playwright test --ui",
     "commitlint": "commitlint"

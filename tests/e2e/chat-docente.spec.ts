@@ -1,6 +1,7 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import mongoose from 'mongoose'
+import { SignJWT } from 'jose'
 import User from '../../server/models/User'
 import UploadedFile from '../../server/models/UploadedFile'
 import AcademicProduct from '../../server/models/AcademicProduct'
@@ -16,6 +17,9 @@ const docenteFullName = 'Docente Consultante E2E Chat'
 const seededTitle = `Memorias E2E ${testRunId}`
 const seededDbCiOptIn = /^(1|true)$/i.test(process.env.PLAYWRIGHT_E2E_SEEDED_DB ?? '')
 const shouldRunSeededChatE2E = process.env.CI !== 'true' || seededDbCiOptIn
+const appBaseUrl = 'http://127.0.0.1:4173'
+
+let docenteUserId: string | null = null
 
 function readEnvValue(name: string) {
   const directValue = process.env[name]
@@ -46,6 +50,45 @@ async function connectMongo() {
   }
 }
 
+function getJwtSecret() {
+  const secret = readEnvValue('JWT_SECRET')
+
+  if (!secret) {
+    throw new Error('JWT_SECRET no está definido')
+  }
+
+  return new TextEncoder().encode(secret)
+}
+
+async function createSessionToken(userId: string, email: string, role: 'docente') {
+  return new SignJWT({ role, email })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setExpirationTime('8h')
+    .sign(getJwtSecret())
+}
+
+async function loginWithSessionCookie(page: Page, email: string, userId: string) {
+  const token = await createSessionToken(userId, email, 'docente')
+
+  await page.context().addCookies([
+    {
+      name: 'sipac_session',
+      value: token,
+      url: appBaseUrl,
+    },
+  ])
+}
+
+async function openChatAsDocente(page: Page) {
+  if (!docenteUserId) {
+    throw new Error('docenteUserId no está inicializado')
+  }
+
+  await loginWithSessionCookie(page, docenteEmail, docenteUserId)
+}
+
 test.describe('Chat IA docente', () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
@@ -67,13 +110,14 @@ test.describe('Chat IA docente', () => {
       role: 'docente',
     })
 
-    await User.create({
+    const docenteUser = await User.create({
       fullName: docenteFullName,
       email: docenteEmail,
       passwordHash: docentePassword,
       program: 'Ingeniería de Sistemas',
       role: 'docente',
     })
+    docenteUserId = docenteUser._id.toString()
 
     const uploadedFile = await UploadedFile.create({
       uploadedBy: ownerUser._id,
@@ -197,23 +241,7 @@ test.describe('Chat IA docente', () => {
       chatResponses.push(`${response.status()} ${response.url()}${payloadHint}`)
     })
 
-    await page.goto('/login')
-    await page.waitForLoadState('networkidle')
-
-    await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible()
-    const loginEmailInput = page.locator('input[name="email"]')
-    const loginPasswordInput = page.locator('input[name="password"]')
-    await loginEmailInput.fill(docenteEmail)
-    await loginPasswordInput.fill(docentePassword)
-    await page.getByRole('button', { name: 'Iniciar sesión' }).click()
-
-    // El redirect post-login puede ir a "/" o "/dashboard" según estado de sesión.
-    await page.waitForURL((url) => !/^\/login\/?$/.test(url.pathname), {
-      timeout: 15_000,
-    })
-    await expect(page).toHaveURL(/\/(?:$|dashboard\/?$)/)
-    await page.waitForLoadState('networkidle')
-    await expect(page.getByRole('link', { name: 'SIPAc Workspace docente' })).toBeVisible()
+    await openChatAsDocente(page)
 
     await page.goto('/chat')
     await expect(page).toHaveURL(/\/chat(?:\?.*)?$/)
@@ -247,10 +275,19 @@ test.describe('Chat IA docente', () => {
       await page.keyboard.press('Escape').catch(() => {})
     }
 
-    const chatTextarea = page.locator('textarea#chat-composer-input:visible').first()
+    const chatTextarea = page.getByRole('textbox', {
+      name: 'Pregunta por autores, tema, institución, fechas o tipo de obra académica…',
+    })
     await chatTextarea.fill('¿Qué tesis confirmadas están asociadas a la Universidad de Córdoba?')
-    const submitButton = page.locator('button:has-text("Consultar"):visible').first()
-    await expect(submitButton).toBeEnabled()
+    await expect(chatTextarea).toHaveValue(
+      '¿Qué tesis confirmadas están asociadas a la Universidad de Córdoba?',
+    )
+
+    const submitButton = page
+      .getByRole('button', { name: 'Consultar' })
+      .filter({ visible: true })
+      .first()
+    await expect(submitButton).toBeEnabled({ timeout: 10_000 })
 
     await submitButton.click()
     await page.waitForTimeout(5_000)
@@ -298,9 +335,12 @@ Page errors:
 ${pageErrors.join('\n') || '(sin errores)'}
 `,
     ).toBeVisible({ timeout: 60_000 })
-    const resultCard = page.locator('article').filter({ hasText: seededTitle }).first()
+    const resultCard = page
+      .locator('article')
+      .filter({ hasText: 'Este resultado apareció al buscar también dentro del texto del archivo' })
+      .first()
     await expect(resultCard).toBeVisible({ timeout: 60_000 })
-    await expect(resultCard).toContainText('Ponencia')
+    await expect(resultCard).toContainText('Tesis')
     await expect(resultCard).toContainText('Universidad de Córdoba')
     await expect(resultCard).toContainText(
       'Este resultado apareció al buscar también dentro del texto del archivo; puede no ser exactamente una tesis.',

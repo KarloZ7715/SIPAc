@@ -57,7 +57,7 @@ jobs:
         run: pnpm audit --audit-level=high
 
   e2e:
-    name: E2E
+    name: E2E Smoke
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     services:
@@ -93,6 +93,7 @@ jobs:
         run: pnpm test:e2e
         env:
           CI: true
+          PLAYWRIGHT_E2E_WORKSPACE: 1
           PLAYWRIGHT_E2E_SEEDED_DB: 1
           MONGODB_URI: mongodb://127.0.0.1:27017/sipac_e2e
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
