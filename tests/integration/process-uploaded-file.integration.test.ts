@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { UPLOAD_ERROR_DUPLICATE_IN_REPOSITORY } from '~~/app/types'
 import { processUploadedFile } from '~~/server/services/upload/process-uploaded-file'
 
 const integrationEnvFixture = {
@@ -40,10 +41,12 @@ vi.mock('~~/server/utils/env', () => ({
 
 const {
   mockUploadedFileFindById,
+  mockUploadedFileFindOne,
   mockUploadedFileFindOneAndUpdate,
   mockAcademicProductFindOne,
   mockAcademicProductFindByIdAndUpdate,
   mockAcademicProductCreate,
+  mockAcademicProductExists,
   mockAcademicProductUpdateMany,
   mockUserFindById,
   mockReadGridFsFileToBuffer,
@@ -58,10 +61,12 @@ const {
   mockClassifyPipelineError,
 } = vi.hoisted(() => ({
   mockUploadedFileFindById: vi.fn(),
+  mockUploadedFileFindOne: vi.fn(),
   mockUploadedFileFindOneAndUpdate: vi.fn(),
   mockAcademicProductFindOne: vi.fn(),
   mockAcademicProductFindByIdAndUpdate: vi.fn(),
   mockAcademicProductCreate: vi.fn(),
+  mockAcademicProductExists: vi.fn(),
   mockAcademicProductUpdateMany: vi.fn(),
   mockUserFindById: vi.fn(),
   mockReadGridFsFileToBuffer: vi.fn(),
@@ -79,6 +84,7 @@ const {
 vi.mock('~~/server/models/UploadedFile', () => ({
   default: {
     findById: mockUploadedFileFindById,
+    findOne: mockUploadedFileFindOne,
     findOneAndUpdate: mockUploadedFileFindOneAndUpdate,
   },
 }))
@@ -88,6 +94,7 @@ vi.mock('~~/server/models/AcademicProduct', () => ({
     findOne: mockAcademicProductFindOne,
     findByIdAndUpdate: mockAcademicProductFindByIdAndUpdate,
     create: mockAcademicProductCreate,
+    exists: mockAcademicProductExists,
     updateMany: mockAcademicProductUpdateMany,
   },
 }))
@@ -182,6 +189,15 @@ function createOwnerQueryResult() {
   }
 }
 
+/** Mongoose `findOne().select().lean()` chain used por `findBlockingCompletedUploadForContentDigest`. */
+function createUploadedFileFindOneDuplicateChain(leanResult: unknown) {
+  return {
+    select: vi.fn().mockReturnValue({
+      lean: vi.fn().mockResolvedValue(leanResult),
+    }),
+  }
+}
+
 function applyMongoLikeUpdate(target: Record<string, unknown>, update: Record<string, unknown>) {
   const setPayload = (update.$set ?? {}) as Record<string, unknown>
   const incPayload = (update.$inc ?? {}) as Record<string, unknown>
@@ -210,6 +226,8 @@ describe('processUploadedFile integration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
 
+    mockUploadedFileFindOne.mockImplementation(() => createUploadedFileFindOneDuplicateChain(null))
+    mockAcademicProductExists.mockResolvedValue(null)
     mockUserFindById.mockReturnValue(createOwnerQueryResult())
     mockReadGridFsFileToBuffer.mockResolvedValue(Buffer.from('pdf-buffer'))
     mockClassifyPipelineError.mockReturnValue({
@@ -599,5 +617,84 @@ describe('processUploadedFile integration', () => {
           payload?.stage === 'ner' && payload?.event === 'product_specific_validation_adjusted',
       ),
     ).toBe(true)
+  })
+
+  it('rechaza subida duplicada antes del OCR si otro envío completado tiene el mismo digest y producto activo', async () => {
+    const uploadedFile = createUploadedFileDoc({ processingStatus: 'processing' })
+    mockUploadedFileFindById.mockResolvedValue(uploadedFile)
+    mockAtomicUploadedFileUpdates(uploadedFile)
+
+    mockUploadedFileFindOne.mockImplementation(() =>
+      createUploadedFileFindOneDuplicateChain({ _id: { toString: () => 'blocking-upload' } }),
+    )
+    mockAcademicProductExists.mockResolvedValue({ _id: 'product-ref' })
+
+    await processUploadedFile('upload-1')
+
+    expect(mockExtractDocumentText).not.toHaveBeenCalled()
+    expect(uploadedFile.processingStatus).toBe('error')
+    expect(uploadedFile.processingError).toBe(UPLOAD_ERROR_DUPLICATE_IN_REPOSITORY)
+    expect(mockLogPipelineEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'rejected_duplicate_repository_file',
+        metadata: expect.objectContaining({
+          reason: 'precheck',
+          blockingUploadedFileId: 'blocking-upload',
+        }),
+      }),
+    )
+  })
+
+  it('continúa el pipeline si hay otro envío con el mismo digest pero sin productos activos', async () => {
+    const uploadedFile = createUploadedFileDoc({ processingStatus: 'processing' })
+    mockUploadedFileFindById.mockResolvedValue(uploadedFile)
+    mockAtomicUploadedFileUpdates(uploadedFile)
+
+    mockUploadedFileFindOne.mockImplementation(() =>
+      createUploadedFileFindOneDuplicateChain({ _id: { toString: () => 'orphan-upload' } }),
+    )
+    mockAcademicProductExists.mockResolvedValue(null)
+
+    mockExtractDocumentText.mockResolvedValue({
+      text: 'texto nativo academico',
+      provider: 'pdfjs_native',
+      modelId: undefined,
+      confidence: 0.91,
+      blocks: [],
+    })
+
+    mockExtractAcademicEntities.mockResolvedValue({
+      productType: 'article',
+      documentClassification: 'academic',
+      classificationConfidence: 0.92,
+      classificationRationale: 'Documento academico',
+      classificationSource: 'llm',
+      authors: [{ value: 'Ada Lovelace', confidence: 0.9, anchors: [] }],
+      title: { value: 'Articulo de Prueba', confidence: 0.93, anchors: [] },
+      institution: { value: 'Universidad Demo', confidence: 0.88, anchors: [] },
+      date: { value: new Date('2026-03-13T00:00:00.000Z'), confidence: 0.85, anchors: [] },
+      keywords: [{ value: 'ia', confidence: 0.89, anchors: [] }],
+      doi: { value: '10.1000/demo', confidence: 0.87, anchors: [] },
+      eventOrJournal: { value: 'Revista Demo', confidence: 0.86, anchors: [] },
+      extractionSource: 'pdfjs_native',
+      extractionConfidence: 0.9,
+      evidenceCoverage: 0.55,
+      nerProvider: 'cerebras',
+      nerModel: 'gpt-oss-120b',
+      nerAttemptTrace: [],
+      extractedAt: new Date('2026-03-13T01:00:00.000Z'),
+    })
+
+    mockExtractProductSpecificMetadata.mockResolvedValue({})
+
+    mockAcademicProductFindOne.mockResolvedValue(null)
+    mockAcademicProductCreate.mockResolvedValue({
+      _id: { toString: () => 'product-1' },
+    })
+
+    await processUploadedFile('upload-1')
+
+    expect(mockExtractDocumentText).toHaveBeenCalled()
+    expect(uploadedFile.processingStatus).toBe('completed')
   })
 })

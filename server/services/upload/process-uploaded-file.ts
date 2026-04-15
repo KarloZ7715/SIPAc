@@ -1,4 +1,11 @@
-import type { NerAttemptTraceEntry, NerProvider, ProductType } from '~~/app/types'
+import { createHash } from 'node:crypto'
+import {
+  UPLOAD_ERROR_DUPLICATE_IN_REPOSITORY,
+  isStructuredOfficeMimeType,
+  type NerAttemptTraceEntry,
+  type NerProvider,
+  type ProductType,
+} from '~~/app/types'
 import AcademicProduct from '~~/server/models/AcademicProduct'
 import UploadedFile from '~~/server/models/UploadedFile'
 import User from '~~/server/models/User'
@@ -15,10 +22,11 @@ import { resolveTextSegments } from '~~/server/services/ner/document-segmentatio
 import { validateProductSpecificMetadata } from '~~/server/services/ner/product-specific-validation'
 import { notifyDocumentProcessing } from '~~/server/services/notifications/notify-document-processing'
 import { validateEnv } from '~~/server/utils/env'
+import { isMongoDuplicateKeyError } from '~~/server/utils/mongo-duplicate-key'
 import { classifyPipelineError, logPipelineEvent } from '~~/server/utils/pipeline-observability'
 import { normalizePublicationLanguageForMongo } from '~~/server/utils/publication-language'
 import { getWorkspaceClassificationRejectionMessage } from '~~/server/utils/workspace-classification-gate'
-import { isStructuredOfficeMimeType } from '~~/app/types'
+import { findBlockingCompletedUploadForContentDigest } from '~~/server/services/upload/find-blocking-duplicate-upload'
 
 function getRuntimeConfigSafe(): Record<string, unknown> {
   try {
@@ -70,7 +78,7 @@ function toStringArray(value: unknown): string[] | undefined {
   return normalized.length ? normalized : undefined
 }
 
-function buildProductSpecificFields(
+export function buildProductSpecificFields(
   productType: ProductType,
   extracted: {
     institution?: { value: string }
@@ -251,6 +259,72 @@ function normalizeProcessingError(error: unknown): string {
   return message.slice(0, 1000)
 }
 
+async function markUploadRejectedDuplicateRepository(input: {
+  uploadedFileId: string
+  traceId: string
+  processStart: number
+  ownerFullName: string
+  uploadedById: string
+  originalFilename: string
+  reason: 'precheck' | 'unique_index_race'
+  blockingUploadId?: string
+}): Promise<void> {
+  const finalized = await UploadedFile.findOneAndUpdate(
+    { _id: input.uploadedFileId, isDeleted: false },
+    {
+      $set: {
+        processingStatus: 'error',
+        processingError: UPLOAD_ERROR_DUPLICATE_IN_REPOSITORY,
+        processingCompletedAt: new Date(),
+      },
+    },
+    { returnDocument: 'after' },
+  )
+
+  if (!finalized) {
+    logPipelineEvent({
+      traceId: input.traceId,
+      documentId: input.uploadedFileId,
+      stage: 'processing',
+      event: 'aborted_deleted_before_duplicate_finalize',
+      durationMs: Date.now() - input.processStart,
+      metadata: {
+        reason: input.reason,
+      },
+    })
+    return
+  }
+
+  logPipelineEvent({
+    traceId: input.traceId,
+    documentId: input.uploadedFileId,
+    stage: 'processing',
+    event: 'rejected_duplicate_repository_file',
+    durationMs: Date.now() - input.processStart,
+    metadata: {
+      reason: input.reason,
+      blockingUploadedFileId: input.blockingUploadId,
+    },
+  })
+
+  await logSystemAudit({
+    userId: input.uploadedById,
+    userName: input.ownerFullName,
+    action: 'update',
+    resource: 'uploaded_file',
+    resourceId: finalized._id,
+    details: `Rechazado por duplicado exacto en el repositorio (${input.originalFilename})`,
+  })
+
+  await notifyDocumentProcessing({
+    recipientId: finalized.uploadedBy.toString(),
+    uploadedFileId: finalized._id.toString(),
+    filename: finalized.originalFilename,
+    status: 'error',
+    errorMessage: UPLOAD_ERROR_DUPLICATE_IN_REPOSITORY,
+  })
+}
+
 async function claimUploadedFileForProcessing(uploadedFileId: string) {
   return UploadedFile.findOneAndUpdate(
     {
@@ -271,6 +345,7 @@ async function claimUploadedFileForProcessing(uploadedFileId: string) {
         nerModel: null,
         nerAttemptTrace: [],
         sourceWorkCount: null,
+        contentDigest: null,
       },
       $inc: {
         processingAttempt: 1,
@@ -310,6 +385,47 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
     const processingWarnings: string[] = []
 
     const fileBuffer = await readGridFsFileToBuffer(uploadedFile.gridfsFileId)
+    const contentDigest = {
+      algorithm: 'sha256' as const,
+      value: createHash('sha256').update(fileBuffer).digest('hex'),
+    }
+
+    const digestPersisted = await UploadedFile.findOneAndUpdate(
+      { _id: uploadedFileId, isDeleted: false },
+      { $set: { contentDigest } },
+      { returnDocument: 'after' },
+    )
+
+    if (!digestPersisted) {
+      logPipelineEvent({
+        traceId,
+        documentId: uploadedFileId,
+        stage: 'processing',
+        event: 'aborted_deleted_before_digest',
+        durationMs: Date.now() - processStart,
+      })
+      return
+    }
+
+    const blockingUpload = await findBlockingCompletedUploadForContentDigest(
+      contentDigest.value,
+      uploadedFile._id.toString(),
+    )
+
+    if (blockingUpload) {
+      await markUploadRejectedDuplicateRepository({
+        uploadedFileId,
+        traceId,
+        processStart,
+        ownerFullName: owner.fullName,
+        uploadedById: uploadedFile.uploadedBy.toString(),
+        originalFilename: uploadedFile.originalFilename,
+        reason: 'precheck',
+        blockingUploadId: blockingUpload.blockingUploadId,
+      })
+      return
+    }
+
     let ocrResult = await extractDocumentText({
       buffer: fileBuffer,
       mimeType: uploadedFile.mimeType,
@@ -829,21 +945,42 @@ export async function processUploadedFile(uploadedFileId: string): Promise<void>
       )
     }
 
-    const completedUpload = await UploadedFile.findOneAndUpdate(
-      {
-        _id: uploadedFileId,
-        isDeleted: false,
-      },
-      {
-        $set: {
-          processingStatus: 'completed',
-          productType: detectedProductType,
-          processingError: null,
-          processingCompletedAt: new Date(),
+    let completedUpload
+    try {
+      completedUpload = await UploadedFile.findOneAndUpdate(
+        {
+          _id: uploadedFileId,
+          isDeleted: false,
         },
-      },
-      { returnDocument: 'after' },
-    )
+        {
+          $set: {
+            processingStatus: 'completed',
+            productType: detectedProductType,
+            processingError: null,
+            processingCompletedAt: new Date(),
+          },
+        },
+        { returnDocument: 'after' },
+      )
+    } catch (completionError) {
+      if (isMongoDuplicateKeyError(completionError)) {
+        await AcademicProduct.updateMany(
+          { sourceFile: uploadedFile._id, isDeleted: false },
+          { $set: { isDeleted: true, deletedAt: new Date() } },
+        )
+        await markUploadRejectedDuplicateRepository({
+          uploadedFileId,
+          traceId,
+          processStart,
+          ownerFullName: owner.fullName,
+          uploadedById: uploadedFile.uploadedBy.toString(),
+          originalFilename: uploadedFile.originalFilename,
+          reason: 'unique_index_race',
+        })
+        return
+      }
+      throw completionError
+    }
 
     if (!completedUpload) {
       logPipelineEvent({

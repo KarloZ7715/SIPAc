@@ -21,6 +21,7 @@ export default defineEventHandler(async (event) => {
   const isOwner = product.owner.toString() === auth.sub
   const canEdit = isOwner || auth.role === 'admin'
   const canView = canEdit || product.reviewStatus === 'confirmed'
+  const isConfirmed = product.reviewStatus === 'confirmed'
 
   if (!canView) {
     throw createAuthorizationError()
@@ -50,7 +51,8 @@ export default defineEventHandler(async (event) => {
       {
         canView: true,
         canEdit,
-        canDelete: canEdit,
+        // Evita "Cancelar proceso" → DELETE /api/upload que borraría el archivo y todos los productos ligados.
+        canDelete: canEdit && !isConfirmed,
       },
     ),
   })

@@ -9,7 +9,9 @@ defineProps<{
     <span class="flex size-16 items-center justify-center rounded-3xl bg-sipac-50 text-sipac-700">
       <UIcon name="i-lucide-folder-search" class="size-7" aria-hidden="true" />
     </span>
-    <h2 class="mt-5 font-display text-2xl font-semibold text-text sm:text-3xl">
+    <h2
+      class="mt-5 font-display text-2xl font-medium leading-[1.2] text-text sm:text-3xl sm:leading-[1.2]"
+    >
       {{
         hydratingWorkspace ? 'Buscamos si dejaste algo pendiente…' : 'Sube un archivo para empezar'
       }}

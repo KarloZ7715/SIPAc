@@ -84,6 +84,22 @@ export interface NerAttemptTraceEntry {
 
 export const MAX_FILE_SIZE_BYTES = 20_971_520 // 20 MB
 
+export const CONTENT_DIGEST_ALGORITHMS = ['sha256'] as const
+export type ContentDigestAlgorithm = (typeof CONTENT_DIGEST_ALGORITHMS)[number]
+
+export interface IFileContentDigest {
+  algorithm: ContentDigestAlgorithm
+  value: string
+}
+
+/** Mensaje persistido en `UploadedFile.processingError` cuando el binario coincide con un envío ya completado en el repositorio. */
+export const UPLOAD_ERROR_DUPLICATE_IN_REPOSITORY =
+  'Este archivo es idéntico (mismo contenido) a un documento que ya figura en el repositorio. No se creó una copia nueva. Si necesitas subir una variante, exporta el archivo de nuevo para que cambien los bytes (por ejemplo, guardar como PDF desde Word).'
+
+export function isDuplicateRepositoryUploadError(message: string | null | undefined): boolean {
+  return message === UPLOAD_ERROR_DUPLICATE_IN_REPOSITORY
+}
+
 export interface IUploadedFile {
   _id: DatabaseId
   uploadedBy: DatabaseId
@@ -94,6 +110,7 @@ export interface IUploadedFile {
   sourceWorkCount?: number
   mimeType: AllowedMimeType
   fileSizeBytes: number
+  contentDigest?: IFileContentDigest | null
   processingStatus: ProcessingStatus
   processingError?: string
   rawExtractedText?: string

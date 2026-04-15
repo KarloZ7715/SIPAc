@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import {
   ALLOWED_MIME_TYPES,
+  CONTENT_DIGEST_ALGORITHMS,
   DOCUMENT_CLASSIFICATIONS,
   MAX_FILE_SIZE_BYTES,
   NER_PROVIDERS,
@@ -12,6 +13,24 @@ import {
 
 const { Schema, model, models } = mongoose
 const NER_ATTEMPT_ERROR_MESSAGE_MAX_LENGTH = 280
+
+const fileContentDigestSchema = new Schema(
+  {
+    algorithm: {
+      type: String,
+      enum: [...CONTENT_DIGEST_ALGORITHMS],
+      required: true,
+    },
+    value: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 64,
+      maxlength: 64,
+    },
+  },
+  { _id: false },
+)
 
 const uploadedFileSchema = new Schema<IUploadedFile>(
   {
@@ -60,6 +79,10 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
       type: Number,
       required: [true, 'El tamaño del archivo es obligatorio'],
       max: [MAX_FILE_SIZE_BYTES, 'El archivo no puede superar los 20 MB'],
+    },
+    contentDigest: {
+      type: fileContentDigestSchema,
+      default: null,
     },
     processingStatus: {
       type: String,
@@ -222,6 +245,19 @@ uploadedFileSchema.index(
   {
     partialFilterExpression: { processingStatus: { $in: ['pending', 'processing'] } },
     name: 'idx_processing_queue',
+  },
+)
+
+uploadedFileSchema.index(
+  { 'contentDigest.value': 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      processingStatus: 'completed',
+      isDeleted: false,
+      'contentDigest.value': { $exists: true, $type: 'string' },
+    },
+    name: 'idx_unique_content_digest_completed_active',
   },
 )
 

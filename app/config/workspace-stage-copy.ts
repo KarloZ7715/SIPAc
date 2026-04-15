@@ -8,7 +8,7 @@ export const WORKSPACE_STAGE_COPY: Record<
   empty: {
     eyebrow: 'Paso 1',
     title: 'Sube tu archivo',
-    description: 'PDF o imagen. Después verás la vista previa y la ficha para revisar.',
+    description: 'PDF, office o imagen. Después verás la vista previa y la ficha para revisar.',
   },
   draft: {
     eyebrow: 'Paso 2',

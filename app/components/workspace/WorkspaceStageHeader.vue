@@ -22,16 +22,21 @@ const activeIdx = computed(() => {
 
 <template>
   <section class="top-20 z-20" aria-labelledby="workspace-stage-title">
-    <div class="border-b border-border/45 bg-white/80 px-4 py-3 backdrop-blur-sm sm:px-5">
+    <div
+      class="border-b border-border/55 bg-gradient-to-b from-white/92 via-surface/90 to-surface-muted/88 px-4 py-3 shadow-[0_12px_32px_-26px_rgb(20_20_19/0.1)] backdrop-blur-md sm:px-5"
+    >
       <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div class="min-w-0">
           <p class="text-[0.72rem] font-semibold tracking-[0.18em] text-text-soft uppercase">
             {{ eyebrow }}
           </p>
-          <h1 id="workspace-stage-title" class="mt-1 text-base font-semibold text-text sm:text-lg">
+          <h1
+            id="workspace-stage-title"
+            class="mt-1 font-display text-lg font-medium leading-[1.2] text-text sm:text-xl sm:leading-[1.2]"
+          >
             {{ title }}
           </h1>
-          <p class="mt-1 line-clamp-2 text-sm leading-6 text-text-muted">
+          <p class="mt-1 line-clamp-2 text-sm leading-[1.6] text-text-muted">
             {{ description }}
           </p>
         </div>
@@ -70,7 +75,7 @@ const activeIdx = computed(() => {
                 {{ index + 1 }}
               </span>
               <div class="min-w-0">
-                <p class="truncate text-xs font-semibold tracking-[0.12em] text-text uppercase">
+                <p class="truncate text-xs font-medium tracking-[0.12em] text-text uppercase">
                   {{ step.label }}
                 </p>
                 <p class="mt-1 line-clamp-2 text-sm text-text-muted">{{ step.hint }}</p>

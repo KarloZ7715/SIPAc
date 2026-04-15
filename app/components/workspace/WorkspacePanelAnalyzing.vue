@@ -52,7 +52,7 @@ const emit = defineEmits<{
 
     <div class="flex min-h-0 min-w-0 flex-col gap-4 lg:max-w-[22rem]">
       <div
-        class="rounded-[1.35rem] border border-sipac-200 bg-sipac-50/72 p-5 shadow-[0_20px_40px_-34px_rgba(17,46,29,0.2)]"
+        class="rounded-[1.35rem] border border-sipac-200 bg-sipac-50/72 p-5 shadow-[0_20px_40px_-34px_rgb(20_20_19/0.2)]"
         role="status"
         aria-live="polite"
         aria-atomic="true"
@@ -100,7 +100,7 @@ const emit = defineEmits<{
           <article
             v-for="highlight in analysisHighlights"
             :key="highlight.id"
-            class="analysis-highlight-card rounded-[1.1rem] border border-border/75 bg-white/88 px-4 py-4 shadow-[0_18px_34px_-30px_rgba(17,46,29,0.14)]"
+            class="analysis-highlight-card rounded-[1.1rem] border border-border/75 bg-white/88 px-4 py-4 shadow-[0_18px_34px_-30px_rgb(20_20_19/0.14)]"
             :class="{
               'analysis-highlight-card-leaving': highlight.leaving,
             }"
@@ -118,7 +118,7 @@ const emit = defineEmits<{
           <article
             v-for="highlight in analysisHighlights"
             :key="highlight.id"
-            class="rounded-[1.1rem] border border-border/75 bg-white/88 px-4 py-4 shadow-[0_18px_34px_-30px_rgba(17,46,29,0.14)]"
+            class="rounded-[1.1rem] border border-border/75 bg-white/88 px-4 py-4 shadow-[0_18px_34px_-30px_rgb(20_20_19/0.14)]"
           >
             <div class="flex items-start gap-3">
               <span class="analysis-step-dot" aria-hidden="true" />

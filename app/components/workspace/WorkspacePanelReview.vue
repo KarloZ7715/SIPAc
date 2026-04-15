@@ -85,7 +85,7 @@ watch(
         </span>
         <h2
           id="workspace-confirmed-heading"
-          class="mt-4 font-display text-xl font-semibold text-text"
+          class="mt-4 font-display text-xl font-medium leading-snug text-text"
         >
           Documento guardado
         </h2>
@@ -107,7 +107,7 @@ watch(
             id="ws-review-tab-preview"
             type="button"
             role="tab"
-            class="flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors"
+            class="flex-1 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
             :class="
               mobileTab === 'preview'
                 ? 'bg-white text-text shadow-sm ring-1 ring-border/60'
@@ -124,7 +124,7 @@ watch(
             id="ws-review-tab-ficha"
             type="button"
             role="tab"
-            class="flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors"
+            class="flex-1 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
             :class="
               mobileTab === 'ficha'
                 ? 'bg-white text-text shadow-sm ring-1 ring-border/60'
@@ -159,7 +159,7 @@ watch(
 
           <div class="divide-y divide-border/60 rounded-xl border border-border/60 bg-white/90">
             <div class="p-4">
-              <p class="text-xs font-semibold tracking-[0.14em] text-text-soft uppercase">
+              <p class="text-xs font-medium tracking-[0.14em] text-text-soft uppercase">
                 Resumen del documento
               </p>
               <div class="mt-3 flex flex-wrap gap-2">
@@ -198,7 +198,7 @@ watch(
                   :key="row.label"
                   class="flex items-start justify-between gap-3"
                 >
-                  <dt class="text-sm font-semibold text-text">{{ row.label }}</dt>
+                  <dt class="text-sm font-medium text-text">{{ row.label }}</dt>
                   <dd class="max-w-[55%] text-right text-sm leading-6 text-text-muted">
                     {{ row.value }}
                   </dd>
@@ -219,7 +219,7 @@ watch(
             <h2
               id="workspace-review-heading-narrow"
               tabindex="-1"
-              class="font-display text-lg font-semibold text-text outline-none focus-visible:ring-2 focus-visible:ring-sipac-500/40"
+              class="font-display text-lg font-medium leading-snug text-text outline-none focus-visible:ring-2 focus-visible:ring-sipac-500/40"
             >
               {{ currentStage === 'ready' ? 'Última revisión' : 'Revisa y corrige la ficha' }}
             </h2>
@@ -263,7 +263,7 @@ watch(
 
           <div class="divide-y divide-border/60 rounded-xl border border-border/60 bg-white/90">
             <div class="p-4">
-              <p class="text-xs font-semibold tracking-[0.14em] text-text-soft uppercase">
+              <p class="text-xs font-medium tracking-[0.14em] text-text-soft uppercase">
                 Resumen del documento
               </p>
               <div class="mt-3 flex flex-wrap gap-2">
@@ -302,7 +302,7 @@ watch(
                   :key="row.label"
                   class="flex items-start justify-between gap-3"
                 >
-                  <dt class="text-sm font-semibold text-text">{{ row.label }}</dt>
+                  <dt class="text-sm font-medium text-text">{{ row.label }}</dt>
                   <dd class="max-w-[55%] text-right text-sm leading-6 text-text-muted">
                     {{ row.value }}
                   </dd>
@@ -317,7 +317,7 @@ watch(
             <h2
               id="workspace-review-heading-wide"
               tabindex="-1"
-              class="font-display text-lg font-semibold text-text outline-none focus-visible:ring-2 focus-visible:ring-sipac-500/40"
+              class="font-display text-lg font-medium leading-snug text-text outline-none focus-visible:ring-2 focus-visible:ring-sipac-500/40"
             >
               {{ currentStage === 'ready' ? 'Última revisión' : 'Revisa y corrige la ficha' }}
             </h2>
@@ -348,7 +348,7 @@ watch(
             class="@container/guardar-panel flex flex-col gap-4 rounded-xl border border-sipac-200/80 bg-sipac-50/70 p-4 sm:p-5 @min-[36rem]/guardar-panel:flex-row @min-[36rem]/guardar-panel:items-center @min-[36rem]/guardar-panel:justify-between @min-[36rem]/guardar-panel:gap-6"
           >
             <div class="min-w-0 @min-[36rem]/guardar-panel:max-w-[min(100%,28rem)]">
-              <p class="font-semibold text-text">Guardar</p>
+              <p class="font-medium text-text">Guardar</p>
               <p class="mt-1 text-sm leading-6 text-text-muted">
                 {{
                   canSave
@@ -393,7 +393,7 @@ watch(
         class="xl:hidden"
       >
         <div
-          class="fixed inset-x-0 bottom-0 z-30 border-t border-border/60 bg-surface/95 px-4 py-3 shadow-[0_-8px_30px_-12px_rgba(17,46,29,0.18)] backdrop-blur-md supports-[backdrop-filter]:bg-surface/88"
+          class="fixed inset-x-0 bottom-0 z-30 border-t border-border/60 bg-surface/95 px-4 py-3 shadow-[0_-8px_30px_-12px_rgb(20_20_19/0.18)] backdrop-blur-md supports-[backdrop-filter]:bg-surface/88"
           style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px))"
         >
           <div class="mx-auto flex max-w-lg gap-2">

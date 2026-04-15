@@ -1,33 +1,45 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { WorkspaceStage } from '~~/app/stores/documents'
 import { WORKSPACE_UPLOAD_ACCEPT } from '~~/app/config/workspace-upload-accept'
 import { formatFileSize } from '~~/app/utils/format-display'
 
 const pendingSelection = defineModel<File | null>('pendingSelection', { default: null })
 
-defineProps<{
-  uploadInputLocked: boolean
-  currentStage: WorkspaceStage
-  currentLocalFile: File | null
-  hasPersistedDraft: boolean
-  currentProcessingError: string | null
-  hasDraft: boolean
-  isImageDraft: boolean
-  currentFileName: string
-  currentFileSize: number
-  fileExtension: string
-  stageEyebrow: string
-  siblingProductIds: string[]
-  sourceWorkCount: number
-  activeProductId: string | null
-  uploading: boolean
-  cancelingDraft: boolean
-  savingDraft: boolean
-  savingSnapshot: boolean
-  canEditCurrentDraft: boolean
-  canDeleteCurrentDraft: boolean
-  isReadonlyView: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    uploadInputLocked: boolean
+    currentStage: WorkspaceStage
+    currentLocalFile: File | null
+    hasPersistedDraft: boolean
+    currentProcessingError: string | null
+    /** Título del UAlert cuando hay error de procesamiento (p. ej. duplicado en repositorio). */
+    processingErrorTitle?: string | null
+    hasDraft: boolean
+    isImageDraft: boolean
+    currentFileName: string
+    currentFileSize: number
+    fileExtension: string
+    stageEyebrow: string
+    siblingProductIds: string[]
+    sourceWorkCount: number
+    activeProductId: string | null
+    uploading: boolean
+    cancelingDraft: boolean
+    savingDraft: boolean
+    savingSnapshot: boolean
+    canEditCurrentDraft: boolean
+    canDeleteCurrentDraft: boolean
+    isReadonlyView: boolean
+  }>(),
+  {
+    processingErrorTitle: null,
+  },
+)
+
+const processingErrorAlertTitle = computed(
+  () => props.processingErrorTitle ?? 'No pudimos terminar con este archivo',
+)
 
 const emit = defineEmits<{
   startAnalysis: []
@@ -81,14 +93,14 @@ const emit = defineEmits<{
       color="error"
       variant="subtle"
       icon="i-lucide-octagon-alert"
-      title="No pudimos terminar con este archivo"
+      :title="processingErrorAlertTitle"
       :description="currentProcessingError"
     />
 
     <div
       v-if="hasDraft"
       data-testid="workspace-draft-card"
-      class="rounded-lg border border-border/75 bg-white/88 p-4 shadow-[0_18px_34px_-30px_rgba(17,46,29,0.16)]"
+      class="rounded-lg border border-border/75 bg-white/88 p-4 shadow-[0_18px_34px_-30px_rgb(20_20_19/0.16)]"
     >
       <div class="flex items-start gap-3">
         <span

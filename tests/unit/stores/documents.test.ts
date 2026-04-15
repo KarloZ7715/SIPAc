@@ -138,6 +138,32 @@ describe('useDocumentsStore', () => {
     expect(store.workspaceStage).toBe('ready')
   })
 
+  it('abre revisión editable para producto confirmado cuando no se puede borrar el upload', async () => {
+    const store = useDocumentsStore()
+    const confirmedEditable = createDraftSnapshot({
+      product: {
+        ...createDraftSnapshot().product,
+        reviewStatus: 'confirmed',
+        reviewConfirmedAt: '2026-03-12T04:00:00.000Z',
+      },
+      uploadedFile: {
+        ...createDraftSnapshot().uploadedFile,
+        reviewStatus: 'confirmed',
+      },
+      access: {
+        canView: true,
+        canEdit: true,
+        canDelete: false,
+      },
+    })
+
+    fetchMock.mockResolvedValueOnce({ success: true, data: { draft: confirmedEditable } })
+    await store.loadDraftProduct('product-1')
+
+    expect(store.draftProduct?.product.reviewStatus).toBe('confirmed')
+    expect(store.workspaceStage).toBe('ready')
+  })
+
   it('confirms the draft and moves the workspace to confirmed', async () => {
     const store = useDocumentsStore()
     const confirmedDraft = createDraftSnapshot({

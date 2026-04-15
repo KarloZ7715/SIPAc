@@ -212,6 +212,15 @@ export const useDocumentsStore = defineStore('documents', () => {
     setWorkspacePreviewFromUpload(snapshot.uploadedFile._id)
 
     if (snapshot.product.reviewStatus === 'confirmed') {
+      const mayEdit = snapshot.access?.canEdit === true
+      const mayDeleteUpload = snapshot.access?.canDelete === true
+      // Producto ya en repositorio: el propietario puede seguir corrigiendo metadatos en la misma UI
+      // de revisión, pero sin exponer "Cancelar proceso" (DELETE del upload borraría todas las obras).
+      if (mayEdit && !mayDeleteUpload) {
+        workspaceStage.value = canConfirmDraft.value ? 'ready' : 'review'
+        return
+      }
+
       workspaceStage.value = 'confirmed'
       return
     }

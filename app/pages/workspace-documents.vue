@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import type { ProductType } from '~~/app/types'
+import type { ApiSuccessResponse, ProductType } from '~~/app/types'
+import { isDuplicateRepositoryUploadError } from '~~/app/types'
+import {
+  type WorkspaceRouteFocusKey,
+  isWorkspaceRouteFocusKey,
+} from '~~/app/types/workspace-route-focus'
 import DocumentPreviewWithHighlights from '~~/app/components/dashboard/DocumentPreviewWithHighlights.vue'
 import { WORKSPACE_STAGE_COPY } from '~~/app/config/workspace-stage-copy'
 import { WORKSPACE_MAX_VISIBLE_ANALYSIS_HIGHLIGHTS } from '~~/app/config/workspace-analysis-ui'
@@ -23,7 +28,8 @@ useSeoMeta({
 })
 
 const documentsStore = useDocumentsStore()
-const { workspaceDraftProductType, pollConsecutiveFailures } = storeToRefs(documentsStore)
+const { workspaceDraftProductType, pollConsecutiveFailures, activeAcademicProductId } =
+  storeToRefs(documentsStore)
 const toast = useToast()
 const runtimeConfig = useRuntimeConfig()
 const route = useRoute()
@@ -76,6 +82,64 @@ const hasPersistedDraft = computed(() => documentsStore.hasPersistedDraft)
 const canEditCurrentDraft = computed(() => documentsStore.canEditDraft)
 const canDeleteCurrentDraft = computed(() => documentsStore.canDeleteDraft)
 const isReadonlyView = computed(() => hasPersistedDraft.value && !canEditCurrentDraft.value)
+
+const reextractingNer = ref(false)
+
+const fromInsightLowNer = computed(
+  () =>
+    typeof route.query.fromInsight === 'string' &&
+    route.query.fromInsight.trim() === 'low-confidence-ner',
+)
+
+const nerExtractionConfidence = computed(() =>
+  Number(documentsStore.draftProduct?.product.extractedEntities?.extractionConfidence),
+)
+
+/** Mismo umbral que el insight de tablero (solo UI). */
+const NER_LOW_CONFIDENCE_THRESHOLD_UI = 0.7
+
+const showReextractNerCta = computed(
+  () =>
+    hasPersistedDraft.value &&
+    ['review', 'ready', 'confirmed'].includes(currentStage.value) &&
+    Boolean(activeAcademicProductId.value) &&
+    (fromInsightLowNer.value ||
+      (Number.isFinite(nerExtractionConfidence.value) &&
+        nerExtractionConfidence.value < NER_LOW_CONFIDENCE_THRESHOLD_UI)),
+)
+
+async function runReextractNer() {
+  const id = activeAcademicProductId.value
+  if (!id) {
+    return
+  }
+
+  reextractingNer.value = true
+  try {
+    const response = await $fetch<ApiSuccessResponse<{ extractionConfidence: number }>>(
+      `/api/products/${id}/reextract-ner`,
+      { method: 'POST' },
+    )
+    const pct = Math.round(response.data.extractionConfidence * 100)
+    toast.add({
+      title: 'Extracción actualizada',
+      description: `Nueva confianza de entidades: ${pct}%.`,
+      icon: 'i-lucide-sparkles',
+      color: 'success',
+    })
+    await documentsStore.loadDraftProduct(id)
+  } catch (error) {
+    toast.add({
+      title: 'No se pudo re-extraer',
+      description: error instanceof Error ? error.message : 'Intenta de nuevo en unos segundos.',
+      icon: 'i-lucide-octagon-alert',
+      color: 'error',
+    })
+  } finally {
+    reextractingNer.value = false
+  }
+}
+
 const currentPreviewUrl = computed(() => documentsStore.workspaceDraftPreviewUrl)
 const currentLocalFile = computed(() => documentsStore.workspaceDraftFile)
 const currentTrackedFile = computed(
@@ -105,6 +169,11 @@ const currentMimeType = computed(() => {
 })
 const currentProcessingError = computed(
   () => documentsStore.activeTrackedDocument?.processingError ?? null,
+)
+const currentProcessingErrorAlertTitle = computed(() =>
+  isDuplicateRepositoryUploadError(currentProcessingError.value)
+    ? 'Este documento ya está en el repositorio'
+    : 'No pudimos terminar con este archivo',
 )
 const showTestingMetrics = computed(
   () => import.meta.dev && runtimeConfig.public.enableTestingMetrics,
@@ -360,6 +429,8 @@ function focusFieldFromHighlight(key: string) {
     institution: 'institution',
     doi: 'doi',
     keywords: 'keywords',
+    repositoryUrl: 'repositoryUrl',
+    softwareRepositoryUrl: 'softwareRepositoryUrl',
   }
 
   const fieldName = fieldNameByKey[key]
@@ -372,6 +443,30 @@ function focusFieldFromHighlight(key: string) {
     `[name="${fieldName}"]`,
   )
   target?.focus()
+}
+
+function resolveRouteFocusKey(rawValue: unknown): WorkspaceRouteFocusKey | null {
+  if (typeof rawValue !== 'string') {
+    return null
+  }
+
+  const normalized = rawValue.trim()
+  return isWorkspaceRouteFocusKey(normalized) ? normalized : null
+}
+
+async function applyRouteFocusIfNeeded() {
+  const focusKey = resolveRouteFocusKey(route.query.focus)
+
+  if (!focusKey) {
+    return
+  }
+
+  if (!['review', 'ready', 'confirmed'].includes(currentStage.value)) {
+    return
+  }
+
+  await nextTick()
+  requestAnimationFrame(() => focusFieldFromHighlight(focusKey))
 }
 
 function openExpandedPreview() {
@@ -423,6 +518,8 @@ async function loadPersistedDraft() {
           ? 'Aquí tienes el documento que pediste ver.'
           : 'Recuperamos tu borrador para que sigas donde lo dejaste.',
       )
+
+      await applyRouteFocusIfNeeded()
     }
   } finally {
     hydratingWorkspace.value = false
@@ -589,6 +686,7 @@ watch(
       hydratingWorkspace.value = true
       try {
         await documentsStore.loadDraftProduct(productId)
+        await applyRouteFocusIfNeeded()
       } finally {
         hydratingWorkspace.value = false
       }
@@ -596,6 +694,13 @@ watch(
     }
 
     await loadPersistedDraft()
+  },
+)
+
+watch(
+  () => route.query.focus,
+  async () => {
+    await applyRouteFocusIfNeeded()
   },
 )
 
@@ -667,10 +772,13 @@ watch(currentProcessingError, (error) => {
   documentsStore.setWorkspaceStage('draft')
   stopProcessingFeedback()
 
+  const duplicate = isDuplicateRepositoryUploadError(error)
   toast.add({
-    title: 'No pudimos terminar con este archivo',
+    title: duplicate
+      ? 'Este documento ya está en el repositorio'
+      : 'No pudimos terminar con este archivo',
     description: error,
-    icon: 'i-lucide-octagon-alert',
+    icon: duplicate ? 'i-lucide-copy' : 'i-lucide-octagon-alert',
     color: 'error',
   })
 })
@@ -712,7 +820,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="workspace-documents-page space-y-5">
+  <div class="workspace-documents-page space-y-5 sm:space-y-6">
     <UAlert
       v-if="isReadonlyView"
       color="neutral"
@@ -720,7 +828,7 @@ onBeforeUnmount(() => {
       icon="i-lucide-eye"
       title="Modo solo lectura"
       description="Este documento ya quedó registrado. Puedes verlo aquí, pero no cambiarlo."
-      class="max-w-3xl"
+      class="fade-up stagger-1 max-w-3xl"
     />
 
     <WorkspaceStageHeader
@@ -730,6 +838,27 @@ onBeforeUnmount(() => {
       :stage-progress-percent="stageProgressPercent"
       :steps="stageSteps"
     />
+
+    <div
+      v-if="showReextractNerCta"
+      class="fade-up stagger-2 flex max-w-3xl flex-col gap-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p class="text-sm leading-relaxed text-text-muted">
+        La confianza de extracción automática es baja. Puedes corregir la ficha a mano o volver a
+        ejecutar el NER sobre el texto ya leído del archivo.
+      </p>
+      <UButton
+        size="sm"
+        color="primary"
+        variant="soft"
+        icon="i-lucide-refresh-ccw"
+        :loading="reextractingNer"
+        class="shrink-0 self-start sm:self-center"
+        @click="runReextractNer"
+      >
+        Re-ejecutar extracción
+      </UButton>
+    </div>
 
     <p v-if="reviewLiveMessage" class="sr-only" role="status" aria-live="polite" aria-atomic="true">
       {{ reviewLiveMessage }}
@@ -763,6 +892,7 @@ onBeforeUnmount(() => {
     <div :class="workspaceShellClass">
       <WorkspaceUploadAside
         v-model:pending-selection="pendingSelection"
+        :processing-error-title="currentProcessingErrorAlertTitle"
         :upload-input-locked="uploadInputLocked"
         :current-stage="currentStage"
         :current-local-file="currentLocalFile"
@@ -868,8 +998,10 @@ onBeforeUnmount(() => {
           <p class="text-[0.72rem] font-semibold tracking-[0.16em] text-amber-700 uppercase">
             Métricas de prueba
           </p>
-          <h2 class="mt-1 text-lg font-semibold text-text">Seguimiento técnico (solo testing)</h2>
-          <p class="mt-1 max-w-2xl text-sm leading-6 text-text-muted">
+          <h2 class="mt-1 font-display text-lg font-medium leading-snug text-text">
+            Seguimiento técnico (solo testing)
+          </h2>
+          <p class="mt-1 max-w-2xl text-sm leading-[1.6] text-text-muted">
             Estas métricas son de soporte para pruebas del flujo actual y se muestran únicamente en
             desarrollo.
           </p>

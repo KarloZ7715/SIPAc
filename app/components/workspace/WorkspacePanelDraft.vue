@@ -26,7 +26,7 @@ const emit = defineEmits<{
 
     <div class="space-y-3">
       <div
-        class="rounded-lg border border-border/75 bg-white/88 p-4 shadow-[0_18px_34px_-30px_rgba(17,46,29,0.14)]"
+        class="rounded-lg border border-border/75 bg-white/88 p-4 shadow-[0_18px_34px_-30px_rgb(20_20_19/0.14)]"
       >
         <p class="font-semibold text-text">Listo para empezar</p>
         <p class="mt-2 text-sm leading-6 text-text-muted">
@@ -36,7 +36,7 @@ const emit = defineEmits<{
       </div>
 
       <div
-        class="rounded-lg border border-border/75 bg-white/88 p-4 shadow-[0_18px_34px_-30px_rgba(17,46,29,0.14)]"
+        class="rounded-lg border border-border/75 bg-white/88 p-4 shadow-[0_18px_34px_-30px_rgb(20_20_19/0.14)]"
       >
         <div class="space-y-3">
           <div

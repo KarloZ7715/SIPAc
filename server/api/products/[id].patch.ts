@@ -357,6 +357,8 @@ export default defineEventHandler(async (event) => {
     throw createNotFoundError('Archivo')
   }
 
+  const isConfirmed = product.reviewStatus === 'confirmed'
+
   await logAudit(event, {
     userId: auth.sub,
     userName: auth.email,
@@ -376,8 +378,8 @@ export default defineEventHandler(async (event) => {
   return ok({
     draft: buildProductWorkspaceDraft(product.toJSON(), uploadedFile, {
       canView: true,
-      canEdit: true,
-      canDelete: true,
+      canEdit: isOwner || auth.role === 'admin',
+      canDelete: (isOwner || auth.role === 'admin') && !isConfirmed,
     }),
   })
 })

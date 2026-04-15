@@ -11,34 +11,41 @@ export type WorkspaceAnalysisHighlightItem = {
   leaving: boolean
 }
 
-/**
- * Feedback visual durante la fase “analyzing”: barra de progreso simulada y mensajes rotativos.
- * No refleja el pipeline real del servidor; solo reduce la percepción de espera.
- */
-export function useWorkspaceAnalysisFeedback() {
-  const prefersReducedMotion = ref(false)
-  const analysisProgress = ref(0)
-  const analysisHighlights = ref<WorkspaceAnalysisHighlightItem[]>([])
-  const analysisStartedAt = ref<number | null>(null)
-  const analysisFinishedAt = ref<number | null>(null)
-  const lastAnalysisDurationMs = ref<number | null>(null)
-  const analysisAttempts = ref(0)
+let globalProgressTimer: NodeJS.Timeout | null = null
+let globalHighlightTimer: NodeJS.Timeout | null = null
 
-  let progressTimer: ReturnType<typeof setInterval> | null = null
-  let highlightTimer: ReturnType<typeof setInterval> | null = null
-  let highlightCursor = 0
-  let highlightSerial = 0
-  let highlightRemovalTimers: ReturnType<typeof setTimeout>[] = []
-  let removeReducedMotionListener: (() => void) | undefined
+export function useWorkspaceAnalysisFeedback() {
+  const prefersReducedMotion = useState('workspace-analysis-prefersReducedMotion', () => false)
+  const analysisProgress = useState('workspace-analysis-progress', () => 0)
+  const analysisHighlights = useState<WorkspaceAnalysisHighlightItem[]>(
+    'workspace-analysis-highlights',
+    () => [],
+  )
+  const analysisStartedAt = useState<number | null>('workspace-analysis-startedAt', () => null)
+  const analysisFinishedAt = useState<number | null>('workspace-analysis-finishedAt', () => null)
+  const lastAnalysisDurationMs = useState<number | null>(
+    'workspace-analysis-lastDurationMs',
+    () => null,
+  )
+  const analysisAttempts = useState('workspace-analysis-attempts', () => 0)
+
+  const highlightCursor = useState('workspace-analysis-cursor', () => 0)
+  const highlightSerial = useState('workspace-analysis-serial', () => 0)
+  const highlightRemovalTimers = useState<ReturnType<typeof setTimeout>[]>(
+    'workspace-analysis-removalTimers',
+    () => [],
+  )
+
+  let localRemoveReducedMotionListener: (() => void) | undefined
 
   const processingMessages = WORKSPACE_ANALYSIS_PROCESSING_MESSAGES
 
   function scheduleHighlightRemoval(id: string) {
     const timer = setTimeout(() => {
       analysisHighlights.value = analysisHighlights.value.filter((highlight) => highlight.id !== id)
-      highlightRemovalTimers = highlightRemovalTimers.filter((entry) => entry !== timer)
+      highlightRemovalTimers.value = highlightRemovalTimers.value.filter((entry) => entry !== timer)
     }, WORKSPACE_ANALYSIS_HIGHLIGHT_EXIT_DELAY_MS)
-    highlightRemovalTimers.push(timer)
+    highlightRemovalTimers.value.push(timer)
   }
 
   function trimAnalysisHighlights() {
@@ -61,7 +68,7 @@ export function useWorkspaceAnalysisFeedback() {
 
   function pushAnalysisHighlight(message: string) {
     const nextHighlight: WorkspaceAnalysisHighlightItem = {
-      id: `analysis-highlight-${highlightSerial++}`,
+      id: `analysis-highlight-${highlightSerial.value++}`,
       message,
       leaving: false,
     }
@@ -85,28 +92,28 @@ export function useWorkspaceAnalysisFeedback() {
       (message) => !recentMessages.includes(message),
     )
     if (!availableMessages.length) {
-      return getProcessingMessage(highlightCursor)
+      return getProcessingMessage(highlightCursor.value)
     }
     const randomIndex = Math.floor(Math.random() * availableMessages.length)
     const nextMessage = availableMessages[randomIndex] ?? fallbackMessage
     const resolvedIndex = processingMessages.indexOf(nextMessage)
     if (resolvedIndex >= 0) {
-      highlightCursor = resolvedIndex
+      highlightCursor.value = resolvedIndex
     }
     return nextMessage
   }
 
   function stopProcessingFeedback() {
-    if (progressTimer) {
-      clearInterval(progressTimer)
-      progressTimer = null
+    if (globalProgressTimer) {
+      clearInterval(globalProgressTimer!)
+      globalProgressTimer = null
     }
-    if (highlightTimer) {
-      clearInterval(highlightTimer)
-      highlightTimer = null
+    if (globalHighlightTimer) {
+      clearInterval(globalHighlightTimer!)
+      globalHighlightTimer = null
     }
-    highlightRemovalTimers.forEach((timer) => clearTimeout(timer))
-    highlightRemovalTimers = []
+    highlightRemovalTimers.value.forEach((timer) => clearTimeout(timer))
+    highlightRemovalTimers.value = []
     analysisHighlights.value = analysisHighlights.value.map((highlight) => ({
       ...highlight,
       leaving: false,
@@ -114,21 +121,21 @@ export function useWorkspaceAnalysisFeedback() {
   }
 
   function startProcessingFeedback() {
-    if (progressTimer || highlightTimer) {
+    if (globalProgressTimer || globalHighlightTimer) {
       return
     }
     if (!analysisHighlights.value.length) {
       pushAnalysisHighlight(getNextHighlightMessage())
     }
     analysisProgress.value = Math.max(12, analysisProgress.value)
-    progressTimer = setInterval(() => {
+    globalProgressTimer = setInterval(() => {
       analysisProgress.value = Math.min(
         92,
         analysisProgress.value + (analysisProgress.value < 48 ? 8 : 4),
       )
     }, 950)
     if (!prefersReducedMotion.value) {
-      highlightTimer = setInterval(() => {
+      globalHighlightTimer = setInterval(() => {
         pushAnalysisHighlight(getNextHighlightMessage())
       }, WORKSPACE_ANALYSIS_HIGHLIGHT_INTERVAL_MS)
     }
@@ -138,8 +145,8 @@ export function useWorkspaceAnalysisFeedback() {
     stopProcessingFeedback()
     analysisProgress.value = 0
     analysisHighlights.value = []
-    highlightCursor = 0
-    highlightSerial = 0
+    highlightCursor.value = 0
+    highlightSerial.value = 0
   }
 
   onMounted(() => {
@@ -152,12 +159,13 @@ export function useWorkspaceAnalysisFeedback() {
       prefersReducedMotion.value = mq.matches
     }
     mq.addEventListener('change', onMotionPreferenceChange)
-    removeReducedMotionListener = () => mq.removeEventListener('change', onMotionPreferenceChange)
+    localRemoveReducedMotionListener = () =>
+      mq.removeEventListener('change', onMotionPreferenceChange)
   })
 
   onBeforeUnmount(() => {
-    removeReducedMotionListener?.()
-    stopProcessingFeedback()
+    localRemoveReducedMotionListener?.()
+    // Not stopping processing feedback so it persists across page navigations
   })
 
   return {

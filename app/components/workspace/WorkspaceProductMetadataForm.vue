@@ -151,7 +151,7 @@ const {
 
       <template v-for="group in groupedSpecificFields" :key="group.group">
         <div class="mt-1 @lg/metadata-form:col-span-2">
-          <h3 class="text-xs font-semibold tracking-[0.12em] text-text-soft uppercase">
+          <h3 class="text-xs font-medium tracking-[0.12em] text-text-soft uppercase">
             {{ group.group }}
           </h3>
         </div>
