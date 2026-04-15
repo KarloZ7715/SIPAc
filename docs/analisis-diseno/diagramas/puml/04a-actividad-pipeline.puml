@@ -14,7 +14,7 @@ title SIPAc — Diagrama de Actividades 4.1\nPipeline Completo de Procesamiento 
 |Usuario|
 start
 :Seleccionar archivo
-(PDF o imagen);
+(PDF, office o imagen);
 :Seleccionar tipo de
 producto académico;
 :Enviar formulario

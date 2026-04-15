@@ -8,7 +8,7 @@ Proyecto de pasantía profesional (Semestre 2026-I).
 
 ## Qué hace
 
-SIPAc automatiza un proceso que hoy es completamente manual: capturar, clasificar y analizar los productos académicos de un programa de posgrado. El docente sube un PDF o imagen de su artículo, ponencia, tesis o certificado, y el sistema:
+SIPAc automatiza un proceso que hoy es completamente manual: capturar, clasificar y analizar los productos académicos de un programa de posgrado. El docente sube un PDF, office o imagen de su artículo, ponencia, tesis o certificado, y el sistema:
 
 1. **Extrae el texto** del documento (OCR con Gemini Vision para escaneados, `pdfjs-dist` para PDFs nativos)
 2. **Identifica entidades** académicas automáticamente (autores, título, DOI, revista, indexación, etc.) usando NER con `generateText` + `Output.object` + Zod
