@@ -1,72 +1,14 @@
-import mongoose from 'mongoose'
+import type { Types } from 'mongoose'
 import AcademicProduct from '~~/server/models/AcademicProduct'
-import { PRODUCT_TYPES, type ProductDashboardSummary } from '~~/app/types'
+import type { ProductDashboardSummary } from '~~/app/types'
 import { ok } from '~~/server/utils/response'
-
-function parseDateParam(value: unknown, boundary: 'start' | 'end') {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    return undefined
-  }
-
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) {
-    return undefined
-  }
-
-  if (boundary === 'end') {
-    parsed.setUTCHours(23, 59, 59, 999)
-  } else {
-    parsed.setUTCHours(0, 0, 0, 0)
-  }
-
-  return parsed
-}
+import { buildDashboardRepositoryMatch } from '~~/server/utils/dashboard-repository-match'
 
 export default defineEventHandler(async (event) => {
-  requireAuth(event)
+  const auth = requireAuth(event)
 
   const query = getQuery(event)
-  const match: Record<string, unknown> = {
-    isDeleted: false,
-    reviewStatus: 'confirmed',
-  }
-
-  if (
-    typeof query.productType === 'string' &&
-    (PRODUCT_TYPES as readonly string[]).includes(query.productType)
-  ) {
-    match.productType = query.productType
-  }
-
-  if (typeof query.owner === 'string' && mongoose.isValidObjectId(query.owner)) {
-    match.owner = new mongoose.Types.ObjectId(query.owner)
-  }
-
-  const from = parseDateParam(query.from, 'start')
-  const to = parseDateParam(query.to, 'end')
-  if (from || to) {
-    match.$expr = {
-      $and: [
-        ...(from
-          ? [
-              {
-                $gte: [
-                  { $ifNull: ['$manualMetadata.date', '$extractedEntities.date.value'] },
-                  from,
-                ],
-              },
-            ]
-          : []),
-        ...(to
-          ? [
-              {
-                $lte: [{ $ifNull: ['$manualMetadata.date', '$extractedEntities.date.value'] }, to],
-              },
-            ]
-          : []),
-      ],
-    }
-  }
+  const { match, from, to } = buildDashboardRepositoryMatch(auth, query as Record<string, unknown>)
 
   const [totals, byType, byOwner, byYear] = await Promise.all([
     AcademicProduct.aggregate<{ totalConfirmedProducts: number; totalOwners: number }>([
@@ -94,7 +36,7 @@ export default defineEventHandler(async (event) => {
       { $group: { _id: '$productType', total: { $sum: 1 } } },
       { $sort: { total: -1, _id: 1 } },
     ]),
-    AcademicProduct.aggregate<{ _id: mongoose.Types.ObjectId; total: number; ownerName?: string }>([
+    AcademicProduct.aggregate<{ _id: Types.ObjectId; total: number; ownerName?: string }>([
       { $match: match },
       { $group: { _id: '$owner', total: { $sum: 1 } } },
       { $sort: { total: -1, _id: 1 } },

@@ -398,7 +398,7 @@ export interface ProductDashboardSummary {
 }
 
 export interface DashboardQuery {
-  productType?: ProductType
+  productType?: ProductType | ProductType[]
   owner?: string
   from?: string
   to?: string
