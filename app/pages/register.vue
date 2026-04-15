@@ -33,17 +33,15 @@ async function onSubmit() {
   <div class="relative min-h-screen overflow-hidden">
     <a
       href="#register-form"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-full focus:bg-sipac-700 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-full focus:bg-sipac-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-[#faf9f5]"
     >
       Ir al formulario de registro
     </a>
 
-    <div
-      class="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_right,rgba(64,152,97,0.16),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(148,101,64,0.14),transparent_24%),linear-gradient(180deg,#fbfdfb_0%,#f3f7f2_100%)]"
-    />
+    <div class="hero-warm absolute inset-0 -z-10" />
 
     <div
-      class="mx-auto grid min-h-screen max-w-7xl items-stretch px-4 py-6 lg:grid-cols-[28rem_minmax(0,1.05fr)] lg:px-6 lg:py-8"
+      class="mx-auto grid min-h-screen max-w-[75rem] items-stretch px-4 py-6 lg:grid-cols-[28rem_minmax(0,1.05fr)] lg:px-6 lg:py-8"
     >
       <section class="order-2 hidden items-center justify-center lg:order-1 lg:flex">
         <SipacCard id="register-form" variant="subtle" class="fade-up w-full max-w-md">
@@ -138,10 +136,10 @@ async function onSubmit() {
         <div class="space-y-6 fade-up">
           <div class="section-chip">Onboarding académico</div>
           <div class="max-w-2xl space-y-4">
-            <h2 class="font-display text-5xl leading-none font-semibold text-text sm:text-6xl">
+            <h2 class="font-display text-5xl font-medium leading-[1.1] text-text sm:text-6xl">
               Crea tu cuenta para gestionar evidencias y productividad académica.
             </h2>
-            <p class="max-w-2xl text-lg leading-8 text-text-muted">
+            <p class="max-w-2xl text-xl leading-[1.6] text-text-muted">
               SIPAc organiza tu trabajo docente con apoyo de IA, centraliza documentos probatorios y
               prepara el terreno para procesos de acreditación.
             </p>
@@ -156,7 +154,7 @@ async function onSubmit() {
               >
                 <UIcon name="i-lucide-check-check" class="size-4.5" aria-hidden="true" />
               </span>
-              <p class="text-sm leading-6 text-text-muted">{{ note }}</p>
+              <p class="text-sm leading-[1.6] text-text-muted">{{ note }}</p>
             </div>
           </SipacCard>
         </div>
@@ -169,8 +167,10 @@ async function onSubmit() {
               <UIcon name="i-lucide-shield-check" class="size-5" aria-hidden="true" />
             </span>
             <div>
-              <h3 class="font-semibold text-text">Seguridad desde el primer paso</h3>
-              <p class="mt-1 text-sm leading-6 text-text-muted">
+              <h3 class="font-display text-lg font-medium text-text">
+                Seguridad desde el primer paso
+              </h3>
+              <p class="mt-1 text-sm leading-[1.6] text-text-muted">
                 Validaciones claras, control de errores y autenticación segura desde el registro.
               </p>
             </div>

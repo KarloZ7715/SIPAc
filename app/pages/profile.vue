@@ -125,24 +125,30 @@ onMounted(() => {
               <UIcon name="i-lucide-id-card" class="size-5" />
             </span>
             <div>
-              <h2 class="font-semibold text-text">Datos de la cuenta</h2>
-              <p class="text-sm text-text-muted">Información registrada</p>
+              <h2 class="font-display text-xl font-medium text-text">Datos de la cuenta</h2>
+              <p class="text-sm leading-[1.6] text-text-muted">Información registrada</p>
             </div>
           </div>
         </template>
 
         <div class="space-y-3">
-          <div class="rounded-xl border border-border/60 bg-surface-muted/50 p-4">
+          <div
+            class="rounded-xl border border-border/60 bg-surface-muted/50 p-4 transition-[border-color,box-shadow,background-color] duration-200 ease-[var(--ease-sipac)] hover:border-border hover:bg-surface-muted/70 hover:shadow-[0_18px_32px_-30px_rgb(20_20_19/0.12)]"
+          >
             <p class="text-sm font-medium text-text-soft">Correo institucional</p>
             <p class="mt-1 truncate font-semibold text-text">{{ user?.email }}</p>
           </div>
-          <div class="rounded-xl border border-border/60 bg-surface-muted/50 p-4">
+          <div
+            class="rounded-xl border border-border/60 bg-surface-muted/50 p-4 transition-[border-color,box-shadow,background-color] duration-200 ease-[var(--ease-sipac)] hover:border-border hover:bg-surface-muted/70 hover:shadow-[0_18px_32px_-30px_rgb(20_20_19/0.12)]"
+          >
             <p class="text-sm font-medium text-text-soft">Rol en el sistema</p>
             <p class="mt-1 font-semibold text-text">
               {{ user?.role === 'admin' ? 'Administrador' : 'Docente' }}
             </p>
           </div>
-          <div class="rounded-xl border border-border/60 bg-surface-muted/50 p-4">
+          <div
+            class="rounded-xl border border-border/60 bg-surface-muted/50 p-4 transition-[border-color,box-shadow,background-color] duration-200 ease-[var(--ease-sipac)] hover:border-border hover:bg-surface-muted/70 hover:shadow-[0_18px_32px_-30px_rgb(20_20_19/0.12)]"
+          >
             <p class="text-sm font-medium text-text-soft">Programa</p>
             <p class="mt-1 font-semibold text-text">{{ user?.program || 'No asignado' }}</p>
           </div>
@@ -170,8 +176,8 @@ onMounted(() => {
                 <UIcon name="i-lucide-bar-chart-3" class="size-5" />
               </span>
               <div>
-                <h2 class="font-semibold text-text">Tu producción</h2>
-                <p class="text-sm text-text-muted">Documentos guardados</p>
+                <h2 class="font-display text-xl font-medium text-text">Tu producción</h2>
+                <p class="text-sm leading-[1.6] text-text-muted">Documentos guardados</p>
               </div>
             </div>
           </template>
@@ -204,7 +210,7 @@ onMounted(() => {
                 <div
                   v-for="item in profileSummary.productSummaryByType"
                   :key="item.productType"
-                  class="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-white px-3 py-2"
+                  class="interactive-card flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white/92 px-3 py-2 shadow-[0_4px_24px_rgb(0_0_0/0.04)]"
                 >
                   <p class="text-sm text-text-muted">{{ item.productType }}</p>
                   <SipacBadge color="primary" variant="subtle">{{ item.total }}</SipacBadge>
@@ -223,7 +229,7 @@ onMounted(() => {
         </SipacCard>
 
         <!-- Update Name -->
-        <SipacCard>
+        <SipacCard class="card-glow">
           <template #header>
             <div class="flex items-center gap-3">
               <span
@@ -232,8 +238,8 @@ onMounted(() => {
                 <UIcon name="i-lucide-pencil" class="size-5" />
               </span>
               <div>
-                <h2 class="font-semibold text-text">Actualizar nombre</h2>
-                <p class="text-sm text-text-muted">Cómo apareces en el sistema</p>
+                <h2 class="font-display text-xl font-medium text-text">Actualizar nombre</h2>
+                <p class="text-sm leading-[1.6] text-text-muted">Cómo apareces en el sistema</p>
               </div>
             </div>
           </template>
@@ -264,7 +270,7 @@ onMounted(() => {
         </SipacCard>
 
         <!-- Change Password -->
-        <SipacCard>
+        <SipacCard class="card-glow">
           <template #header>
             <div class="flex items-center gap-3">
               <span
@@ -273,8 +279,8 @@ onMounted(() => {
                 <UIcon name="i-lucide-key-round" class="size-5" />
               </span>
               <div>
-                <h2 class="font-semibold text-text">Cambiar contraseña</h2>
-                <p class="text-sm text-text-muted">Mantén tu cuenta segura</p>
+                <h2 class="font-display text-xl font-medium text-text">Cambiar contraseña</h2>
+                <p class="text-sm leading-[1.6] text-text-muted">Mantén tu cuenta segura</p>
               </div>
             </div>
           </template>

@@ -100,8 +100,8 @@ watch(
 
 <template>
   <section
-    v-if="!collapsed"
-    class="sidebar-chat-recents mt-5 border-t border-border/50 pt-4"
+    :data-collapsed="props.collapsed ? 'true' : 'false'"
+    class="sidebar-chat-recents overflow-x-hidden mt-5 border-t border-border/50 pt-4 transition-all duration-300"
     aria-labelledby="sidebar-chat-recents-heading"
   >
     <div class="mb-2 flex items-center justify-between gap-2">
@@ -123,18 +123,26 @@ watch(
       />
     </div>
 
-    <SipacButton block size="sm" icon="i-lucide-plus" class="mb-3" @click="startNewConversation">
+    <SipacButton
+      color="primary"
+      variant="outline"
+      block
+      size="sm"
+      icon="i-lucide-plus"
+      class="mb-3 border-dashed border-sipac-300 hover:border-sipac-400 hover:bg-sipac-50/50"
+      @click="startNewConversation"
+    >
       Nueva conversación
     </SipacButton>
 
     <ul v-if="chatStore.conversations.length" class="space-y-1" role="list">
       <li v-for="c in visibleConversations" :key="c.id">
         <div
-          class="group flex items-start gap-1 rounded-lg border border-transparent transition-colors"
+          class="group flex items-start gap-1 rounded-lg border transition-all duration-200"
           :class="
             c.id === activeId
-              ? 'border-sipac-200/80 bg-sipac-50/90'
-              : 'hover:border-border-muted hover:bg-surface-muted/60'
+              ? 'border-sipac-200/60 bg-sipac-50/60 shadow-sm'
+              : 'border-transparent hover:bg-surface-muted/50'
           "
         >
           <button
@@ -181,7 +189,7 @@ watch(
 
     <UModal v-model:open="showAllModal" title="Todas las conversaciones">
       <template #body>
-        <div class="max-h-[min(70vh,28rem)] space-y-1 overflow-y-auto pe-1">
+        <div class="sidebar-scroll max-h-[min(70vh,28rem)] space-y-1 overflow-y-auto pe-1">
           <div
             v-for="c in chatStore.conversations"
             :key="`all-${c.id}`"

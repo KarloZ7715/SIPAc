@@ -21,8 +21,8 @@ withDefaults(
       >
         {{ eyebrow }}
       </p>
-      <h2 class="mt-1 font-display text-2xl font-semibold text-text">{{ title }}</h2>
-      <p v-if="description" class="mt-1 max-w-2xl text-sm leading-6 text-text-muted">
+      <h2 class="mt-1 font-display text-2xl font-medium leading-[1.2] text-text">{{ title }}</h2>
+      <p v-if="description" class="mt-1 max-w-2xl text-sm leading-[1.6] text-text-muted">
         {{ description }}
       </p>
     </div>

@@ -47,26 +47,24 @@ async function onSubmit() {
   <div class="relative min-h-screen overflow-hidden">
     <a
       href="#login-form"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-full focus:bg-sipac-700 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-full focus:bg-sipac-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-[#faf9f5]"
     >
       Ir al formulario de acceso
     </a>
 
-    <div
-      class="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(64,152,97,0.16),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(148,101,64,0.12),transparent_24%),linear-gradient(180deg,#fcfdfb_0%,#f4f7f3_100%)]"
-    />
+    <div class="hero-warm absolute inset-0 -z-10" />
 
     <div
-      class="mx-auto grid min-h-screen max-w-7xl items-stretch px-4 py-6 lg:grid-cols-[minmax(0,1.1fr)_30rem] lg:px-6 lg:py-8"
+      class="mx-auto grid min-h-screen max-w-[75rem] items-stretch px-4 py-6 lg:grid-cols-[minmax(0,1.1fr)_30rem] lg:px-6 lg:py-8"
     >
       <section class="hidden lg:flex lg:min-h-full lg:flex-col lg:justify-between lg:px-6 lg:py-8">
         <div class="space-y-6 fade-up">
           <div class="section-chip">Universidad de Córdoba</div>
           <div class="max-w-2xl space-y-4">
-            <h1 class="font-display text-6xl leading-none font-semibold text-text">
+            <h1 class="font-display text-5xl font-medium leading-[1.1] text-text sm:text-6xl">
               Un acceso claro para un sistema académico inteligente.
             </h1>
-            <p class="max-w-xl text-lg leading-8 text-text-muted">
+            <p class="max-w-xl text-xl leading-[1.6] text-text-muted">
               SIPAc nace para organizar evidencias, preparar acreditación y convertir documentos
               dispersos en conocimiento útil.
             </p>
@@ -88,8 +86,8 @@ async function onSubmit() {
                 <UIcon :name="pillar.icon" class="size-5" aria-hidden="true" />
               </span>
               <div>
-                <h2 class="text-base font-semibold text-text">{{ pillar.title }}</h2>
-                <p class="mt-1 text-sm leading-6 text-text-muted">{{ pillar.description }}</p>
+                <h2 class="font-display text-lg font-medium text-text">{{ pillar.title }}</h2>
+                <p class="mt-1 text-sm leading-[1.6] text-text-muted">{{ pillar.description }}</p>
               </div>
             </div>
           </SipacCard>

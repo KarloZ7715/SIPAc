@@ -60,7 +60,7 @@ const toneClasses = computed(() => {
     <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/78" aria-hidden="true" />
 
     <span
-      class="flex size-11 shrink-0 items-center justify-center rounded-2xl shadow-[0_14px_24px_-22px_rgba(17,46,29,0.18)]"
+      class="flex size-11 shrink-0 items-center justify-center rounded-2xl shadow-[0_14px_24px_-22px_rgb(20_20_19/0.18)]"
       :class="toneClasses.icon"
     >
       <UIcon :name="icon" class="size-5" />

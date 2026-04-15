@@ -60,7 +60,7 @@ function toneClasses(tone: HomeContinuationItem['tone']) {
         <p class="text-[0.68rem] font-semibold tracking-[0.18em] text-text-soft uppercase">
           Continuidad
         </p>
-        <h2 class="font-display text-2xl font-semibold text-text">{{ props.title }}</h2>
+        <h2 class="font-display text-2xl font-medium leading-[1.2] text-text">{{ props.title }}</h2>
         <p class="max-w-2xl text-sm leading-6 text-text-muted">{{ props.description }}</p>
       </div>
 
@@ -111,14 +111,14 @@ function toneClasses(tone: HomeContinuationItem['tone']) {
                 {{ props.featured.eyebrow }}
               </p>
               <h3
-                class="max-w-xl text-[1.45rem] leading-tight font-semibold text-text sm:text-[1.7rem] md:text-[2rem]"
+                class="max-w-xl font-display text-[1.45rem] font-medium leading-[1.2] text-text sm:text-[1.7rem] md:text-[2rem]"
               >
                 {{ props.featured.title }}
               </h3>
             </div>
 
             <span
-              class="flex size-12 shrink-0 items-center justify-center rounded-2xl shadow-[0_16px_24px_-22px_rgba(17,46,29,0.2)]"
+              class="flex size-12 shrink-0 items-center justify-center rounded-2xl shadow-[0_16px_24px_-22px_rgb(20_20_19/0.14)]"
               :class="toneClasses(props.featured.tone).icon"
             >
               <UIcon :name="props.featured.icon" class="size-5" />

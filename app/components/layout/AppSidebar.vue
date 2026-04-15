@@ -34,9 +34,7 @@ const initials = computed(() => {
     .toUpperCase()
 })
 
-const workspaceLabel = computed(() =>
-  isAdmin.value ? 'Panel administrativo' : 'Workspace docente',
-)
+const workspaceLabel = computed(() => 'Sistema Inteligente de Productividad Académica')
 const footerMeta = computed(
   () => user.value?.program || (isAdmin.value ? 'Administrador' : 'Docente'),
 )
@@ -171,24 +169,53 @@ function toggleDesktopSidebar() {
     >
       <NuxtLink
         to="/"
-        class="sidebar-brand group min-w-0"
-        :class="
-          props.collapsed && !props.mobile ? 'mx-auto w-[3.45rem] justify-center px-0' : 'flex-1'
-        "
+        class="sidebar-brand group min-w-0 transition-all duration-[260ms]"
+        :data-collapsed="props.collapsed && !props.mobile ? 'true' : 'false'"
         :aria-label="props.collapsed && !props.mobile ? 'Ir al inicio' : undefined"
         :title="props.collapsed && !props.mobile ? 'Ir al inicio' : undefined"
         @click="closeMobileSidebar"
       >
         <span class="sidebar-brand__mark" aria-hidden="true">
-          <UIcon name="i-lucide-graduation-cap" class="size-5" />
+          <svg
+            class="w-12 h-12 lg:w-14 lg:h-14"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 100 100"
+          >
+            <g stroke-linecap="round" stroke-linejoin="round">
+              <polygon fill="#f3a683" points="50 36 37.876 29 37.876 43" />
+              <polygon fill="#e08b66" points="50 50 50 36 37.876 43" />
+              <polygon fill="#f3a683" points="62.124 43 74.248 50 62.124 57" />
+              <polygon fill="#e08b66" points="50 50 62.124 43 62.124 57" />
+              <polygon fill="#f3a683" points="37.876 57 37.876 71 50 64" />
+              <polygon fill="#e08b66" points="50 50 37.876 57 50 64" />
+              <polygon fill="#f3a683" points="37.876 29 50 36 50 22" />
+              <polygon fill="#e08b66" points="62.124 29 50 36 50 22" />
+              <polygon fill="#f3a683" points="62.124 29 62.124 43 74.248 36" />
+              <polygon fill="#e08b66" points="74.248 50 62.124 43 74.248 36" />
+              <polygon fill="#f3a683" points="74.248 50 62.124 57 74.248 64" />
+              <polygon fill="#e08b66" points="62.124 71 62.124 57 74.248 64" />
+              <polygon fill="#f3a683" points="62.124 71 50 64 50 78" />
+              <polygon fill="#e08b66" points="37.876 71 50 64 50 78" />
+              <polygon fill="#f3a683" points="37.876 71 37.876 57 25.752 64" />
+              <polygon fill="#e08b66" points="25.752 50 37.876 57 25.752 64" />
+              <polygon fill="#f3a683" points="25.752 50 37.876 43 25.752 36" />
+              <polygon fill="#e08b66" points="37.876 29 37.876 43 25.752 36" />
+            </g>
+          </svg>
         </span>
 
-        <template v-if="!(props.collapsed && !props.mobile)">
-          <span class="sidebar-brand__text">
-            <span class="sidebar-brand__title">SIPAc</span>
-            <span class="sidebar-brand__meta">{{ workspaceLabel }}</span>
-          </span>
-        </template>
+        <span
+          class="sidebar-brand__text"
+          :data-collapsed="props.collapsed && !props.mobile ? 'true' : 'false'"
+        >
+          <span class="sidebar-brand__title">SIPAc</span>
+          <span
+            class="sidebar-brand__meta"
+            title="Sistema Inteligente de Productividad Académica"
+            >{{ workspaceLabel }}</span
+          >
+        </span>
       </NuxtLink>
 
       <SipacButton
@@ -219,7 +246,7 @@ function toggleDesktopSidebar() {
 
     <div class="sidebar-divider" />
 
-    <div class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+    <div class="sidebar-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
       <div class="space-y-5">
         <section
           v-for="section in sections"
@@ -234,10 +261,7 @@ function toggleDesktopSidebar() {
             {{ section.label }}
           </p>
 
-          <nav
-            :aria-label="section.label"
-            :class="props.collapsed && !props.mobile ? 'mx-auto w-auto' : 'w-full'"
-          >
+          <nav :aria-label="section.label" class="w-full transition-all duration-[260ms]">
             <ul class="space-y-1.5">
               <li v-for="item in section.items" :key="item.to">
                 <LayoutSidebarNavItem
@@ -268,8 +292,8 @@ function toggleDesktopSidebar() {
       <UDropdownMenu :items="userMenuItems">
         <button
           type="button"
-          class="sidebar-user-card w-full text-left"
-          :class="props.collapsed && !props.mobile ? 'mx-auto w-[3.45rem] justify-center px-0' : ''"
+          class="sidebar-user-card w-full text-left transition-all duration-[260ms]"
+          :data-collapsed="props.collapsed && !props.mobile ? 'true' : 'false'"
           :aria-label="props.collapsed && !props.mobile ? 'Abrir menú de usuario' : undefined"
           :title="props.collapsed && !props.mobile ? 'Abrir menú de usuario' : undefined"
         >
@@ -277,21 +301,25 @@ function toggleDesktopSidebar() {
             :text="initials"
             :alt="user?.fullName"
             size="md"
-            class="ring-2 ring-sipac-200/80 ring-offset-2 ring-offset-surface"
+            class="ring-2 ring-sipac-200/90 ring-offset-2 ring-offset-surface"
           />
 
-          <template v-if="!(props.collapsed && !props.mobile)">
-            <div class="sidebar-user-card__text">
-              <p class="truncate text-sm font-semibold text-text">{{ user?.fullName }}</p>
-              <p class="truncate text-xs text-text-muted">{{ footerMeta }}</p>
-            </div>
+          <div
+            class="sidebar-user-card__text"
+            :data-collapsed="props.collapsed && !props.mobile ? 'true' : 'false'"
+          >
+            <p class="truncate text-sm font-semibold text-text">
+              {{ user?.fullName || 'Usuario SIPAc' }}
+            </p>
+            <p class="truncate text-xs text-text-muted">{{ footerMeta }}</p>
+          </div>
 
-            <UIcon
-              name="i-lucide-chevrons-up-down"
-              class="sidebar-user-card__chevron size-4 text-text-soft"
-              aria-hidden="true"
-            />
-          </template>
+          <UIcon
+            name="i-lucide-chevrons-up-down"
+            class="sidebar-user-card__chevron items-center justify-center shrink-0 size-4 text-text-soft"
+            :data-collapsed="props.collapsed && !props.mobile ? 'true' : 'false'"
+            aria-hidden="true"
+          />
         </button>
       </UDropdownMenu>
     </div>

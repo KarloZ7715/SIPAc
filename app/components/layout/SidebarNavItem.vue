@@ -23,7 +23,6 @@ const props = withDefaults(
     :aria-label="props.collapsed ? props.label : undefined"
     :title="props.collapsed ? props.label : undefined"
     class="sidebar-nav-item group"
-    :class="props.collapsed ? 'mx-auto' : 'w-full'"
     :data-active="props.active ? 'true' : 'false'"
     :data-collapsed="props.collapsed ? 'true' : 'false'"
     :data-secondary="props.secondary ? 'true' : 'false'"
@@ -32,7 +31,7 @@ const props = withDefaults(
       <UIcon :name="props.icon" class="size-[1.05rem]" />
     </span>
 
-    <span v-if="!props.collapsed" class="sidebar-nav-item__content">
+    <span class="sidebar-nav-item__content" aria-hidden="true">
       <span class="sidebar-nav-item__label">{{ props.label }}</span>
     </span>
 

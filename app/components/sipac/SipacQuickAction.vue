@@ -22,11 +22,11 @@ const baseClass =
 
 const emphasisClass = computed(() => {
   if (props.emphasis === 'quick' && props.active) {
-    return 'border border-sipac-200 bg-sipac-50 text-sipac-800 shadow-[0_12px_24px_-24px_rgba(18,63,40,0.35)]'
+    return 'border border-sipac-200 bg-sipac-50 text-sipac-800 shadow-[0_12px_24px_-24px_rgb(20_20_19/0.12)]'
   }
 
   if (props.active || props.emphasis === 'active') {
-    return 'bg-sipac-700 text-white shadow-[0_16px_30px_-22px_rgba(18,63,40,0.6)]'
+    return 'bg-sipac-700 text-white shadow-[0_16px_30px_-22px_rgb(20_20_19/0.22)]'
   }
 
   if (props.emphasis === 'quick') {

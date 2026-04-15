@@ -5,20 +5,23 @@ const layoutHydrated = ref(false)
 const route = useRoute()
 const isChatRoute = computed(() => route.path.startsWith('/chat'))
 const isWorkspaceDocumentsRoute = computed(() => route.path === '/workspace-documents')
+const isWideWorkspaceRoute = computed(
+  () => route.path === '/' || route.path === '/dashboard' || isWorkspaceDocumentsRoute.value,
+)
 const contentWidthClass = computed(() => {
   if (isChatRoute.value) {
     return 'max-w-none w-full'
   }
-  if (route.path === '/' || isWorkspaceDocumentsRoute.value) {
+  if (isWideWorkspaceRoute.value) {
     return 'max-w-[96rem] xl:px-10'
   }
-  return 'max-w-7xl'
+  return 'max-w-[75rem]'
 })
 const contentSpacingClass = computed(() => {
   if (isChatRoute.value) {
     return 'py-0'
   }
-  if (route.path === '/' || isWorkspaceDocumentsRoute.value) {
+  if (isWideWorkspaceRoute.value) {
     return 'py-4 lg:py-5'
   }
   return 'py-5 lg:py-6'
@@ -79,7 +82,7 @@ onMounted(() => {
   <div :class="shellRootClass">
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-100 focus:rounded-full focus:bg-sipac-700 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-100 focus:rounded-full focus:bg-sipac-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-[#faf9f5]"
     >
       Saltar al contenido principal
     </a>
@@ -104,7 +107,9 @@ onMounted(() => {
         v-model:open="mobileSidebarOpen"
         side="left"
         :overlay="true"
-        :ui="{ content: 'max-w-[18.5rem] border-r border-border/60 bg-white/96 backdrop-blur-xl' }"
+        :ui="{
+          content: 'max-w-[18.5rem] border-r border-border/80 bg-surface/98 backdrop-blur-xl',
+        }"
       >
         <template #body>
           <div class="h-full overflow-y-auto">
@@ -136,7 +141,7 @@ onMounted(() => {
             body: 'flex flex-col gap-4 flex-1 overflow-x-hidden overflow-y-auto px-1.5 py-1.5',
             footer: 'shrink-0 px-1.5 pb-1.5 pt-0',
           }"
-          class="sipac-dashboard-sidebar overflow-hidden border-r border-border/50 bg-white/84 backdrop-blur-md"
+          class="sipac-dashboard-sidebar overflow-hidden border-r border-border/70 bg-surface/90 backdrop-blur-md"
         >
           <template #default="{ collapsed }">
             <LayoutAppSidebar :collapsed="collapsed" />
@@ -167,7 +172,7 @@ onMounted(() => {
       </UDashboardGroup>
       <div v-else class="hidden min-h-0 flex-1 lg:flex">
         <aside
-          class="sipac-dashboard-sidebar hidden min-h-svh w-[18.5rem] shrink-0 border-r border-border/50 bg-white/84 backdrop-blur-md lg:flex"
+          class="sipac-dashboard-sidebar hidden min-h-svh w-[18.5rem] shrink-0 border-r border-border/70 bg-surface/90 backdrop-blur-md lg:flex"
         />
         <div class="flex min-h-0 flex-1 flex-col">
           <LayoutAppHeader />

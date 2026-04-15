@@ -827,10 +827,10 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
             <p class="text-[0.68rem] font-semibold tracking-[0.18em] text-text-soft uppercase">
               Dock de trabajo
             </p>
-            <h2 class="font-display text-2xl font-semibold text-text">
+            <h2 class="font-display text-2xl font-medium leading-[1.2] text-text">
               Entra al espacio correcto.
             </h2>
-            <p class="max-w-2xl text-sm leading-6 text-text-muted">
+            <p class="max-w-2xl text-sm leading-[1.6] text-text-muted">
               Usa cada módulo sin perder de vista tu prioridad principal.
             </p>
           </div>
@@ -929,7 +929,9 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
           <template #header>
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 class="font-display text-2xl font-semibold text-text">Usuarios recientes</h2>
+                <h2 class="font-display text-2xl font-medium leading-[1.2] text-text">
+                  Usuarios recientes
+                </h2>
                 <p class="mt-1 text-sm text-text-muted">
                   Vista rapida de las ultimas cuentas registradas.
                 </p>

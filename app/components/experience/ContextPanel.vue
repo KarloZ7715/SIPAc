@@ -18,7 +18,7 @@ const props = withDefaults(
 const toneClasses = computed(() => {
   if (props.tone === 'primary') {
     return {
-      shell: 'border-sipac-200/80 bg-sipac-50/78 shadow-[0_20px_40px_-34px_rgba(17,46,29,0.22)]',
+      shell: 'border-sipac-200/80 bg-sipac-50/78 shadow-[0_20px_40px_-34px_rgb(20_20_19/0.22)]',
       icon: 'bg-white text-sipac-700',
     }
   }
@@ -31,7 +31,7 @@ const toneClasses = computed(() => {
   }
 
   return {
-    shell: 'border-border/75 bg-white/84 shadow-[0_18px_34px_-30px_rgba(17,46,29,0.14)]',
+    shell: 'border-border/75 bg-white/84 shadow-[0_18px_34px_-30px_rgb(20_20_19/0.14)]',
     icon: 'bg-surface-muted text-sipac-700',
   }
 })
@@ -55,8 +55,8 @@ const toneClasses = computed(() => {
         >
           {{ eyebrow }}
         </p>
-        <h3 class="mt-1 font-semibold text-text">{{ title }}</h3>
-        <p v-if="description" class="mt-2 text-sm leading-6 text-text-muted">
+        <h3 class="mt-1 font-display text-lg font-medium leading-snug text-text">{{ title }}</h3>
+        <p v-if="description" class="mt-2 text-sm leading-[1.6] text-text-muted">
           {{ description }}
         </p>
 

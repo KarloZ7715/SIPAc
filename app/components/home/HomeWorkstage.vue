@@ -93,11 +93,11 @@ const toneClasses = computed(() => {
         <div class="min-w-0 space-y-5 @container/home-cockpit-main">
           <div class="space-y-3">
             <h1
-              class="max-w-4xl text-balance font-display text-[1.875rem] leading-[1.12] font-semibold text-text sm:text-[2.35rem] sm:leading-tight xl:text-[3.35rem]"
+              class="max-w-4xl text-balance font-display text-[1.875rem] font-medium leading-[1.12] text-text sm:text-[2.35rem] sm:leading-[1.15] xl:text-[3.35rem] xl:leading-[1.15]"
             >
               {{ title }}
             </h1>
-            <p class="max-w-3xl text-sm leading-7 text-text-muted sm:text-base">
+            <p class="max-w-3xl text-base leading-[1.6] text-text-muted sm:text-lg">
               {{ summary }}
             </p>
           </div>
@@ -107,7 +107,7 @@ const toneClasses = computed(() => {
               :to="primaryAction.to"
               :icon="primaryAction.icon"
               size="lg"
-              class="w-full justify-center shadow-[0_24px_40px_-28px_rgba(18,63,40,0.55)] sm:w-auto"
+              class="w-full justify-center shadow-[0_24px_40px_-28px_rgb(20_20_19/0.14)] sm:w-auto"
             >
               {{ primaryAction.label }}
             </SipacButton>
@@ -153,7 +153,9 @@ const toneClasses = computed(() => {
               <p class="text-[0.68rem] font-semibold tracking-[0.18em] text-text-soft uppercase">
                 {{ focusEyebrow }}
               </p>
-              <h2 class="mt-3 text-xl font-semibold text-text">{{ focusTitle }}</h2>
+              <h2 class="mt-3 font-display text-xl font-medium leading-snug text-text">
+                {{ focusTitle }}
+              </h2>
             </div>
 
             <span class="home-focus-icon">

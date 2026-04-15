@@ -52,8 +52,8 @@ function toneClasses(tone: HomeRailItem['tone']) {
         <p class="text-[0.68rem] font-semibold tracking-[0.18em] text-text-soft uppercase">
           Señales de hoy
         </p>
-        <h2 class="text-xl font-semibold text-text">{{ title }}</h2>
-        <p class="text-sm leading-6 text-text-muted">{{ description }}</p>
+        <h2 class="font-display text-xl font-medium leading-snug text-text">{{ title }}</h2>
+        <p class="text-sm leading-[1.6] text-text-muted">{{ description }}</p>
       </div>
 
       <div class="space-y-3">
@@ -70,7 +70,7 @@ function toneClasses(tone: HomeRailItem['tone']) {
 
           <div class="flex items-start gap-3">
             <span
-              class="flex size-10 shrink-0 items-center justify-center rounded-2xl shadow-[0_16px_28px_-24px_rgba(17,46,29,0.22)]"
+              class="flex size-10 shrink-0 items-center justify-center rounded-2xl shadow-[0_16px_28px_-24px_rgb(20_20_19/0.22)]"
               :class="toneClasses(item.tone).icon"
             >
               <UIcon :name="item.icon" class="size-5" />

@@ -327,13 +327,13 @@ onMounted(() => loadUsers())
                 <UIcon name="i-lucide-shield-check" class="size-5" aria-hidden="true" />
               </span>
               <div>
-                <h3 class="font-semibold text-text">Buenas prácticas</h3>
-                <p class="text-sm text-text-muted">UX y seguridad alineadas</p>
+                <h3 class="font-display text-lg font-medium text-text">Buenas prácticas</h3>
+                <p class="text-sm leading-[1.6] text-text-muted">UX y seguridad alineadas</p>
               </div>
             </div>
           </template>
 
-          <div class="space-y-3 text-sm leading-6 text-text-muted">
+          <div class="space-y-3 text-sm leading-[1.6] text-text-muted">
             <p>
               Las acciones visibles están organizadas para facilitar decisiones rápidas y reducir
               confusiones.

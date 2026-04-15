@@ -135,7 +135,7 @@ onMounted(() => {
           />
           <motion.div
             v-bind="composerDockMotion"
-            class="chat-composer-dock shrink-0 border-t border-border/55 bg-surface/88 shadow-[0_-14px_48px_-32px_rgb(17_46_29/0.14)] backdrop-blur-xl supports-[backdrop-filter]:bg-surface/72"
+            class="chat-composer-dock shrink-0 border-t border-border/60 bg-[linear-gradient(rgb(255_255_255/0.96),rgb(247_246_240/0.94))] shadow-[0_-18px_36px_-28px_rgb(20_20_19/0.12),inset_0_1px_0_0_rgb(255_255_255/0.65)] backdrop-blur-xl supports-[backdrop-filter]:bg-surface/78"
           >
             <div class="w-full px-3 py-2 sm:px-8 sm:py-3">
               <ChatComposer

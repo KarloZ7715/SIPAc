@@ -21,7 +21,7 @@ const open = defineModel<boolean>('open', { required: true })
         </span>
         <div class="min-w-0 flex-1">
           <p class="text-xs font-medium text-text-soft">Vista previa</p>
-          <h3 class="truncate font-semibold text-text">
+          <h3 class="truncate font-display text-lg font-medium leading-snug text-text">
             {{ document?.title || 'Documento' }}
           </h3>
         </div>

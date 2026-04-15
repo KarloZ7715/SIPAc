@@ -10,11 +10,13 @@ import SipacLogoMarkEasterEgg from '~/components/brand/SipacLogoMarkEasterEgg.vu
       <SipacLogoMarkEasterEgg base-phase="preparing" aria-label="Animar logo de bienvenida" />
     </div>
 
-    <h1 class="fade-up text-balance text-xl font-semibold tracking-tight text-text sm:text-2xl">
+    <h1
+      class="fade-up text-balance font-display text-2xl font-medium leading-[1.2] text-text sm:text-[2rem]"
+    >
       ¿Qué investigaremos hoy?
     </h1>
     <p
-      class="fade-up stagger-1 mt-2 text-pretty text-sm leading-relaxed text-text-muted sm:text-base"
+      class="fade-up stagger-1 mt-2 text-pretty text-base leading-[1.6] text-text-muted sm:text-lg"
     >
       Escribe abajo: autores, tema, institución, fechas o tipo de documento. El asistente revisa tus
       archivos confirmados y te muestra fragmentos útiles cuando los encuentra.

@@ -26,7 +26,9 @@ const toolbarFeedback = computed(() =>
           <UIcon name="i-lucide-messages-square" class="size-[1.15rem] sm:size-5" />
         </span>
         <div class="min-w-0">
-          <h2 class="truncate text-sm font-semibold text-text sm:text-base">{{ title }}</h2>
+          <h2 class="truncate font-display text-base font-medium leading-snug text-text sm:text-lg">
+            {{ title }}
+          </h2>
           <p class="text-xs text-text-muted sm:text-sm">
             <template v-if="docCount">
               {{ docCount }} documento{{ docCount === 1 ? '' : 's' }} citado{{

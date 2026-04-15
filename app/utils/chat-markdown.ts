@@ -23,7 +23,7 @@ function renderInlineMarkdown(text: string) {
     (_match, content: string) =>
       `<code class="rounded-md bg-sipac-50 px-1.5 py-0.5 font-mono text-[0.9em] text-sipac-900">${escapeHtml(content)}</code>`,
   )
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold text-text">$1</strong>')
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-medium text-text">$1</strong>')
   html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>')
   html = html.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
@@ -150,9 +150,9 @@ export function renderChatMarkdown(markdown: string) {
       if (codeFence) {
         const lang = (codeFence.language ?? '').trim() || 'texto'
         htmlBlocks.push(
-          `<div class="chat-md-code not-prose overflow-hidden rounded-xl border border-border/80 bg-[#0f172a] shadow-sm"><div class="flex items-center border-b border-white/10 px-3 py-1.5"><span class="font-mono text-[0.65rem] font-medium uppercase tracking-wider text-white/55">${escapeHtml(
+          `<div class="chat-md-code not-prose overflow-hidden rounded-xl border border-[#30302e] bg-[#141413] shadow-[0_4px_24px_rgb(0_0_0/0.08)]"><div class="flex items-center border-b border-[#30302e] px-3 py-1.5"><span class="font-mono text-[0.65rem] font-medium uppercase tracking-wider text-[#b0aea5]">${escapeHtml(
             lang,
-          )}</span></div><pre class="overflow-x-auto px-4 py-3 text-[0.8125rem] leading-relaxed text-slate-100"><code class="font-mono">${escapeHtml(
+          )}</span></div><pre class="overflow-x-auto px-4 py-3 text-[0.8125rem] leading-[1.6] text-[#faf9f5]"><code class="font-mono">${escapeHtml(
             codeFence.lines.join('\n'),
           )}</code></pre></div>`,
         )

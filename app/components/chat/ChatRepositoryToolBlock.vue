@@ -97,7 +97,9 @@ const toolPart = computed(() => {
                 </SipacBadge>
               </div>
 
-              <h3 class="text-[0.95rem] font-semibold leading-snug text-text sm:text-base">
+              <h3
+                class="font-display text-[0.95rem] font-medium leading-snug text-text sm:text-base"
+              >
                 {{ result.title }}
               </h3>
 

@@ -8,6 +8,7 @@ const mobileSidebarOpen = useState<boolean>('sipac-mobile-sidebar-open')
 const isHomeSpecial = computed(() => route.path === '/' && !isAdmin.value)
 const isChatSpecial = computed(() => route.path.startsWith('/chat'))
 const isWorkspaceDocumentsSpecial = computed(() => route.path === '/workspace-documents')
+const isDashboardSpecial = computed(() => route.path === '/dashboard')
 
 const showNotifications = ref(false)
 let stopNotificationsFocusRefresh: (() => void) | undefined
@@ -169,19 +170,19 @@ onBeforeUnmount(() => {
 
 <template>
   <header
-    class="border-b backdrop-blur-md"
+    class="sticky top-0 z-30 border-b backdrop-blur-md transition-[border-color,background-color] duration-300"
     :class="
-      isHomeSpecial || isChatSpecial || isWorkspaceDocumentsSpecial
-        ? 'border-border/35 bg-white/68 supports-[backdrop-filter]:bg-white/58'
-        : 'border-border/50 bg-white/85'
+      isHomeSpecial || isChatSpecial || isWorkspaceDocumentsSpecial || isDashboardSpecial
+        ? 'border-border/50 bg-surface/75 supports-[backdrop-filter]:bg-surface/65'
+        : 'border-border/60 bg-surface/88'
     "
   >
     <div
       class="mx-auto flex w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8"
       :class="
-        isHomeSpecial || isChatSpecial || isWorkspaceDocumentsSpecial
+        isHomeSpecial || isChatSpecial || isWorkspaceDocumentsSpecial || isDashboardSpecial
           ? 'max-w-[96rem] py-3.5 xl:px-10'
-          : 'max-w-7xl py-4'
+          : 'max-w-[75rem] py-4'
       "
     >
       <div class="flex min-w-0 items-start gap-3">
@@ -205,7 +206,7 @@ onBeforeUnmount(() => {
               {{ todayLabel }}
             </SipacBadge>
           </div>
-          <p class="mt-2 text-sm leading-6 text-text-muted">
+          <p class="mt-2 text-sm leading-[1.6] text-text-muted sm:text-base">
             Vuelve a lo que importa hoy sin cargar el inicio con chrome innecesario.
           </p>
         </div>
@@ -225,7 +226,7 @@ onBeforeUnmount(() => {
               {{ todayLabel }}
             </SipacBadge>
           </div>
-          <p class="mt-2 text-sm leading-6 text-text-muted">
+          <p class="mt-2 text-sm leading-[1.6] text-text-muted sm:text-base">
             Haz preguntas como lo harías con un colega; las respuestas se apoyan en los documentos
             que ya subiste a SIPAc.
           </p>
@@ -246,9 +247,29 @@ onBeforeUnmount(() => {
               {{ todayLabel }}
             </SipacBadge>
           </div>
-          <p class="mt-2 text-sm leading-6 text-text-muted">
-            Sube un PDF o una imagen, revisa la ficha que te proponemos y confirma cuando esté
+          <p class="mt-2 text-sm leading-[1.6] text-text-muted sm:text-base">
+            Sube todo tipo de documentos, revisa la ficha que te proponemos y confirma cuando esté
             lista.
+          </p>
+        </div>
+
+        <div v-else-if="isDashboardSpecial" class="min-w-0">
+          <div class="flex flex-wrap items-center gap-3">
+            <p class="text-[0.68rem] font-semibold tracking-[0.22em] text-text-soft uppercase">
+              {{ isAdmin ? 'Centro administrativo' : 'Workspace docente' }}
+            </p>
+            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
+            <SipacBadge color="primary" variant="subtle" size="sm" class="gap-1">
+              <UIcon name="i-lucide-chart-column-big" class="size-3" />
+              Analítica
+            </SipacBadge>
+            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
+            <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
+              {{ todayLabel }}
+            </SipacBadge>
+          </div>
+          <p class="mt-2 text-sm leading-[1.6] text-text-muted sm:text-base">
+            Revisa tu avance, detecta patrones y entiende cómo va tu producción con filtros claros.
           </p>
         </div>
 
@@ -257,14 +278,16 @@ onBeforeUnmount(() => {
             {{ routeMeta.eyebrow }}
           </p>
           <div class="flex flex-wrap items-center gap-3">
-            <h2 class="font-display text-2xl font-semibold text-text sm:text-[2rem]">
+            <h2
+              class="font-display text-2xl font-medium leading-[1.2] text-text sm:text-[2rem] sm:leading-[1.2]"
+            >
               {{ routeMeta.title }}
             </h2>
             <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
               {{ todayLabel }}
             </SipacBadge>
           </div>
-          <p class="mt-1 max-w-2xl text-sm leading-6 text-text-muted">
+          <p class="mt-1 max-w-2xl text-sm leading-[1.6] text-text-muted sm:text-base">
             {{ routeMeta.description }}
           </p>
         </div>
@@ -291,7 +314,7 @@ onBeforeUnmount(() => {
           </SipacButton>
           <span
             v-if="unreadCount"
-            class="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-sipac-700 px-1.5 py-0.5 text-[0.65rem] font-semibold text-white"
+            class="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-sipac-600 px-1.5 py-0.5 text-[0.65rem] font-semibold text-[#faf9f5]"
           >
             {{ unreadCount > 9 ? '9+' : unreadCount }}
           </span>

@@ -17,8 +17,8 @@ const props = withDefaults(
 
 const titleClass = computed(() =>
   props.size === 'md'
-    ? 'mt-2 font-display text-2xl font-semibold text-text sm:text-3xl'
-    : 'mt-3 font-display text-4xl font-semibold text-text sm:text-5xl',
+    ? 'mt-2 font-display text-2xl font-medium leading-[1.2] text-text sm:text-3xl sm:leading-[1.2]'
+    : 'mt-3 font-display text-4xl font-medium leading-[1.15] text-text sm:text-5xl sm:leading-[1.15]',
 )
 </script>
 
@@ -35,7 +35,7 @@ const titleClass = computed(() =>
     </h2>
     <p
       v-if="props.description"
-      class="mt-2 max-w-2xl text-sm leading-6 text-text-muted sm:text-base sm:leading-7"
+      class="mt-2 max-w-2xl text-base leading-[1.6] text-text-muted"
       :class="props.center ? 'mx-auto' : ''"
     >
       {{ props.description }}
