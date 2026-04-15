@@ -92,10 +92,17 @@ pnpm test tests/unit/server/semantic-validation.test.ts  # Single test file
 pnpm test -- -t "should validate"  # Run tests matching pattern
 pnpm test:watch             # Watch mode
 pnpm test:coverage          # Coverage report
-pnpm test:e2e               # E2E tests (Playwright)
+pnpm test:e2e               # E2E smoke tests (Playwright, excluye flujos completos)
+pnpm test:e2e:full          # Flujos completos OCR/NER en desarrollo, opt-in
 pnpm test:e2e:ui            # E2E with Playwright UI
 pnpm test:eval:ner          # NER field extraction evals
 ```
+
+### Testing Policy
+
+- `pnpm test:e2e` debe quedarse rápido y apto para CI.
+- `pnpm test:e2e:full` se reserva para desarrollo manual con OCR/NER real.
+- No agregues los flujos completos al camino por defecto de CI.
 
 ## Architecture
 
@@ -104,7 +111,7 @@ pnpm test:eval:ner          # NER field extraction evals
 - `app/` — Vue 3 client: pages, components (`sipac/` for design system), composables, Pinia stores, types
 - `server/` — Nuxt server: API routes, Mongoose models, services (OCR/NER/chat), middleware
 - `tests/unit/`, `tests/integration/`, `tests/evals/` — Test files mirroring source structure
-- `e2e/` — Playwright E2E tests
+- `tests/e2e/` — Playwright E2E tests; smoke por defecto, flujos completos sólo con `pnpm test:e2e:full`
 - `docs/analisis-diseno/` — Project documentation, UML diagrams, ADRs
 
 ### Core Services (server/services/)

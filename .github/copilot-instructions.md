@@ -78,9 +78,16 @@ pnpm lint && pnpm lint:fix    # ESLint
 pnpm typecheck                # TypeScript check
 pnpm test                     # Unit/integration tests (Vitest)
 pnpm test tests/unit/server/services/ner/semantic-validation.test.ts  # Single test file
-pnpm test:e2e                 # E2E tests (Playwright)
+pnpm test:e2e                 # E2E smoke tests (Playwright, excluye flujos completos)
+pnpm test:e2e:full            # Flujos completos OCR/NER en desarrollo, opt-in
 pnpm test:e2e:ui              # E2E with Playwright UI
 ```
+
+### Testing Policy
+
+- `pnpm test:e2e` debe quedarse rápido y apto para CI.
+- `pnpm test:e2e:full` se reserva para desarrollo manual con OCR/NER real.
+- No agregues los flujos completos al camino por defecto de CI.
 
 ## Architecture
 
