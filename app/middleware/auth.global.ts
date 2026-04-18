@@ -18,7 +18,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     authStore.setUser(data.value?.data?.user ?? null)
   }
 
-  const publicRoutes = ['/login', '/register']
+  const publicRoutes = ['/login', '/register', '/verify-email']
 
   if (!auth.isAuthenticated.value && !publicRoutes.includes(to.path)) {
     return navigateTo('/login')

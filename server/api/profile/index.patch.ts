@@ -17,23 +17,41 @@ export default defineEventHandler(async (event) => {
   }
 
   const updates = parsed.data
-  if (Object.keys(updates).length === 0) {
+  const hasAny = Object.values(updates).some((v) => v !== undefined && v !== '')
+  if (!hasAny) {
     throw createValidationError({
       issues: [{ path: [], message: 'Se debe enviar al menos un campo para actualizar' }],
-    } as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
   }
 
-  const user = await User.findByIdAndUpdate(
-    auth.sub,
-    { $set: updates },
-    { returnDocument: 'after', runValidators: true },
-  ).lean()
-
+  const user = await User.findById(auth.sub)
   if (!user) {
     throw createNotFoundError('Usuario')
   }
 
-  const changedFields = Object.keys(updates).join(', ')
+  if (updates.firstName !== undefined) user.firstName = updates.firstName
+  if (updates.middleName !== undefined) user.middleName = updates.middleName || undefined
+  if (updates.lastName !== undefined) user.lastName = updates.lastName
+  if (updates.secondLastName !== undefined)
+    user.secondLastName = updates.secondLastName || undefined
+  if (updates.program !== undefined) user.program = updates.program || undefined
+
+  // Marca que el usuario revisó los nombres (cierra el banner de migración)
+  if (
+    updates.firstName !== undefined ||
+    updates.middleName !== undefined ||
+    updates.lastName !== undefined ||
+    updates.secondLastName !== undefined
+  ) {
+    user.namesReviewedAt = new Date()
+  }
+
+  await user.save()
+
+  const changedFields = Object.keys(updates)
+    .filter((k) => updates[k as keyof typeof updates] !== undefined)
+    .join(', ')
   await logAudit(event, {
     userId: auth.sub,
     userName: auth.email,
@@ -43,5 +61,5 @@ export default defineEventHandler(async (event) => {
     details: `Usuario actualizó perfil: ${changedFields}`,
   })
 
-  return ok({ user })
+  return ok({ user: user.toJSON() })
 })

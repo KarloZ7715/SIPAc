@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt'
 import mongoose from 'mongoose'
 import User from '~~/server/models/User'
 import { changePasswordSchema } from '~~/server/utils/schemas/auth'
+import { revokeAllSessionsForUser, createLoginSession } from '~~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
   const auth = requireAuth(event)
@@ -31,6 +32,13 @@ export default defineEventHandler(async (event) => {
 
   user.passwordHash = newPassword
   await user.save()
+
+  // Revoke all sessions except the current one by resetting sessions then recreating current
+  await revokeAllSessionsForUser(auth.sub, 'password_change')
+  const refreshed = await User.findById(auth.sub)
+  if (refreshed) {
+    await createLoginSession(event, refreshed)
+  }
 
   await logAudit(event, {
     userId: auth.sub,

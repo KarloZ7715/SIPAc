@@ -3,11 +3,15 @@ import { loginSchema } from '~~/server/utils/schemas/auth'
 
 definePageMeta({ layout: false })
 
-const { login, loading } = useAuth()
+const { login, verify2FA, loading } = useAuth()
 const toast = useToast()
 
 const state = reactive({ email: '', password: '' })
 const errorMsg = ref('')
+const step = ref<'credentials' | 'twofa' | 'verify-email'>('credentials')
+const challengeId = ref('')
+const challengeEmail = ref('')
+const otpCode = ref('')
 const valuePillars = [
   {
     title: 'Trabajo académico asistido',
@@ -31,14 +35,83 @@ const valuePillars = [
 async function onSubmit() {
   errorMsg.value = ''
   try {
-    await login(state)
-    await navigateTo('/')
+    const outcome = await login(state)
+    if (outcome.kind === 'success') {
+      await navigateTo('/')
+      return
+    }
+    if (outcome.kind === '2fa') {
+      challengeId.value = outcome.challengeId
+      challengeEmail.value = outcome.email
+      step.value = 'twofa'
+      toast.add({
+        title: 'Verificación en dos pasos',
+        description: `Enviamos un código a ${outcome.email}`,
+        icon: 'i-lucide-shield-check',
+        color: 'info',
+      })
+      return
+    }
+    if (outcome.kind === 'verification') {
+      challengeEmail.value = outcome.email
+      step.value = 'verify-email'
+      return
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const msg =
       err?.data?.data?.error?.message || err?.data?.statusMessage || 'Error al iniciar sesión'
     errorMsg.value = msg
     toast.add({ title: 'Error', description: msg, icon: 'i-lucide-circle-alert', color: 'error' })
+  }
+}
+
+async function onSubmit2FA() {
+  errorMsg.value = ''
+  try {
+    await verify2FA(challengeId.value, otpCode.value)
+    await navigateTo('/')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (err: any) {
+    const msg = err?.data?.data?.error?.message || err?.data?.statusMessage || 'Código inválido'
+    errorMsg.value = msg
+    toast.add({ title: 'Error', description: msg, icon: 'i-lucide-circle-alert', color: 'error' })
+  }
+}
+
+function backToCredentials() {
+  step.value = 'credentials'
+  otpCode.value = ''
+  challengeId.value = ''
+  errorMsg.value = ''
+}
+
+const resending = ref(false)
+
+const { data: googleStatus } = await useAsyncData('google-oauth-status', () =>
+  $fetch<{ success: boolean; data: { enabled: boolean } }>('/api/auth/google/status'),
+)
+const googleEnabled = computed(() => googleStatus.value?.data.enabled === true)
+async function resendVerification() {
+  if (!challengeEmail.value) return
+  resending.value = true
+  try {
+    await $fetch('/api/auth/resend-verification', {
+      method: 'POST',
+      body: { email: challengeEmail.value },
+    })
+    toast.add({
+      title: 'Enlace enviado',
+      description: 'Revisa tu bandeja de entrada.',
+      icon: 'i-lucide-mail-check',
+      color: 'success',
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (err: any) {
+    const msg = err?.data?.data?.error?.message || 'No se pudo reenviar el enlace'
+    toast.add({ title: 'Error', description: msg, icon: 'i-lucide-circle-alert', color: 'error' })
+  } finally {
+    resending.value = false
   }
 }
 </script>
@@ -58,7 +131,7 @@ async function onSubmit() {
       class="mx-auto grid min-h-screen max-w-[75rem] items-stretch px-4 py-6 lg:grid-cols-[minmax(0,1.1fr)_30rem] lg:px-6 lg:py-8"
     >
       <section class="hidden lg:flex lg:min-h-full lg:flex-col lg:justify-between lg:px-6 lg:py-8">
-        <div class="space-y-6 fade-up">
+        <div class="page-stage-hero space-y-6">
           <div class="section-chip">Universidad de Córdoba</div>
           <div class="max-w-2xl space-y-4">
             <h1 class="font-display text-5xl font-medium leading-[1.1] text-text sm:text-6xl">
@@ -71,7 +144,7 @@ async function onSubmit() {
           </div>
         </div>
 
-        <div class="grid gap-4 fade-up stagger-1">
+        <div class="page-stage-grid page-stage-grid--tight grid gap-4">
           <SipacCard
             v-for="pillar in valuePillars"
             :key="pillar.title"
@@ -95,15 +168,36 @@ async function onSubmit() {
       </section>
 
       <section class="flex items-center justify-center py-8 lg:py-0">
-        <SipacCard id="login-form" variant="subtle" class="fade-up w-full max-w-md">
+        <SipacCard id="login-form" variant="subtle" class="page-stage-primary w-full max-w-md">
           <SipacSectionHeader
+            v-if="step === 'credentials'"
             eyebrow="Sistema Inteligente de Productividad Académica"
             title="Iniciar sesión"
             description="Accede con tu cuenta institucional para continuar en el workspace de SIPAc."
             center
           />
+          <SipacSectionHeader
+            v-else-if="step === 'twofa'"
+            eyebrow="Verificación en dos pasos"
+            title="Ingresa el código"
+            :description="`Enviamos un código de 6 dígitos a ${challengeEmail}. Vence en 5 minutos.`"
+            center
+          />
+          <SipacSectionHeader
+            v-else
+            eyebrow="Verificación pendiente"
+            title="Confirma tu correo"
+            :description="`Para iniciar sesión debes confirmar ${challengeEmail}. Revisa tu bandeja de entrada.`"
+            center
+          />
 
-          <UForm :schema="loginSchema" :state="state" class="mt-8 space-y-5" @submit="onSubmit">
+          <UForm
+            v-if="step === 'credentials'"
+            :schema="loginSchema"
+            :state="state"
+            class="mt-8 space-y-5"
+            @submit="onSubmit"
+          >
             <UFormField label="Correo electrónico" name="email" required>
               <UInput
                 v-model="state.email"
@@ -146,7 +240,71 @@ async function onSubmit() {
             <SipacButton type="submit" block size="lg" :loading="loading"
               >Iniciar sesión</SipacButton
             >
+
+            <AuthGoogleAuthButton :enabled="googleEnabled" label="Continuar con Google" />
           </UForm>
+
+          <form v-else-if="step === 'twofa'" class="mt-8 space-y-5" @submit.prevent="onSubmit2FA">
+            <UFormField label="Código de 6 dígitos" name="code" required>
+              <UInput
+                v-model="otpCode"
+                color="neutral"
+                variant="outline"
+                name="otp"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="6"
+                pattern="[0-9]{6}"
+                placeholder="••••••"
+                icon="i-lucide-key-round"
+                class="w-full"
+              />
+            </UFormField>
+
+            <UAlert
+              v-if="errorMsg"
+              aria-live="polite"
+              color="error"
+              variant="subtle"
+              icon="i-lucide-octagon-alert"
+              title="No fue posible verificar"
+              :description="errorMsg"
+            />
+
+            <SipacButton
+              type="submit"
+              block
+              size="lg"
+              :loading="loading"
+              :disabled="otpCode.length !== 6"
+              >Verificar e ingresar</SipacButton
+            >
+            <SipacButton type="button" block size="lg" variant="ghost" @click="backToCredentials"
+              >Usar otra cuenta</SipacButton
+            >
+          </form>
+
+          <div v-else class="mt-8 space-y-5">
+            <UAlert
+              color="warning"
+              variant="subtle"
+              icon="i-lucide-mail-warning"
+              title="Correo no verificado"
+              description="Revisa el enlace que te enviamos al registrarte o solicita un reenvío."
+            />
+            <SipacButton
+              type="button"
+              block
+              size="lg"
+              icon="i-lucide-send"
+              :loading="resending"
+              @click="resendVerification"
+              >Reenviar enlace de verificación</SipacButton
+            >
+            <SipacButton type="button" block size="lg" variant="ghost" @click="backToCredentials"
+              >Volver</SipacButton
+            >
+          </div>
 
           <div class="mt-6 space-y-4">
             <p class="text-center text-sm text-text-muted">

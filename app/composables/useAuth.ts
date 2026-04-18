@@ -9,6 +9,7 @@ export function useAuth() {
     isAuthenticated,
     isAdmin,
     login: store.login,
+    verify2FA: store.verify2FA,
     register: store.register,
     logout: store.logout,
     fetchUser: store.fetchUser,

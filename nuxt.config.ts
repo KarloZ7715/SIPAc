@@ -6,6 +6,7 @@ const isProduction = process.env.NODE_ENV === 'production'
 const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true'
 const hasSentryDsn = Boolean(process.env.SENTRY_DSN)
 const enableSentry = isProduction && hasSentryDsn
+const enableNuxtDevtools = process.env.NUXT_PUBLIC_ENABLE_DEVTOOLS === 'true'
 const modules = ['@nuxt/ui', '@pinia/nuxt', '@nuxt/eslint'] as string[]
 
 if (!isTest) {
@@ -27,7 +28,14 @@ export default defineNuxtConfig({
       allowedHosts: ['localhost', '127.0.0.1', '.trycloudflare.com'],
     },
     optimizeDeps: {
-      include: ['pdfjs-dist/legacy/build/pdf.mjs', 'motion-v', 'ai', '@ai-sdk/vue'],
+      include: [
+        'pdfjs-dist/legacy/build/pdf.mjs',
+        'motion-v',
+        'ai',
+        '@ai-sdk/vue',
+        'chart.js',
+        'vue-chartjs',
+      ],
     },
   },
 
@@ -66,8 +74,13 @@ export default defineNuxtConfig({
     nerSegmentationModelId:
       process.env.NER_SEGMENTATION_MODEL_ID?.trim() || 'gemini-2.5-flash-lite',
     rateLimitDocumentsPerHour: Number(process.env.RATE_LIMIT_DOCS_PER_HOUR ?? 15),
-    resendApiKey: process.env.RESEND_API_KEY ?? '',
-    resendFromEmail: process.env.RESEND_FROM_EMAIL ?? '',
+    brevoApiKey: process.env.BREVO_API_KEY ?? '',
+    brevoFromEmail: process.env.BREVO_FROM_EMAIL ?? '',
+    brevoFromName: process.env.BREVO_FROM_NAME ?? '',
+    googleOauthClientId: process.env.GOOGLE_OAUTH_CLIENT_ID ?? '',
+    googleOauthClientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '',
+    googleOauthRedirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI ?? '',
+    publicAppUrl: process.env.NUXT_PUBLIC_APP_URL ?? '',
     session: {
       maxAge: 28800, // 8 hours
     },
@@ -95,6 +108,7 @@ export default defineNuxtConfig({
     enabled: isProduction,
     headers: {
       crossOriginEmbedderPolicy: false,
+      xFrameOptions: 'SAMEORIGIN',
       contentSecurityPolicy: {
         'img-src': ["'self'", 'data:', 'https:'],
         // Vista previa PDF en iframe (blob: / misma app) en workspace.
@@ -117,7 +131,7 @@ export default defineNuxtConfig({
     },
   },
 
-  ...(isTest ? {} : { devtools: { enabled: true } }),
+  ...(isTest ? {} : { devtools: { enabled: enableNuxtDevtools } }),
 
   sentry: enableSentry
     ? {
@@ -134,6 +148,6 @@ export default defineNuxtConfig({
     : undefined,
 
   devtools: {
-    enabled: true,
+    enabled: enableNuxtDevtools,
   },
 })

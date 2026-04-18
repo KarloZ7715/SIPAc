@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { USER_ROLES } from '~~/app/types'
+import { DEFAULT_LANDING_ROUTES, USER_ROLES } from '~~/app/types'
 
 export const createUserSchema = z.object({
   fullName: z
@@ -26,4 +26,8 @@ export const updateUserSchema = z.object({
   role: z.enum(USER_ROLES).optional(),
   isActive: z.boolean().optional(),
   program: z.string().trim().optional(),
+})
+
+export const updatePreferencesSchema = z.object({
+  defaultLanding: z.enum(DEFAULT_LANDING_ROUTES),
 })

@@ -65,10 +65,15 @@ const envSchema = z.object({
   nerSegmentationMinSegmentChars: z.coerce.number().int().min(50).max(10_000).default(400),
   nerSegmentationModelId: z.string().trim().min(1).default('gemini-2.5-flash-lite'),
   rateLimitDocumentsPerHour: z.coerce.number().int().positive().default(15),
-  resendApiKey: z.string().optional().default(''),
-  resendFromEmail: z
-    .union([z.literal(''), z.email('RESEND_FROM_EMAIL debe ser un correo válido')])
+  brevoApiKey: z.string().optional().default(''),
+  brevoFromEmail: z
+    .union([z.literal(''), z.email('BREVO_FROM_EMAIL debe ser un correo válido')])
     .default(''),
+  brevoFromName: z.string().optional().default(''),
+  googleOauthClientId: z.string().optional().default(''),
+  googleOauthClientSecret: z.string().optional().default(''),
+  googleOauthRedirectUri: z.string().optional().default(''),
+  publicAppUrl: z.string().optional().default(''),
 })
 
 const coreEnvSchema = z
