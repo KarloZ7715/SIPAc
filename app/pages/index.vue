@@ -84,20 +84,8 @@ const { user, isAdmin } = useAuth()
 const usersStore = useUsersStore()
 const chatStore = useChatStore()
 const documentsStore = useDocumentsStore()
-
-const prefersReducedMotion = useState<boolean>('sipac-home-reduced-motion', () => false)
-
-if (import.meta.client) {
-  const media = window.matchMedia('(prefers-reduced-motion: reduce)')
-  prefersReducedMotion.value = media.matches
-
-  const syncReducedMotion = (event: MediaQueryListEvent) => {
-    prefersReducedMotion.value = event.matches
-  }
-
-  onMounted(() => media.addEventListener('change', syncReducedMotion))
-  onBeforeUnmount(() => media.removeEventListener('change', syncReducedMotion))
-}
+const { prefersReducedMotion, prefersMinimalMotion, densityPreference } = useUiPreferences()
+const { isPageTransitionActive } = usePageMotion()
 
 const { data: homeOverview, pending: homePending } = await useAsyncData(
   'home-overview',
@@ -690,8 +678,16 @@ const adminHighlights = computed(() => [
 const adminPreviewUsers = computed(() => usersStore.users.slice(0, 5))
 
 function enterMotion(delay = 0, distance = 18) {
+  if (prefersMinimalMotion.value || isPageTransitionActive.value) {
+    return {
+      initial: false,
+      animate: {},
+      transition: { duration: 0 },
+    }
+  }
+
   const transition = prefersReducedMotion.value
-    ? { duration: 0.01, delay: 0 }
+    ? { duration: 0.16, delay: 0 }
     : { duration: 0.42, delay, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] }
 
   return {
@@ -767,7 +763,13 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
 </script>
 
 <template>
-  <div class="space-y-6 sm:space-y-8 lg:space-y-9">
+  <div
+    :class="
+      densityPreference === 'compact'
+        ? 'space-y-5 sm:space-y-6 lg:space-y-7'
+        : 'space-y-6 sm:space-y-8 lg:space-y-9'
+    "
+  >
     <UAlert
       v-if="homeOverview?.partialFailures && !isAdmin"
       color="warning"

@@ -10,6 +10,7 @@ const ALL_STATUS_FILTER = 'all_status'
 
 const usersStore = useUsersStore()
 const toast = useToast()
+const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 
 const page = ref(1)
 const roleFilter = ref<string>(ALL_ROLES_FILTER)
@@ -93,13 +94,27 @@ const columns = [
 ]
 
 async function loadUsers() {
-  await usersStore.fetchUsers({
-    page: page.value,
-    role: roleFilter.value === ALL_ROLES_FILTER ? undefined : roleFilter.value,
-    isActive: statusFilter.value === ALL_STATUS_FILTER ? undefined : statusFilter.value,
-    search: search.value || undefined,
-  })
+  await usersStore.fetchUsers(
+    {
+      page: page.value,
+      role: roleFilter.value === ALL_ROLES_FILTER ? undefined : roleFilter.value,
+      isActive: statusFilter.value === ALL_STATUS_FILTER ? undefined : statusFilter.value,
+      search: search.value || undefined,
+    },
+    requestFetch,
+  )
 }
+
+await useAsyncData(
+  'admin-users-bootstrap',
+  async () => {
+    await loadUsers()
+    return true
+  },
+  {
+    default: () => true,
+  },
+)
 
 function openEdit(user: UserPublic) {
   editingUser.value = user
@@ -177,13 +192,11 @@ watch(search, () => {
     loadUsers()
   }, 400)
 })
-
-onMounted(() => loadUsers())
 </script>
 
 <template>
   <div class="space-y-8">
-    <section class="panel-surface hero-wash fade-up p-6 sm:p-8">
+    <section class="page-stage-hero panel-surface hero-wash p-6 sm:p-8">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-4">
           <div class="section-chip">Administración segura</div>
@@ -200,7 +213,7 @@ onMounted(() => loadUsers())
       </div>
     </section>
 
-    <section class="grid gap-4 lg:grid-cols-3">
+    <section class="page-stage-grid page-stage-grid--tight grid gap-4 lg:grid-cols-3">
       <SipacCard interactive>
         <template #header>
           <p class="text-xs font-semibold tracking-[0.16em] text-text-soft uppercase">Resultados</p>
@@ -233,7 +246,7 @@ onMounted(() => loadUsers())
     </section>
 
     <section class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
-      <SipacCard>
+      <SipacCard class="page-stage-primary">
         <template #header>
           <div class="flex flex-wrap items-start justify-between gap-4">
             <SipacSectionHeader
@@ -318,7 +331,7 @@ onMounted(() => loadUsers())
       </SipacCard>
 
       <div class="space-y-6">
-        <SipacCard>
+        <SipacCard class="page-stage-supporting">
           <template #header>
             <div class="flex items-center gap-3">
               <span

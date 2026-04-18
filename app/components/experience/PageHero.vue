@@ -17,7 +17,7 @@ withDefaults(
 
 <template>
   <section
-    class="page-hero panel-surface paper-texture hero-warm fade-up relative overflow-hidden px-6 py-8 sm:px-8 sm:py-9"
+    class="page-hero page-stage-hero panel-surface paper-texture hero-warm relative overflow-hidden px-6 py-8 sm:px-8 sm:py-9"
   >
     <div
       class="pointer-events-none absolute -right-20 -top-20 size-72 rounded-full bg-sipac-200/90 opacity-25 blur-3xl"

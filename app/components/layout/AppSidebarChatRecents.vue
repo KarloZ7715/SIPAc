@@ -81,20 +81,8 @@ function menuItemsFor(id: string): DropdownMenuItem[][] {
 
 const visibleConversations = computed(() => chatStore.conversations.slice(0, VISIBLE_COUNT))
 const hiddenCount = computed(() => Math.max(0, chatStore.conversations.length - VISIBLE_COUNT))
-
-onMounted(() => {
-  if (route.path.startsWith('/chat')) {
-    void chatStore.fetchConversations()
-  }
-})
-
-watch(
-  () => route.path,
-  (path) => {
-    if (path.startsWith('/chat')) {
-      void chatStore.fetchConversations()
-    }
-  },
+const shouldShowBootLoading = computed(
+  () => !chatStore.conversationsResolved && !chatStore.conversations.length,
 )
 </script>
 
@@ -107,7 +95,7 @@ watch(
     <div class="mb-2 flex items-center justify-between gap-2">
       <h2
         id="sidebar-chat-recents-heading"
-        class="text-[0.65rem] font-semibold tracking-[0.18em] text-text-soft uppercase"
+        class="text-[0.72rem] font-semibold tracking-[0.14em] text-text-soft uppercase"
       >
         Conversaciones
       </h2>
@@ -135,7 +123,21 @@ watch(
       Nueva conversación
     </SipacButton>
 
-    <ul v-if="chatStore.conversations.length" class="space-y-1" role="list">
+    <div v-if="shouldShowBootLoading" class="space-y-2" aria-busy="true">
+      <div
+        v-for="index in 4"
+        :key="`chat-recents-skeleton-${index}`"
+        class="h-14 rounded-xl bg-surface-muted/80"
+      />
+    </div>
+
+    <TransitionGroup
+      v-else-if="chatStore.conversations.length"
+      name="sidebar-recents"
+      tag="ul"
+      class="space-y-1"
+      role="list"
+    >
       <li v-for="c in visibleConversations" :key="c.id">
         <div
           class="group flex items-start gap-1 rounded-lg border transition-all duration-200"
@@ -150,10 +152,10 @@ watch(
             class="min-w-0 flex-1 px-2 py-1.5 text-left"
             @click="navigateToConversation(c.id)"
           >
-            <span class="line-clamp-2 text-[0.8rem] font-medium leading-snug text-text">
+            <span class="line-clamp-2 text-sm font-medium leading-snug text-text">
               {{ c.title }}
             </span>
-            <span class="mt-0.5 block text-[0.65rem] text-text-soft">
+            <span class="mt-0.5 block text-[0.75rem] text-text-soft">
               {{ formatRelativeShort(c.lastMessageAt) }}
             </span>
           </button>
@@ -171,16 +173,16 @@ watch(
           </UDropdownMenu>
         </div>
       </li>
-    </ul>
+    </TransitionGroup>
 
-    <p v-else-if="!chatStore.conversationsLoading" class="text-[0.75rem] text-text-muted">
+    <p v-else-if="!chatStore.conversationsLoading" class="text-sm text-text-muted">
       Sin conversaciones aún.
     </p>
 
     <div v-if="hiddenCount > 0" class="mt-2">
       <button
         type="button"
-        class="w-full rounded-lg py-1.5 text-center text-[0.75rem] font-medium text-sipac-700 transition-colors hover:bg-sipac-50"
+        class="w-full rounded-lg py-1.5 text-center text-sm font-medium text-sipac-700 transition-colors hover:bg-sipac-50"
         @click="showAllModal = true"
       >
         Ver todas ({{ chatStore.conversations.length }})
@@ -222,3 +224,42 @@ watch(
     </UModal>
   </section>
 </template>
+
+<style scoped>
+.sidebar-recents-enter-active,
+.sidebar-recents-leave-active {
+  transition:
+    opacity var(--motion-normal, 220ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform var(--motion-normal, 220ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.sidebar-recents-leave-active {
+  position: absolute;
+  width: 100%;
+}
+
+.sidebar-recents-enter-from,
+.sidebar-recents-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.sidebar-recents-move {
+  transition: transform var(--motion-normal, 220ms)
+    var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-recents-enter-active,
+  .sidebar-recents-leave-active,
+  .sidebar-recents-move {
+    transition-duration: 1ms;
+  }
+}
+
+:global(:root[data-motion='minimal']) .sidebar-recents-enter-active,
+:global(:root[data-motion='minimal']) .sidebar-recents-leave-active,
+:global(:root[data-motion='minimal']) .sidebar-recents-move {
+  transition: none;
+}
+</style>

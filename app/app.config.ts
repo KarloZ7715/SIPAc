@@ -235,7 +235,7 @@ export default defineAppConfig({
       slots: {
         base: 'relative inline-flex items-center rounded-xl border border-border/85 bg-white/95 text-text transition-[background-color,border-color,box-shadow,color] duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70',
         content:
-          'max-h-60 rounded-2xl border border-border/85 bg-surface/98 shadow-[0_4px_24px_rgba(0,0,0,0.06)] backdrop-blur-md overflow-hidden flex flex-col',
+          'max-h-60 w-(--reka-select-trigger-width) rounded-2xl border border-border/85 bg-surface/98 shadow-[0_4px_24px_rgba(0,0,0,0.06)] backdrop-blur-md overflow-hidden pointer-events-auto flex flex-col',
         viewport:
           'relative divide-y divide-border-muted/80 scroll-py-1 overflow-y-auto flex-1 text-text',
         group: 'p-1 isolate',
@@ -286,7 +286,7 @@ export default defineAppConfig({
         value: 'truncate text-text',
         arrow: 'text-text-soft',
         content:
-          'max-h-60 rounded-2xl border border-border/85 bg-surface/98 text-text shadow-[0_4px_24px_rgba(0,0,0,0.06)] backdrop-blur-md overflow-hidden flex flex-col ring-0',
+          'max-h-60 w-(--reka-combobox-trigger-width) rounded-2xl border border-border/85 bg-surface/98 text-text shadow-[0_4px_24px_rgba(0,0,0,0.06)] backdrop-blur-md overflow-hidden pointer-events-auto flex flex-col ring-0',
         viewport:
           'sipac-select-menu-viewport relative divide-y divide-border-muted/80 scroll-py-1 overflow-y-auto flex-1 text-text',
         group: 'p-1 isolate',

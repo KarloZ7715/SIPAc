@@ -15,6 +15,7 @@ const logs = ref<AuditLogPublic[]>([])
 const meta = ref<PaginationMeta | null>(null)
 const loading = ref(false)
 const page = ref(1)
+const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 
 const filters = reactive<{
   resource?: AuditResource
@@ -48,7 +49,7 @@ const actionOptions = [
 async function loadAuditLogs() {
   loading.value = true
   try {
-    const response = await $fetch<AuditLogsResponse>('/api/audit-logs', {
+    const response = await requestFetch<AuditLogsResponse>('/api/audit-logs', {
       query: {
         page: page.value,
         ...(filters.resource ? { resource: filters.resource } : {}),
@@ -65,6 +66,17 @@ async function loadAuditLogs() {
   }
 }
 
+await useAsyncData(
+  'admin-audit-logs-bootstrap',
+  async () => {
+    await loadAuditLogs()
+    return true
+  },
+  {
+    default: () => true,
+  },
+)
+
 function resetFilters() {
   filters.resource = undefined
   filters.action = undefined
@@ -77,15 +89,11 @@ function resetFilters() {
 watch(page, () => {
   void loadAuditLogs()
 })
-
-onMounted(() => {
-  void loadAuditLogs()
-})
 </script>
 
 <template>
   <div class="space-y-8">
-    <section class="panel-surface hero-wash fade-up p-6 sm:p-8">
+    <section class="page-stage-hero panel-surface hero-wash p-6 sm:p-8">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-4">
           <div class="section-chip">M7 · Auditoría</div>
@@ -113,7 +121,7 @@ onMounted(() => {
       </div>
     </section>
 
-    <SipacCard>
+    <SipacCard class="page-stage-primary">
       <template #header>
         <div class="grid gap-3 md:grid-cols-4">
           <USelect

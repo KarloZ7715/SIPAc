@@ -19,9 +19,12 @@ const props = defineProps<{
 }>()
 
 const route = useRoute()
+const { visibleRoutePath: _visibleRoutePath } = usePageMotion()
 const { user, isAdmin, logout } = useAuth()
 const mobileSidebarOpen = useState<boolean>('sipac-mobile-sidebar-open')
-const desktopSidebarCollapsed = useState<boolean>('sipac-desktop-sidebar-collapsed')
+const emit = defineEmits<{
+  'toggle-desktop-collapse': []
+}>()
 
 const initials = computed(() => {
   if (!user.value?.fullName) return 'SI'
@@ -148,7 +151,7 @@ function closeMobileSidebar() {
 
 function toggleDesktopSidebar() {
   if (!props.mobile) {
-    desktopSidebarCollapsed.value = !desktopSidebarCollapsed.value
+    emit('toggle-desktop-collapse')
   }
 }
 </script>
@@ -218,10 +221,9 @@ function toggleDesktopSidebar() {
         </span>
       </NuxtLink>
 
-      <SipacButton
+      <button
         v-if="!props.mobile"
-        color="neutral"
-        variant="ghost"
+        type="button"
         class="sidebar-toggle hidden shrink-0 lg:inline-flex"
         :aria-label="props.collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'"
         @click="toggleDesktopSidebar"
@@ -230,18 +232,17 @@ function toggleDesktopSidebar() {
           :name="props.collapsed ? 'i-lucide-panel-left-open' : 'i-lucide-panel-left-close'"
           class="size-[1.05rem]"
         />
-      </SipacButton>
+      </button>
 
-      <SipacButton
+      <button
         v-else
-        color="neutral"
-        variant="ghost"
+        type="button"
         class="sidebar-toggle rounded-full p-2"
         aria-label="Cerrar navegación"
         @click="closeMobileSidebar"
       >
         <UIcon name="i-lucide-x" class="size-4.5" />
-      </SipacButton>
+      </button>
     </div>
 
     <div class="sidebar-divider" />
@@ -278,11 +279,13 @@ function toggleDesktopSidebar() {
           </nav>
         </section>
 
-        <LayoutAppSidebarChatRecents
-          v-if="route.path.startsWith('/chat')"
-          :collapsed="props.collapsed"
-          :mobile="props.mobile"
-        />
+        <Transition name="sidebar-chat-panel">
+          <LayoutAppSidebarChatRecents
+            v-if="route.path.startsWith('/chat')"
+            :collapsed="props.collapsed"
+            :mobile="props.mobile"
+          />
+        </Transition>
       </div>
     </div>
 
@@ -325,3 +328,30 @@ function toggleDesktopSidebar() {
     </div>
   </aside>
 </template>
+
+<style scoped>
+.sidebar-chat-panel-enter-active,
+.sidebar-chat-panel-leave-active {
+  transition:
+    opacity var(--motion-normal, 220ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform var(--motion-normal, 220ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.sidebar-chat-panel-enter-from,
+.sidebar-chat-panel-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-chat-panel-enter-active,
+  .sidebar-chat-panel-leave-active {
+    transition-duration: 1ms;
+  }
+}
+
+:global(:root[data-motion='minimal']) .sidebar-chat-panel-enter-active,
+:global(:root[data-motion='minimal']) .sidebar-chat-panel-leave-active {
+  transition: none;
+}
+</style>

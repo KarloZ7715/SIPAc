@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 
-const route = useRoute()
+const { layoutRoutePath } = usePageMotion()
 const { user, isAdmin, logout } = useAuth()
 const notificationsStore = useNotificationsStore()
 const mobileSidebarOpen = useState<boolean>('sipac-mobile-sidebar-open')
-const isHomeSpecial = computed(() => route.path === '/' && !isAdmin.value)
-const isChatSpecial = computed(() => route.path.startsWith('/chat'))
-const isWorkspaceDocumentsSpecial = computed(() => route.path === '/workspace-documents')
-const isDashboardSpecial = computed(() => route.path === '/dashboard')
+const isHomeSpecial = computed(() => layoutRoutePath.value === '/' && !isAdmin.value)
+const isChatSpecial = computed(() => layoutRoutePath.value.startsWith('/chat'))
+const isWorkspaceDocumentsSpecial = computed(() => layoutRoutePath.value === '/workspace-documents')
+const isDashboardSpecial = computed(() => layoutRoutePath.value === '/dashboard')
+const isRepositorySpecial = computed(() => layoutRoutePath.value === '/repository')
 
 const showNotifications = ref(false)
 let stopNotificationsFocusRefresh: (() => void) | undefined
@@ -24,7 +25,7 @@ const initials = computed(() => {
 })
 
 const routeMeta = computed(() => {
-  if (route.path === '/profile') {
+  if (layoutRoutePath.value === '/profile') {
     return {
       eyebrow: 'Cuenta personal',
       title: 'Mi perfil',
@@ -32,7 +33,7 @@ const routeMeta = computed(() => {
     }
   }
 
-  if (route.path === '/admin/users') {
+  if (layoutRoutePath.value === '/admin/users') {
     return {
       eyebrow: 'Administración',
       title: 'Gestión de usuarios',
@@ -40,7 +41,7 @@ const routeMeta = computed(() => {
     }
   }
 
-  if (route.path === '/dashboard') {
+  if (layoutRoutePath.value === '/dashboard') {
     return {
       eyebrow: 'Analítica',
       title: 'Dashboard académico',
@@ -48,7 +49,7 @@ const routeMeta = computed(() => {
     }
   }
 
-  if (route.path === '/repository') {
+  if (layoutRoutePath.value === '/repository') {
     return {
       eyebrow: 'Base académica',
       title: 'Repositorio académico',
@@ -57,7 +58,7 @@ const routeMeta = computed(() => {
     }
   }
 
-  if (route.path === '/chat') {
+  if (layoutRoutePath.value === '/chat') {
     return {
       eyebrow: 'Consulta asistida',
       title: 'Chat con respaldo documental',
@@ -66,7 +67,7 @@ const routeMeta = computed(() => {
     }
   }
 
-  if (route.path === '/admin/audit-logs') {
+  if (layoutRoutePath.value === '/admin/audit-logs') {
     return {
       eyebrow: 'Auditoría',
       title: 'Registro de auditoría',
@@ -74,7 +75,7 @@ const routeMeta = computed(() => {
     }
   }
 
-  if (route.path === '/') {
+  if (layoutRoutePath.value === '/') {
     return {
       eyebrow: isAdmin.value ? 'Centro administrativo' : 'Centro de trabajo',
       title: isAdmin.value ? 'Panel institucional' : 'Tu jornada en SIPAc',
@@ -172,7 +173,11 @@ onBeforeUnmount(() => {
   <header
     class="sticky top-0 z-30 border-b backdrop-blur-md transition-[border-color,background-color] duration-300"
     :class="
-      isHomeSpecial || isChatSpecial || isWorkspaceDocumentsSpecial || isDashboardSpecial
+      isHomeSpecial ||
+      isChatSpecial ||
+      isWorkspaceDocumentsSpecial ||
+      isDashboardSpecial ||
+      isRepositorySpecial
         ? 'border-border/50 bg-surface/75 supports-[backdrop-filter]:bg-surface/65'
         : 'border-border/60 bg-surface/88'
     "
@@ -180,7 +185,11 @@ onBeforeUnmount(() => {
     <div
       class="mx-auto flex w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8"
       :class="
-        isHomeSpecial || isChatSpecial || isWorkspaceDocumentsSpecial || isDashboardSpecial
+        isHomeSpecial ||
+        isChatSpecial ||
+        isWorkspaceDocumentsSpecial ||
+        isDashboardSpecial ||
+        isRepositorySpecial
           ? 'max-w-[96rem] py-3.5 xl:px-10'
           : 'max-w-[75rem] py-4'
       "
@@ -198,7 +207,7 @@ onBeforeUnmount(() => {
 
         <div v-if="isHomeSpecial" class="min-w-0">
           <div class="flex flex-wrap items-center gap-3">
-            <p class="text-[0.68rem] font-semibold tracking-[0.22em] text-text-soft uppercase">
+            <p class="text-[0.75rem] font-semibold tracking-[0.16em] text-text-soft uppercase">
               Workspace docente
             </p>
             <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
@@ -213,7 +222,7 @@ onBeforeUnmount(() => {
 
         <div v-else-if="isChatSpecial" class="min-w-0">
           <div class="flex flex-wrap items-center gap-3">
-            <p class="text-[0.68rem] font-semibold tracking-[0.22em] text-text-soft uppercase">
+            <p class="text-[0.75rem] font-semibold tracking-[0.16em] text-text-soft uppercase">
               {{ isAdmin ? 'Centro administrativo' : 'Workspace docente' }}
             </p>
             <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
@@ -234,7 +243,7 @@ onBeforeUnmount(() => {
 
         <div v-else-if="isWorkspaceDocumentsSpecial" class="min-w-0">
           <div class="flex flex-wrap items-center gap-3">
-            <p class="text-[0.68rem] font-semibold tracking-[0.22em] text-text-soft uppercase">
+            <p class="text-[0.75rem] font-semibold tracking-[0.16em] text-text-soft uppercase">
               {{ isAdmin ? 'Centro administrativo' : 'Workspace docente' }}
             </p>
             <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
@@ -255,7 +264,7 @@ onBeforeUnmount(() => {
 
         <div v-else-if="isDashboardSpecial" class="min-w-0">
           <div class="flex flex-wrap items-center gap-3">
-            <p class="text-[0.68rem] font-semibold tracking-[0.22em] text-text-soft uppercase">
+            <p class="text-[0.75rem] font-semibold tracking-[0.16em] text-text-soft uppercase">
               {{ isAdmin ? 'Centro administrativo' : 'Workspace docente' }}
             </p>
             <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
@@ -273,8 +282,28 @@ onBeforeUnmount(() => {
           </p>
         </div>
 
+        <div v-else-if="isRepositorySpecial" class="min-w-0">
+          <div class="flex flex-wrap items-center gap-3">
+            <p class="text-[0.75rem] font-semibold tracking-[0.16em] text-text-soft uppercase">
+              {{ isAdmin ? 'Centro administrativo' : 'Workspace docente' }}
+            </p>
+            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
+            <SipacBadge color="primary" variant="subtle" size="sm" class="gap-1">
+              <UIcon name="i-lucide-library" class="size-3" />
+              Catálogo
+            </SipacBadge>
+            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
+            <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
+              {{ todayLabel }}
+            </SipacBadge>
+          </div>
+          <p class="mt-2 text-sm leading-[1.6] text-text-muted sm:text-base">
+            {{ routeMeta.description }}
+          </p>
+        </div>
+
         <div v-else class="min-w-0">
-          <p class="text-[0.68rem] font-semibold tracking-[0.22em] text-text-soft uppercase">
+          <p class="text-[0.75rem] font-semibold tracking-[0.16em] text-text-soft uppercase">
             {{ routeMeta.eyebrow }}
           </p>
           <div class="flex flex-wrap items-center gap-3">
@@ -314,7 +343,7 @@ onBeforeUnmount(() => {
           </SipacButton>
           <span
             v-if="unreadCount"
-            class="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-sipac-600 px-1.5 py-0.5 text-[0.65rem] font-semibold text-[#faf9f5]"
+            class="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-sipac-600 px-1.5 py-0.5 text-[0.7rem] font-semibold text-[#faf9f5]"
           >
             {{ unreadCount > 9 ? '9+' : unreadCount }}
           </span>

@@ -17,12 +17,14 @@ interface UsersFilters {
   search?: string
 }
 
+type StoreFetch = <T>(request: string, options?: Parameters<typeof $fetch>[1]) => Promise<T>
+
 export const useUsersStore = defineStore('users', () => {
   const users = ref<UserPublic[]>([])
   const meta = ref<PaginationMeta | null>(null)
   const loading = ref(false)
 
-  async function fetchUsers(filters: UsersFilters = {}) {
+  async function fetchUsers(filters: UsersFilters = {}, fetcher: StoreFetch = $fetch) {
     loading.value = true
     try {
       const query = new URLSearchParams()
@@ -32,7 +34,7 @@ export const useUsersStore = defineStore('users', () => {
       if (filters.isActive) query.set('isActive', filters.isActive)
       if (filters.search) query.set('search', filters.search)
 
-      const data = await $fetch<UsersListResponse>(`/api/users?${query.toString()}` as string)
+      const data = await fetcher<UsersListResponse>(`/api/users?${query.toString()}` as string)
       users.value = data.data
       meta.value = data.meta ?? null
     } finally {
