@@ -170,135 +170,148 @@ onMounted(() => {
       aria-label="Mensajes de la conversación"
       @scroll.passive="updateNearBottom"
     >
-      <div
-        v-if="initializing"
-        class="mx-auto grid max-w-3xl gap-3"
-        aria-busy="true"
-        aria-label="Cargando conversación"
-      >
-        <div class="skeleton-shimmer h-16 rounded-xl" />
-        <div class="skeleton-shimmer ml-auto h-12 w-4/5 max-w-md rounded-xl" />
-        <div class="skeleton-shimmer h-24 rounded-xl" />
-      </div>
+      <Transition name="chat-msg" mode="out-in">
+        <div
+          v-if="initializing"
+          key="initializing"
+          class="mx-auto grid max-w-3xl gap-3"
+          aria-busy="true"
+          aria-label="Cargando conversación"
+        >
+          <div class="skeleton-shimmer h-16 rounded-xl" />
+          <div class="skeleton-shimmer ml-auto h-12 w-4/5 max-w-md rounded-xl" />
+          <div class="skeleton-shimmer h-24 rounded-xl" />
+        </div>
 
-      <TransitionGroup v-else name="chat-msg" tag="div" class="mx-auto max-w-3xl space-y-8">
-        <article v-for="(message, msgIndex) in messages" :key="message.id" class="chat-msg-item">
-          <!-- Usuario: pastilla compacta a la derecha -->
-          <div v-if="message.role === 'user'" class="flex justify-end">
+        <TransitionGroup
+          v-else
+          name="chat-msg"
+          tag="div"
+          class="mx-auto max-w-3xl space-y-8"
+          appear
+        >
+          <article v-for="(message, msgIndex) in messages" :key="message.id" class="chat-msg-item">
+            <!-- Usuario: pastilla compacta a la derecha -->
+            <div v-if="message.role === 'user'" class="flex justify-end">
+              <div
+                class="user-pill max-w-[min(100%,28rem)] rounded-2xl rounded-br-md border border-sipac-200/50 bg-gradient-to-br from-sipac-50/95 to-earth-50/80 px-4 py-2.5 shadow-sm"
+              >
+                <template v-for="(part, index) in message.parts" :key="`${message.id}-${index}`">
+                  <ChatMarkdownRenderer
+                    v-if="part.type === 'text' && part.text.trim().length"
+                    tone="user"
+                    :content="part.text"
+                  />
+                </template>
+              </div>
+            </div>
+
+            <!-- Asistente: lectura tipo documento, sin caja pesada -->
             <div
-              class="user-pill max-w-[min(100%,28rem)] rounded-2xl rounded-br-md border border-sipac-200/50 bg-gradient-to-br from-sipac-50/95 to-earth-50/80 px-4 py-2.5 shadow-sm"
+              v-else
+              class="assistant-turn"
+              :class="msgIndex > 0 ? 'mt-2 border-t border-border/35 pt-6' : 'pt-0.5'"
             >
-              <template v-for="(part, index) in message.parts" :key="`${message.id}-${index}`">
-                <ChatMarkdownRenderer
-                  v-if="part.type === 'text' && part.text.trim().length"
-                  tone="user"
-                  :content="part.text"
-                />
-              </template>
-            </div>
-          </div>
-
-          <!-- Asistente: lectura tipo documento, sin caja pesada -->
-          <div
-            v-else
-            class="assistant-turn"
-            :class="msgIndex > 0 ? 'mt-2 border-t border-border/35 pt-6' : 'pt-0.5'"
-          >
-            <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span
-                class="inline-flex items-center gap-1.5 text-xs font-semibold text-text sm:text-sm"
-              >
-                <UIcon
-                  name="i-lucide-sparkles"
-                  class="size-3.5 text-sipac-600"
-                  aria-hidden="true"
-                />
-                Asistente SIPAc
-              </span>
-              <span
-                v-if="formatChatTimestamp(message.metadata?.createdAt)"
-                class="text-[0.65rem] text-text-soft sm:text-xs"
-              >
-                {{ formatChatTimestamp(message.metadata?.createdAt) }}
-              </span>
-              <SipacBadge
-                v-if="isStoppedAssistantMessage(message)"
-                color="warning"
-                variant="subtle"
-                size="sm"
-              >
-                Respuesta detenida
-              </SipacBadge>
-              <span
-                v-if="isStoppedAssistantMessage(message) && msgIndex === messages.length - 1"
-                class="sr-only"
-                aria-live="polite"
-              >
-                La respuesta fue detenida. Se conservó el texto generado hasta este punto.
-              </span>
-              <SipacButton
-                v-if="chatMessagePlainText(message)"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                icon="i-lucide-copy"
-                class="ms-auto opacity-80 hover:opacity-100"
-                aria-label="Copiar respuesta"
-                @click="copyAssistantMessage(message)"
-              />
-            </div>
-
-            <div class="space-y-4">
-              <template v-for="(part, index) in message.parts" :key="`${message.id}-${index}`">
-                <div
-                  v-if="part.type === 'text' && part.text.trim().length"
-                  :class="[
-                    isStreaming && msgIndex === messages.length - 1 && 'chat-text-block--streaming',
-                  ]"
-                >
-                  <ChatMarkdownRenderer tone="assistant" :content="part.text" />
-                </div>
-                <ChatRepositoryToolBlock
-                  v-else-if="part.type === 'tool-searchRepositoryProducts'"
-                  :message="message"
-                  :part-index="index"
-                  @open-document="emit('openDocument', $event)"
-                />
-              </template>
-
-              <div v-if="msgIndex === messages.length - 1" class="streaming-tail">
-                <span class="sr-only">
-                  {{
-                    isAssistantBusy ? (activityLabel ?? 'Generando respuesta') : 'Respuesta lista'
-                  }}
+              <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span class="inline-flex items-center gap-1.5 text-sm font-semibold text-text">
+                  <UIcon
+                    name="i-lucide-sparkles"
+                    class="size-3.5 text-sipac-600"
+                    aria-hidden="true"
+                  />
+                  Asistente SIPAc
                 </span>
+                <span
+                  v-if="formatChatTimestamp(message.metadata?.createdAt)"
+                  class="text-[0.75rem] text-text-soft sm:text-sm"
+                >
+                  {{ formatChatTimestamp(message.metadata?.createdAt) }}
+                </span>
+                <SipacBadge
+                  v-if="isStoppedAssistantMessage(message)"
+                  color="warning"
+                  variant="subtle"
+                  size="sm"
+                >
+                  Respuesta detenida
+                </SipacBadge>
+                <span
+                  v-if="isStoppedAssistantMessage(message) && msgIndex === messages.length - 1"
+                  class="sr-only"
+                  aria-live="polite"
+                >
+                  La respuesta fue detenida. Se conservó el texto generado hasta este punto.
+                </span>
+                <SipacButton
+                  v-if="chatMessagePlainText(message)"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  icon="i-lucide-copy"
+                  class="ms-auto opacity-80 hover:opacity-100"
+                  aria-label="Copiar respuesta"
+                  @click="copyAssistantMessage(message)"
+                />
+              </div>
+
+              <div class="space-y-4">
+                <template v-for="(part, index) in message.parts" :key="`${message.id}-${index}`">
+                  <div
+                    v-if="part.type === 'text' && part.text.trim().length"
+                    :class="[
+                      isStreaming &&
+                        msgIndex === messages.length - 1 &&
+                        'chat-text-block--streaming',
+                    ]"
+                  >
+                    <ChatMarkdownRenderer tone="assistant" :content="part.text" />
+                  </div>
+                  <ChatRepositoryToolBlock
+                    v-else-if="part.type === 'tool-searchRepositoryProducts'"
+                    :message="message"
+                    :part-index="index"
+                    @open-document="emit('openDocument', $event)"
+                  />
+                </template>
+
+                <div v-if="msgIndex === messages.length - 1" class="streaming-tail">
+                  <span class="sr-only">
+                    {{
+                      isAssistantBusy ? (activityLabel ?? 'Generando respuesta') : 'Respuesta lista'
+                    }}
+                  </span>
+                  <div class="streaming-tail__logo">
+                    <SipacLogoMarkEasterEgg
+                      :base-phase="isAssistantBusy ? streamLogoPhase : 'preparing'"
+                      :disabled="disableEasterEgg"
+                      aria-label="Animar logo de conversación"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article
+            v-if="showStreamingPlaceholder"
+            key="streaming-placeholder"
+            class="chat-msg-item"
+          >
+            <div class="assistant-turn pt-0.5">
+              <div class="streaming-tail streaming-tail--inline">
+                <span class="sr-only">{{ activityLabel ?? 'Preparando la respuesta…' }}</span>
                 <div class="streaming-tail__logo">
                   <SipacLogoMarkEasterEgg
-                    :base-phase="isAssistantBusy ? streamLogoPhase : 'preparing'"
+                    :base-phase="streamLogoPhase"
                     :disabled="disableEasterEgg"
-                    aria-label="Animar logo de conversación"
+                    aria-label="Animar logo de estado"
                   />
                 </div>
               </div>
             </div>
-          </div>
-        </article>
-
-        <article v-if="showStreamingPlaceholder" key="streaming-placeholder" class="chat-msg-item">
-          <div class="assistant-turn pt-0.5">
-            <div class="streaming-tail streaming-tail--inline">
-              <span class="sr-only">{{ activityLabel ?? 'Preparando la respuesta…' }}</span>
-              <div class="streaming-tail__logo">
-                <SipacLogoMarkEasterEgg
-                  :base-phase="streamLogoPhase"
-                  :disabled="disableEasterEgg"
-                  aria-label="Animar logo de estado"
-                />
-              </div>
-            </div>
-          </div>
-        </article>
-      </TransitionGroup>
+          </article>
+        </TransitionGroup>
+      </Transition>
     </div>
 
     <Transition name="chat-fab">

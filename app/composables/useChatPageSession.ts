@@ -20,15 +20,30 @@ export function useChatPageSession() {
   const route = useRoute()
   const router = useRouter()
   const chatStore = useChatStore()
+  const isChatRouteActive = computed(() => route.path.startsWith('/chat'))
 
   const chatSession = shallowRef<Chat<ChatUiMessage> | null>(null)
   const draftInput = ref('')
   const selectedDocument = ref<ChatSearchResult | null>(null)
   const previewOpen = ref(false)
-  const selectedModelKey = ref<string>('default')
-  const initializing = ref(false)
+  function readSelectedModelKeyFromStorage() {
+    if (!import.meta.client) {
+      return null
+    }
+
+    try {
+      const storedValue = localStorage.getItem(CHAT_MODEL_PERSISTENCE_KEY)
+      return storedValue && storedValue.trim().length > 0 ? storedValue : null
+    } catch {
+      return null
+    }
+  }
+
+  const selectedModelKey = ref<string>(readSelectedModelKeyFromStorage() ?? 'default')
+  const initializing = ref(true)
   let latestInitializationToken = 0
   let historyRecoveryRedirected = false
+  let disposed = false
 
   const conversationId = computed(() => {
     const id = route.query.id
@@ -61,26 +76,6 @@ export function useChatPageSession() {
     } catch {
       /* persistencia opcional: no bloquear el chat si storage no está disponible */
     }
-  }
-
-  function restoreSelectedModelKey() {
-    if (!import.meta.client) {
-      return
-    }
-
-    let storedValue: string | null = null
-
-    try {
-      storedValue = localStorage.getItem(CHAT_MODEL_PERSISTENCE_KEY)
-    } catch {
-      return
-    }
-
-    if (!storedValue) {
-      return
-    }
-
-    selectedModelKey.value = storedValue
   }
 
   function isManualModelStillAvailable(modelKey: string) {
@@ -223,64 +218,101 @@ export function useChatPageSession() {
     return createChatConversationId()
   }
 
+  function createSessionConversationId() {
+    return conversationId.value ?? chatSession.value?.id ?? createFreshConversationId()
+  }
+
+  async function ensureConversationIdInRoute(conversationIdValue: string) {
+    if (!isChatRouteActive.value) {
+      return
+    }
+
+    if (conversationId.value === conversationIdValue) {
+      return
+    }
+
+    await router.replace({
+      path: '/chat',
+      query: { id: conversationIdValue },
+    })
+  }
+
+  function hasConversationSummary(conversationIdValue: string) {
+    return chatStore.conversations.some((conversation) => conversation.id === conversationIdValue)
+  }
+
   async function ensureConversationId() {
     if (conversationId.value) {
       return conversationId.value
     }
 
-    const nextId = createFreshConversationId()
-    await router.replace({
-      path: '/chat',
-      query: { id: nextId },
-    })
-    return nextId
+    return createSessionConversationId()
   }
 
   async function initializeChatSession() {
+    if (disposed || !isChatRouteActive.value) {
+      return
+    }
+
     const initializationToken = ++latestInitializationToken
     initializing.value = true
 
     try {
       const nextConversationId = await ensureConversationId()
-      if (initializationToken !== latestInitializationToken) {
+      if (
+        disposed ||
+        !isChatRouteActive.value ||
+        initializationToken !== latestInitializationToken
+      ) {
         return
       }
 
       let initialMessages: ChatUiMessage[] = []
       let loadWarningFeedback: ReturnType<typeof getChatHistoryWarningFeedback> | null = null
 
-      try {
-        const conversation = await chatStore.fetchConversation(nextConversationId)
-        initialMessages = conversation?.messages ?? []
-      } catch (error) {
+      if (!conversationId.value || !hasConversationSummary(nextConversationId)) {
         chatStore.clearActiveConversation()
         initialMessages = []
+      } else if (chatStore.activeConversation?.id === nextConversationId) {
+        initialMessages = chatStore.activeConversation.messages ?? []
+      } else {
+        try {
+          const conversation = await chatStore.fetchConversation(nextConversationId)
+          initialMessages = conversation?.messages ?? []
+        } catch (error) {
+          chatStore.clearActiveConversation()
+          initialMessages = []
 
-        if (getErrorStatusCode(error) !== 404) {
-          const feedback = getChatHistoryWarningFeedback(error)
+          if (getErrorStatusCode(error) !== 404) {
+            const feedback = getChatHistoryWarningFeedback(error)
 
-          if (!historyRecoveryRedirected) {
-            historyRecoveryRedirected = true
-            chatSession.value = null
-            toast.add({
-              title: feedback.title,
-              description: feedback.description,
-              color: 'warning',
-              icon: 'i-lucide-triangle-alert',
-            })
+            if (!historyRecoveryRedirected) {
+              historyRecoveryRedirected = true
+              chatSession.value = null
+              toast.add({
+                title: feedback.title,
+                description: feedback.description,
+                color: 'warning',
+                icon: 'i-lucide-triangle-alert',
+              })
 
-            await router.replace({
-              path: '/chat',
-              query: { id: createFreshConversationId() },
-            })
-            return
+              await router.replace({
+                path: '/chat',
+                query: { id: createFreshConversationId() },
+              })
+              return
+            }
+
+            loadWarningFeedback = feedback
           }
-
-          loadWarningFeedback = feedback
         }
       }
 
-      if (initializationToken !== latestInitializationToken) {
+      if (
+        disposed ||
+        !isChatRouteActive.value ||
+        initializationToken !== latestInitializationToken
+      ) {
         return
       }
 
@@ -333,7 +365,7 @@ export function useChatPageSession() {
         })
       }
     } finally {
-      if (initializationToken === latestInitializationToken) {
+      if (initializationToken === latestInitializationToken && !disposed) {
         initializing.value = false
       }
     }
@@ -350,6 +382,8 @@ export function useChatPageSession() {
 
     const nextInput = draftInput.value.trim()
     draftInput.value = ''
+
+    await ensureConversationIdInRoute(chatSession.value.id)
 
     await chatSession.value.sendMessage({
       text: nextInput,
@@ -401,8 +435,10 @@ export function useChatPageSession() {
   }
 
   onMounted(async () => {
-    restoreSelectedModelKey()
-    await chatStore.fetchConversations()
+    if (!isChatRouteActive.value) {
+      return
+    }
+
     await initializeChatSession()
   })
 
@@ -424,13 +460,35 @@ export function useChatPageSession() {
   watch(
     () => conversationId.value,
     async (next, previous) => {
+      if (disposed || !isChatRouteActive.value) {
+        return
+      }
+
       if (next === previous && chatSession.value) {
+        return
+      }
+
+      if (next && chatSession.value?.id === next) {
         return
       }
 
       await initializeChatSession()
     },
   )
+
+  watch(
+    () => route.path,
+    (path) => {
+      if (!path.startsWith('/chat')) {
+        latestInitializationToken += 1
+      }
+    },
+  )
+
+  onBeforeUnmount(() => {
+    disposed = true
+    latestInitializationToken += 1
+  })
 
   return {
     chatSession,

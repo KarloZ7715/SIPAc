@@ -104,12 +104,6 @@ function onKeydown(e: KeyboardEvent) {
     emit('submit')
   }
 }
-
-onMounted(() => {
-  void chatStore.fetchProviders().catch(() => {
-    /* sin proveedores opcionales configurados */
-  })
-})
 </script>
 
 <template>
@@ -136,13 +130,13 @@ onMounted(() => {
     />
 
     <form
-      class="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/55 bg-white/95 shadow-[0_12px_40px_-12px_rgb(17_46_29/0.12)] backdrop-blur-sm"
+      class="relative flex min-h-0 flex-col overflow-hidden bg-white/95 shadow-[0_12px_40px_-12px_rgb(17_46_29/0.12)] backdrop-blur-sm transition-all duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
       :class="[
         layout === 'centered'
-          ? 'rounded-[1.35rem] ring-1 ring-sipac-200/25'
+          ? 'rounded-[1.35rem] ring-1 ring-sipac-200/25 border border-border/55'
           : layout === 'docked'
-            ? 'rounded-2xl border-border/50 shadow-[0_8px_32px_-20px_rgb(17_46_29/0.12)] sm:rounded-[1.25rem]'
-            : 'rounded-2xl',
+            ? 'rounded-2xl border border-border/50 shadow-[0_8px_32px_-20px_rgb(17_46_29/0.12)] sm:rounded-[1.25rem]'
+            : 'rounded-2xl border border-border/55',
       ]"
       @submit.prevent="emit('submit')"
     >

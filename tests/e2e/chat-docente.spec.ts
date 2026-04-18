@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import mongoose from 'mongoose'
-import { SignJWT } from 'jose'
 import User from '../../server/models/User'
 import UploadedFile from '../../server/models/UploadedFile'
 import AcademicProduct from '../../server/models/AcademicProduct'
@@ -15,6 +14,8 @@ const docenteEmail = `query-${testRunId}@correo.unicordoba.edu.co`
 const docentePassword = 'Docente12345!'
 const docenteFullName = 'Docente Consultante E2E Chat'
 const seededTitle = `Memorias E2E ${testRunId}`
+const seededConversationId = `seeded-${testRunId}`
+const seededConversationTitle = `Historial E2E ${testRunId}`
 const seededDbCiOptIn = /^(1|true)$/i.test(process.env.PLAYWRIGHT_E2E_SEEDED_DB ?? '')
 const shouldRunSeededChatE2E = process.env.CI !== 'true' || seededDbCiOptIn
 const appBaseUrl = 'http://127.0.0.1:4173'
@@ -50,35 +51,19 @@ async function connectMongo() {
   }
 }
 
-function getJwtSecret() {
-  const secret = readEnvValue('JWT_SECRET')
+async function loginWithSessionCookie(page: Page, email: string, password: string) {
+  const response = await page.request.post(`${appBaseUrl}/api/auth/login`, {
+    data: { email, password },
+  })
 
-  if (!secret) {
-    throw new Error('JWT_SECRET no está definido')
+  if (!response.ok()) {
+    throw new Error(`No se pudo iniciar sesión (${response.status()})`)
   }
 
-  return new TextEncoder().encode(secret)
-}
-
-async function createSessionToken(userId: string, email: string, role: 'docente') {
-  return new SignJWT({ role, email })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setSubject(userId)
-    .setIssuedAt()
-    .setExpirationTime('8h')
-    .sign(getJwtSecret())
-}
-
-async function loginWithSessionCookie(page: Page, email: string, userId: string) {
-  const token = await createSessionToken(userId, email, 'docente')
-
-  await page.context().addCookies([
-    {
-      name: 'sipac_session',
-      value: token,
-      url: appBaseUrl,
-    },
-  ])
+  const cookies = await page.context().cookies(appBaseUrl)
+  if (!cookies.some((cookie) => cookie.name === 'sipac_session')) {
+    throw new Error('No se recibió cookie sipac_session tras login')
+  }
 }
 
 async function openChatAsDocente(page: Page) {
@@ -86,7 +71,7 @@ async function openChatAsDocente(page: Page) {
     throw new Error('docenteUserId no está inicializado')
   }
 
-  await loginWithSessionCookie(page, docenteEmail, docenteUserId)
+  await loginWithSessionCookie(page, docenteEmail, docentePassword)
 }
 
 test.describe('Chat IA docente', () => {
@@ -108,6 +93,7 @@ test.describe('Chat IA docente', () => {
       passwordHash: ownerPassword,
       program: 'Ingeniería de Sistemas',
       role: 'docente',
+      emailVerifiedAt: new Date(),
     })
 
     const docenteUser = await User.create({
@@ -116,6 +102,7 @@ test.describe('Chat IA docente', () => {
       passwordHash: docentePassword,
       program: 'Ingeniería de Sistemas',
       role: 'docente',
+      emailVerifiedAt: new Date(),
     })
     docenteUserId = docenteUser._id.toString()
 
@@ -173,6 +160,28 @@ test.describe('Chat IA docente', () => {
       areaOfKnowledge: 'Educación y Tecnologías Emergentes',
       presentationType: 'oral',
       eventDate: new Date('2025-09-18T00:00:00.000Z'),
+    })
+
+    await ChatConversation.create({
+      chatId: seededConversationId,
+      userId: docenteUser._id,
+      title: seededConversationTitle,
+      messages: [
+        {
+          id: `msg-user-${testRunId}`,
+          role: 'user',
+          parts: [{ type: 'text', text: '¿Qué productos tengo confirmados?' }],
+          metadata: { createdAt: Date.now() - 60_000 },
+        },
+        {
+          id: `msg-assistant-${testRunId}`,
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Tienes productos confirmados en el repositorio.' }],
+          metadata: { createdAt: Date.now() - 45_000 },
+        },
+      ],
+      isActive: true,
+      lastAccessedAt: new Date(),
     })
   })
 
@@ -275,9 +284,7 @@ test.describe('Chat IA docente', () => {
       await page.keyboard.press('Escape').catch(() => {})
     }
 
-    const chatTextarea = page.getByRole('textbox', {
-      name: 'Pregunta por autores, tema, institución, fechas o tipo de obra académica…',
-    })
+    const chatTextarea = page.getByRole('textbox', { name: 'Mensaje para el asistente' })
     await chatTextarea.fill('¿Qué tesis confirmadas están asociadas a la Universidad de Córdoba?')
     await expect(chatTextarea).toHaveValue(
       '¿Qué tesis confirmadas están asociadas a la Universidad de Córdoba?',
@@ -349,5 +356,24 @@ ${pageErrors.join('\n') || '(sin errores)'}
     await page.getByRole('button', { name: 'Abrir menú de usuario' }).click()
     await page.getByRole('menuitem', { name: 'Cerrar sesión' }).click()
     await expect(page).toHaveURL(/\/login/)
+  })
+
+  test('abre historial de conversaciones y crea una conversación nueva', async ({ page }) => {
+    await openChatAsDocente(page)
+
+    await page.goto('/chat')
+    await expect(page).toHaveURL(/\/chat(?:\?.*)?$/)
+    await page.waitForLoadState('networkidle')
+
+    await expect(page.getByRole('region', { name: 'Conversaciones' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Nueva conversación' })).toBeVisible()
+    await expect(page.getByRole('button', { name: seededConversationTitle })).toBeVisible()
+
+    await page.getByRole('button', { name: seededConversationTitle }).click()
+    await expect(page).toHaveURL(new RegExp(`/chat\\?id=${seededConversationId}$`))
+
+    await page.getByRole('button', { name: 'Nueva conversación' }).click()
+    await expect(page).toHaveURL(/\/chat\?id=chat_[a-z0-9]+$/i)
+    await expect(page.getByRole('textbox', { name: 'Mensaje para el asistente' })).toBeVisible()
   })
 })

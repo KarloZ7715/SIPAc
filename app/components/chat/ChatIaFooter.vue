@@ -6,7 +6,7 @@
 
 <template>
   <footer
-    class="shrink-0 border-t border-border/45 bg-surface-muted/20 px-3 py-2 text-[0.7rem] leading-snug text-text-muted sm:px-4 sm:py-2.5"
+    class="shrink-0 border-t border-border/45 bg-surface-muted/20 px-3 py-2 text-xs leading-normal text-text-muted sm:px-4 sm:py-2.5"
     role="contentinfo"
   >
     <div

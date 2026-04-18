@@ -1,6 +1,37 @@
 <script setup lang="ts">
 import { motion } from 'motion-v'
 
+const chatStore = useChatStore()
+const requestFetch = import.meta.server ? useRequestFetch() : $fetch
+const route = useRoute()
+
+await useAsyncData(
+  'chat-page-bootstrap',
+  async () => {
+    const conversationId =
+      typeof route.query.id === 'string' && route.query.id.trim().length > 0 ? route.query.id : null
+
+    const [conversations] = await Promise.all([
+      chatStore.fetchConversations(20, requestFetch),
+      chatStore.fetchProviders(requestFetch),
+    ])
+
+    if (
+      conversationId &&
+      conversations.some((conversation) => conversation.id === conversationId)
+    ) {
+      await chatStore.fetchConversation(conversationId, requestFetch).catch(() => null)
+    } else {
+      chatStore.clearActiveConversation()
+    }
+
+    return true
+  },
+  {
+    default: () => true,
+  },
+)
+
 const {
   chatSession,
   draftInput,
@@ -25,16 +56,30 @@ const {
 
 const hasThread = computed(() => messages.value.length > 0)
 const isStreaming = computed(() => chatStatus.value === 'streaming')
-
-const prefersReducedMotion = ref(false)
+const { prefersReducedMotion, prefersMinimalMotion, densityPreference } = useUiPreferences()
+const composerLayout = computed(() => (hasThread.value ? 'docked' : 'centered'))
+const showWelcomeState = computed(() => !hasThread.value && !initializing.value)
+const showSessionBootState = computed(() => !hasThread.value && initializing.value)
+const composerShellClass = computed(() =>
+  hasThread.value
+    ? 'chat-composer-shell--docked border-t border-border/60 bg-[linear-gradient(rgb(255_255_255/0.96),rgb(247_246_240/0.94))] shadow-[0_-18px_36px_-28px_rgb(20_20_19/0.12),inset_0_1px_0_0_rgb(255_255_255/0.65)] backdrop-blur-xl supports-[backdrop-filter]:bg-surface/78'
+    : 'chat-composer-shell--centered page-stage-primary px-3 pb-6 sm:px-4 sm:pb-10',
+)
 
 /** Entrada del compositor al pasar de bienvenida a hilo: resorte (estilo Claude), sin solapar mensajes. */
 const composerDockMotion = computed(() => {
-  if (prefersReducedMotion.value) {
+  if (prefersMinimalMotion.value) {
     return {
       initial: false,
       animate: {},
       transition: { duration: 0 },
+    }
+  }
+  if (prefersReducedMotion.value) {
+    return {
+      initial: { opacity: 0.92, y: 8 },
+      animate: { opacity: 1, y: 0 },
+      transition: { duration: 0.16, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
     }
   }
   return {
@@ -47,19 +92,6 @@ const composerDockMotion = computed(() => {
       mass: 0.82,
     },
   }
-})
-
-onMounted(() => {
-  if (!import.meta.client) {
-    return
-  }
-  const mq = matchMedia('(prefers-reduced-motion: reduce)')
-  prefersReducedMotion.value = mq.matches
-  const onChange = () => {
-    prefersReducedMotion.value = mq.matches
-  }
-  mq.addEventListener('change', onChange)
-  onBeforeUnmount(() => mq.removeEventListener('change', onChange))
 })
 </script>
 
@@ -91,35 +123,40 @@ onMounted(() => {
     <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <Transition name="chat-phase" mode="out-in">
         <div
-          v-if="!hasThread"
+          v-if="showSessionBootState"
+          key="boot"
+          class="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+        >
+          <div
+            class="flex min-h-0 flex-1 flex-col items-center justify-center px-3 py-6 sm:px-4 sm:py-10"
+          >
+            <div
+              class="page-stage-primary chat-boot-state mx-auto flex w-full max-w-2xl flex-col items-center gap-4 rounded-[1.75rem] border border-border/70 bg-white/75 px-6 py-8 text-center shadow-[0_18px_42px_-30px_rgb(20_20_19/0.12)]"
+            >
+              <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-sipac-700" />
+              <div class="space-y-1.5">
+                <p class="font-display text-xl font-medium text-text">
+                  Preparando el espacio de consulta
+                </p>
+                <p class="text-sm leading-[1.6] text-text-muted">
+                  Cargando conversación, historial y modos de respuesta sin desmontar el compositor.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-else-if="showWelcomeState"
           key="welcome"
           class="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
         >
           <div
             class="flex min-h-0 flex-1 flex-col items-center justify-center px-3 py-6 sm:px-4 sm:py-10"
           >
-            <ChatWelcomeState />
-            <div
-              v-if="initializing && !chatSession"
-              class="mt-8 grid w-full max-w-xl gap-3"
-              aria-busy="true"
-            >
-              <div class="skeleton-shimmer h-20 rounded-2xl" />
-              <div class="skeleton-shimmer h-11 rounded-xl" />
+            <div class="page-stage-primary w-full">
+              <ChatWelcomeState />
             </div>
-            <ChatComposer
-              v-else
-              v-model:selected-model-key="selectedModelKey"
-              class="mt-8 w-full max-w-2xl"
-              :model-value="draftInput"
-              layout="centered"
-              :can-send="canSend"
-              :can-stop="canStop"
-              :busy="chatStatus === 'submitted' || chatStatus === 'streaming'"
-              @update:model-value="draftInput = $event"
-              @submit="handleSubmit"
-              @stop="stopConversation"
-            />
           </div>
         </div>
 
@@ -133,26 +170,38 @@ onMounted(() => {
             :activity-phase="assistantActivityPhase"
             @open-document="openDocument"
           />
-          <motion.div
-            v-bind="composerDockMotion"
-            class="chat-composer-dock shrink-0 border-t border-border/60 bg-[linear-gradient(rgb(255_255_255/0.96),rgb(247_246_240/0.94))] shadow-[0_-18px_36px_-28px_rgb(20_20_19/0.12),inset_0_1px_0_0_rgb(255_255_255/0.65)] backdrop-blur-xl supports-[backdrop-filter]:bg-surface/78"
-          >
-            <div class="w-full px-3 py-2 sm:px-8 sm:py-3">
-              <ChatComposer
-                v-model:selected-model-key="selectedModelKey"
-                :model-value="draftInput"
-                layout="docked"
-                :can-send="canSend"
-                :can-stop="canStop"
-                :busy="chatStatus === 'submitted' || chatStatus === 'streaming'"
-                @update:model-value="draftInput = $event"
-                @submit="handleSubmit"
-                @stop="stopConversation"
-              />
-            </div>
-          </motion.div>
         </div>
       </Transition>
+
+      <!-- Elimino la Transition en el composer para morphing continuo -->
+      <component
+        :is="hasThread ? motion.div : 'div'"
+        v-bind="hasThread ? composerDockMotion : {}"
+        class="chat-composer-shell shrink-0"
+        :class="composerShellClass"
+      >
+        <div
+          :class="
+            hasThread
+              ? densityPreference === 'compact'
+                ? 'w-full px-3 py-1.5 sm:px-6 sm:py-2'
+                : 'w-full px-3 py-2 sm:px-8 sm:py-3'
+              : 'mx-auto w-full max-w-2xl'
+          "
+        >
+          <ChatComposer
+            v-model:selected-model-key="selectedModelKey"
+            :model-value="draftInput"
+            :layout="composerLayout"
+            :can-send="canSend"
+            :can-stop="canStop"
+            :busy="chatStatus === 'submitted' || chatStatus === 'streaming'"
+            @update:model-value="draftInput = $event"
+            @submit="handleSubmit"
+            @stop="stopConversation"
+          />
+        </div>
+      </component>
     </div>
 
     <ChatIaFooter />
@@ -165,8 +214,8 @@ onMounted(() => {
 .chat-toolbar-enter-active,
 .chat-toolbar-leave-active {
   transition:
-    opacity 0.25s ease,
-    transform 0.25s ease;
+    opacity var(--motion-normal, 220ms) ease,
+    transform var(--motion-normal, 220ms) ease;
 }
 
 .chat-toolbar-enter-from,
@@ -178,8 +227,8 @@ onMounted(() => {
 .chat-phase-enter-active,
 .chat-phase-leave-active {
   transition:
-    opacity 0.32s var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1)),
-    transform 0.32s var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1));
+    opacity var(--motion-slow, 320ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform var(--motion-slow, 320ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
 .chat-phase-enter-from,
@@ -188,19 +237,38 @@ onMounted(() => {
   transform: translateY(10px);
 }
 
+.chat-composer-shell {
+  transition:
+    padding var(--motion-normal, 220ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1)),
+    background-color var(--motion-normal, 220ms) ease,
+    border-color var(--motion-normal, 220ms) ease,
+    box-shadow var(--motion-normal, 220ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1)),
+    border-radius var(--motion-normal, 220ms) ease,
+    max-width var(--motion-normal, 220ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chat-toolbar-enter-active,
   .chat-toolbar-leave-active,
   .chat-phase-enter-active,
-  .chat-phase-leave-active {
-    transition: none;
+  .chat-phase-leave-active,
+  .chat-composer-shell {
+    transition-duration: 1ms;
   }
+}
 
-  .chat-toolbar-enter-from,
-  .chat-toolbar-leave-to,
-  .chat-phase-enter-from,
-  .chat-phase-leave-to {
-    transform: none;
-  }
+:global(:root[data-motion='minimal']) .chat-toolbar-enter-active,
+:global(:root[data-motion='minimal']) .chat-toolbar-leave-active,
+:global(:root[data-motion='minimal']) .chat-phase-enter-active,
+:global(:root[data-motion='minimal']) .chat-phase-leave-active,
+:global(:root[data-motion='minimal']) .chat-composer-shell {
+  transition: none;
+}
+
+:global(:root[data-motion='minimal']) .chat-toolbar-enter-from,
+:global(:root[data-motion='minimal']) .chat-toolbar-leave-to,
+:global(:root[data-motion='minimal']) .chat-phase-enter-from,
+:global(:root[data-motion='minimal']) .chat-phase-leave-to {
+  transform: none;
 }
 </style>

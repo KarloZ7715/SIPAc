@@ -22,6 +22,8 @@ export const useChatStore = defineStore('chat', () => {
   const conversationsLoading = ref(false)
   const conversationLoading = ref(false)
   const providersLoading = ref(false)
+  const conversationsResolved = ref(false)
+  const providersResolved = ref(false)
   const deletingConversationId = ref<string | null>(null)
 
   async function fetchConversations(limit = 20, fetcher: StoreFetch = $fetch) {
@@ -36,14 +38,15 @@ export const useChatStore = defineStore('chat', () => {
       return conversations.value
     } finally {
       conversationsLoading.value = false
+      conversationsResolved.value = true
     }
   }
 
-  async function fetchConversation(id: string) {
+  async function fetchConversation(id: string, fetcher: StoreFetch = $fetch) {
     conversationLoading.value = true
 
     try {
-      const response = await $fetch<ChatConversationResponse>(`/api/chat/conversations/${id}`)
+      const response = await fetcher<ChatConversationResponse>(`/api/chat/conversations/${id}`)
       activeConversation.value = response.data.conversation
       return activeConversation.value
     } catch (error) {
@@ -54,11 +57,11 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function fetchProviders() {
+  async function fetchProviders(fetcher: StoreFetch = $fetch) {
     providersLoading.value = true
 
     try {
-      const response = await $fetch<ChatProvidersApiResponse>('/api/chat/providers')
+      const response = await fetcher<ChatProvidersApiResponse>('/api/chat/providers')
       providers.value = response.data
       return providers.value
     } catch (error) {
@@ -66,6 +69,7 @@ export const useChatStore = defineStore('chat', () => {
       throw error
     } finally {
       providersLoading.value = false
+      providersResolved.value = true
     }
   }
 
@@ -97,6 +101,8 @@ export const useChatStore = defineStore('chat', () => {
     conversationsLoading,
     conversationLoading,
     providersLoading,
+    conversationsResolved,
+    providersResolved,
     deletingConversationId,
     fetchConversations,
     fetchConversation,
