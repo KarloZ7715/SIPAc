@@ -2,8 +2,9 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import mongoose from 'mongoose'
-import { SignJWT } from 'jose'
 import User from '../../server/models/User'
+import UploadedFile from '../../server/models/UploadedFile'
+import AcademicProduct from '../../server/models/AcademicProduct'
 import { buildAcademicPdfBuffer } from './helpers/build-academic-pdf'
 
 const fixturesDir = join(process.cwd(), 'tests/e2e/fixtures')
@@ -74,44 +75,33 @@ async function connectMongo() {
   }
 }
 
-function getJwtSecret() {
-  const secret = readEnvValue('JWT_SECRET')
+async function loginWithSessionCookie(page: Page, email: string, password: string) {
+  const response = await page.request.post(`${appBaseUrl}/api/auth/login`, {
+    data: { email, password },
+  })
 
-  if (!secret) {
-    throw new Error('JWT_SECRET no está definido')
+  if (!response.ok()) {
+    throw new Error(`No se pudo iniciar sesión (${response.status()})`)
   }
 
-  return new TextEncoder().encode(secret)
-}
-
-async function createSessionToken(userId: string, email: string) {
-  return new SignJWT({ role: 'docente', email })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setSubject(userId)
-    .setIssuedAt()
-    .setExpirationTime('8h')
-    .sign(getJwtSecret())
-}
-
-async function loginWithSessionCookie(page: Page, email: string, userId: string) {
-  const token = await createSessionToken(userId, email)
-
-  await page.context().addCookies([
-    {
-      name: 'sipac_session',
-      value: token,
-      url: appBaseUrl,
-    },
-  ])
+  const cookies = await page.context().cookies(appBaseUrl)
+  if (!cookies.some((cookie) => cookie.name === 'sipac_session')) {
+    throw new Error('No se recibió cookie sipac_session tras login')
+  }
 }
 
 async function loginAndOpenWorkspace(page: Page) {
   if (!workspaceUserId) {
     throw new Error('workspaceUserId no está inicializado')
   }
-  await loginWithSessionCookie(page, workspaceEmail, workspaceUserId)
+  await loginWithSessionCookie(page, workspaceEmail, workspacePassword)
   await page.goto('/workspace-documents')
   await page.waitForLoadState('networkidle')
+}
+
+async function loginAndOpenCleanWorkspace(page: Page) {
+  await loginAndOpenWorkspace(page)
+  await cancelPersistedWorkspaceFlow(page)
 }
 
 /** El layout duplica la página (móvil vs escritorio); solo una rama es visible. */
@@ -229,7 +219,7 @@ async function runWorkspaceFullFlow(
     debugResponses.push(`${response.status()} ${url}`)
   })
 
-  await loginAndOpenWorkspace(page)
+  await loginAndOpenCleanWorkspace(page)
   await attachWorkspaceFile(page, payload)
 
   const uploadPromise = page.waitForResponse(
@@ -252,6 +242,62 @@ ${debugResponses.join('\n') || '(sin responses)'}
   await cancelPersistedWorkspaceFlow(page)
 }
 
+async function seedPersistedWorkspaceDraft() {
+  if (!workspaceUserId) {
+    throw new Error('workspaceUserId no está inicializado')
+  }
+
+  const uploadedFile = await UploadedFile.create({
+    uploadedBy: new mongoose.Types.ObjectId(workspaceUserId),
+    originalFilename: `${testRunId}-persisted.pdf`,
+    gridfsFileId: new mongoose.Types.ObjectId(),
+    mimeType: 'application/pdf',
+    fileSizeBytes: 2301,
+    processingStatus: 'completed',
+    rawExtractedText:
+      'Borrador persistido para E2E. Universidad de Córdoba. Inteligencia artificial aplicada.',
+    ocrProvider: 'pdfjs_native',
+    ocrModel: 'pdfjs_native',
+    ocrConfidence: 0.95,
+    nerProvider: 'cerebras',
+    nerModel: 'qwen-3-235b-a22b-instruct-2507',
+    documentClassification: 'academic',
+    documentClassificationSource: 'heuristic',
+    classificationConfidence: 0.9,
+    sourceWorkCount: 1,
+  })
+
+  const product = await AcademicProduct.create({
+    productType: 'thesis',
+    owner: new mongoose.Types.ObjectId(workspaceUserId),
+    sourceFile: uploadedFile._id,
+    segmentIndex: 0,
+    reviewStatus: 'draft',
+    extractedEntities: {
+      authors: [{ value: 'Docente E2E Workspace', confidence: 0.92, anchors: [] }],
+      title: { value: `Borrador persistido ${testRunId}`, confidence: 0.94, anchors: [] },
+      institution: { value: 'Universidad de Córdoba', confidence: 0.95, anchors: [] },
+      date: { value: new Date('2025-04-16T00:00:00.000Z'), confidence: 0.91, anchors: [] },
+      keywords: [{ value: 'inteligencia artificial', confidence: 0.9, anchors: [] }],
+      extractionSource: 'pdfjs_native',
+      extractionConfidence: 0.93,
+      extractedAt: new Date(),
+    },
+    manualMetadata: {
+      title: `Borrador persistido ${testRunId}`,
+      authors: ['Docente E2E Workspace'],
+      institution: 'Universidad de Córdoba',
+      date: new Date('2025-04-16T00:00:00.000Z'),
+      keywords: ['inteligencia artificial'],
+      notes: 'Draft persistido para prueba E2E',
+    },
+    thesisLevel: 'maestria',
+    program: 'Ingeniería de Sistemas',
+  })
+
+  return { uploadedFile, product }
+}
+
 test.describe('Workspace documentos — acciones unificadas', () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(600_000)
@@ -270,11 +316,17 @@ test.describe('Workspace documentos — acciones unificadas', () => {
       passwordHash: workspacePassword,
       program: 'Ingeniería de Sistemas',
       role: 'docente',
+      emailVerifiedAt: new Date(),
     })
     workspaceUserId = workspaceUser._id.toString()
   })
 
   test.afterAll(async () => {
+    if (workspaceUserId) {
+      const ownerId = new mongoose.Types.ObjectId(workspaceUserId)
+      await AcademicProduct.deleteMany({ owner: ownerId })
+      await UploadedFile.deleteMany({ uploadedBy: ownerId })
+    }
     await User.deleteMany({ email: workspaceEmail })
     if (mongoose.connection.readyState === 1) {
       await mongoose.disconnect()
@@ -282,7 +334,7 @@ test.describe('Workspace documentos — acciones unificadas', () => {
   })
 
   test('sin borrador no hay botones de acción del flujo (chrome oculto)', async ({ page }) => {
-    await loginAndOpenWorkspace(page)
+    await loginAndOpenCleanWorkspace(page)
 
     await expect(
       page.getByTestId('workspace-action-start-review').filter({ visible: true }),
@@ -297,7 +349,7 @@ test.describe('Workspace documentos — acciones unificadas', () => {
   test('con archivo local en borrador, chrome y aside muestran la misma fila de acciones (testid)', async ({
     page,
   }) => {
-    await loginAndOpenWorkspace(page)
+    await loginAndOpenCleanWorkspace(page)
     await attachTinyImage(page)
 
     const startButtons = page.getByTestId('workspace-action-start-review').filter({ visible: true })
@@ -318,7 +370,7 @@ test.describe('Workspace documentos — acciones unificadas', () => {
   test('vista previa (imagen en borrador): la imagen arranca cerca del borde superior del shell', async ({
     page,
   }) => {
-    await loginAndOpenWorkspace(page)
+    await loginAndOpenCleanWorkspace(page)
     await attachTinyImage(page)
 
     const shell = page.getByTestId('document-preview-shell').filter({ visible: true })
@@ -341,7 +393,7 @@ test.describe('Workspace documentos — acciones unificadas', () => {
   test('Quitar archivo desde la barra superior limpia el borrador (acciones coherentes)', async ({
     page,
   }) => {
-    await loginAndOpenWorkspace(page)
+    await loginAndOpenCleanWorkspace(page)
     await attachTinyImage(page)
 
     const chrome = page
@@ -357,6 +409,65 @@ test.describe('Workspace documentos — acciones unificadas', () => {
         .getByRole('region', { name: 'Estado del documento y acciones rápidas' })
         .filter({ visible: true }),
     ).toBeHidden()
+  })
+
+  test('upload en borrador: PDF mantiene vista previa activa sin iniciar análisis', async ({
+    page,
+  }) => {
+    await loginAndOpenCleanWorkspace(page)
+    await attachWorkspaceFile(page, {
+      name: 'e2e-draft.pdf',
+      mimeType: 'application/pdf',
+      buffer: buildAcademicPdfBuffer(),
+    })
+
+    await expect(page.getByTestId('document-preview-shell').filter({ visible: true })).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(
+      page.getByRole('region', { name: 'Estado del documento y acciones rápidas' }).filter({
+        visible: true,
+      }),
+    ).toBeVisible()
+
+    await cancelPersistedWorkspaceFlow(page)
+  })
+
+  test('upload en borrador: DOCX muestra estado Office sin romper el flujo', async ({ page }) => {
+    await loginAndOpenCleanWorkspace(page)
+    await attachWorkspaceFile(page, {
+      name: 'e2e-draft.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      buffer: readFileSync(join(fixturesDir, 'e2e-academic.docx')),
+    })
+
+    await expect(page.getByTestId('document-preview-shell').filter({ visible: true })).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(page.getByText('Vista previa no disponible para este Office')).toBeVisible()
+
+    await cancelPersistedWorkspaceFlow(page)
+  })
+
+  test('reanuda borrador persistido al volver al workspace', async ({ page }) => {
+    const seeded = await seedPersistedWorkspaceDraft()
+
+    await loginAndOpenWorkspace(page)
+
+    await expect(
+      page.locator('#workspace-review-heading-wide, #workspace-review-heading-narrow').filter({
+        visible: true,
+      }),
+    ).toBeVisible()
+    await expect(page.getByText(seeded.uploadedFile.originalFilename).first()).toBeVisible()
+    await expect(
+      page.getByTestId('workspace-action-save-snapshot').filter({ visible: true }),
+    ).toHaveCount(2)
+    await expect(
+      page.getByTestId('workspace-action-start-review').filter({ visible: true }),
+    ).toHaveCount(0)
+
+    await cancelPersistedWorkspaceFlow(page)
   })
 
   test('flujo completo: PDF con texto académico llega a la ficha de revisión', async ({

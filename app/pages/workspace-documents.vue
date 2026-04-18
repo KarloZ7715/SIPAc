@@ -33,11 +33,13 @@ const { workspaceDraftProductType, pollConsecutiveFailures, activeAcademicProduc
 const toast = useToast()
 const runtimeConfig = useRuntimeConfig()
 const route = useRoute()
+const requestFetch = import.meta.server ? useRequestFetch() : $fetch
+const isWorkspaceRouteActive = computed(() => route.path === '/workspace-documents')
 
 const pendingSelection = ref<File | null>(null)
 const showCancelModal = ref(false)
 const showExpandedPreviewModal = ref(false)
-const hydratingWorkspace = ref(true)
+const hydratingWorkspace = ref(false)
 const savingSnapshot = ref(false)
 const lastShownProcessingError = ref<string | null>(null)
 const activeHighlightKey = ref<string | null>(null)
@@ -175,9 +177,7 @@ const currentProcessingErrorAlertTitle = computed(() =>
     ? 'Este documento ya está en el repositorio'
     : 'No pudimos terminar con este archivo',
 )
-const showTestingMetrics = computed(
-  () => import.meta.dev && runtimeConfig.public.enableTestingMetrics,
-)
+const showTestingMetrics = computed(() => runtimeConfig.public.enableTestingMetrics)
 const selectedProductType = computed({
   get: () => workspaceDraftProductType.value,
   set: (value: ProductType) => documentsStore.setWorkspaceProductType(value),
@@ -455,6 +455,10 @@ function resolveRouteFocusKey(rawValue: unknown): WorkspaceRouteFocusKey | null 
 }
 
 async function applyRouteFocusIfNeeded() {
+  if (!import.meta.client) {
+    return
+  }
+
   const focusKey = resolveRouteFocusKey(route.query.focus)
 
   if (!focusKey) {
@@ -502,16 +506,26 @@ function handleFileSelection(selection: File | File[] | null) {
 }
 
 async function loadPersistedDraft() {
-  hydratingWorkspace.value = true
+  if (!isWorkspaceRouteActive.value) {
+    return
+  }
+
+  if (import.meta.client) {
+    hydratingWorkspace.value = true
+  }
 
   try {
     const requestedProductId =
       typeof route.query.productId === 'string' ? route.query.productId.trim() : ''
     const draft = requestedProductId
-      ? await documentsStore.loadDraftProduct(requestedProductId)
-      : await documentsStore.loadCurrentDraft()
+      ? await documentsStore.loadDraftProduct(requestedProductId, requestFetch)
+      : await documentsStore.loadCurrentDraft(requestFetch)
 
     if (draft) {
+      if (!isWorkspaceRouteActive.value) {
+        return
+      }
+
       analysisProgress.value = 100
       pushAnalysisHighlight(
         requestedProductId
@@ -525,6 +539,17 @@ async function loadPersistedDraft() {
     hydratingWorkspace.value = false
   }
 }
+
+await useAsyncData(
+  'workspace-documents-bootstrap',
+  async () => {
+    await loadPersistedDraft()
+    return true
+  },
+  {
+    default: () => true,
+  },
+)
 
 async function openSiblingDraft(productId: string) {
   if (!productId || productId === documentsStore.activeAcademicProductId) {
@@ -678,6 +703,10 @@ watch(pendingSelection, handleFileSelection)
 watch(
   () => route.query.productId,
   async (productId, previousProductId) => {
+    if (!isWorkspaceRouteActive.value) {
+      return
+    }
+
     if (productId === previousProductId) {
       return
     }
@@ -700,6 +729,10 @@ watch(
 watch(
   () => route.query.focus,
   async () => {
+    if (!isWorkspaceRouteActive.value) {
+      return
+    }
+
     await applyRouteFocusIfNeeded()
   },
 )
@@ -711,7 +744,7 @@ watch(
       activeHighlightKey.value = null
     }
 
-    if (stage === 'review' && prev === 'analyzing') {
+    if (import.meta.client && stage === 'review' && prev === 'analyzing') {
       if (reviewLiveClearTimeout != null) {
         clearTimeout(reviewLiveClearTimeout)
         reviewLiveClearTimeout = null
@@ -807,7 +840,6 @@ watch(pollConsecutiveFailures, (failures) => {
 
 onMounted(async () => {
   stopDocumentsFocusRefresh = documentsStore.refreshOnFocus()
-  await loadPersistedDraft()
 })
 
 onBeforeUnmount(() => {
@@ -828,7 +860,7 @@ onBeforeUnmount(() => {
       icon="i-lucide-eye"
       title="Modo solo lectura"
       description="Este documento ya quedó registrado. Puedes verlo aquí, pero no cambiarlo."
-      class="fade-up stagger-1 max-w-3xl"
+      class="page-stage-inline max-w-3xl"
     />
 
     <WorkspaceStageHeader
@@ -841,7 +873,7 @@ onBeforeUnmount(() => {
 
     <div
       v-if="showReextractNerCta"
-      class="fade-up stagger-2 flex max-w-3xl flex-col gap-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+      class="page-stage-inline flex max-w-3xl flex-col gap-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <p class="text-sm leading-relaxed text-text-muted">
         La confianza de extracción automática es baja. Puedes corregir la ficha a mano o volver a
@@ -889,7 +921,7 @@ onBeforeUnmount(() => {
       </template>
     </WorkspaceDocumentsTaskChrome>
 
-    <div :class="workspaceShellClass">
+    <div :class="[workspaceShellClass, 'page-stage-grid page-stage-grid--relaxed']">
       <WorkspaceUploadAside
         v-model:pending-selection="pendingSelection"
         :processing-error-title="currentProcessingErrorAlertTitle"
@@ -926,10 +958,10 @@ onBeforeUnmount(() => {
         :class="{ 'pb-24 xl:pb-0': needsMobileSavePadding }"
       >
         <section
-          class="panel-surface fade-up stagger-3 overflow-hidden p-5 sm:p-6 lg:p-5"
+          class="panel-surface overflow-hidden p-5 sm:p-6 lg:p-5"
           :aria-busy="currentStage === 'analyzing' ? 'true' : undefined"
         >
-          <Transition name="workspace-phase" mode="out-in">
+          <Transition :css="!hydratingWorkspace" name="workspace-phase" mode="out-in">
             <WorkspacePanelEmpty
               v-if="currentStage === 'empty'"
               key="ws-empty"
@@ -991,7 +1023,7 @@ onBeforeUnmount(() => {
 
     <section
       v-if="showTestingMetrics"
-      class="panel-surface fade-up border border-amber-200/80 bg-amber-50/80 px-5 py-5 sm:px-6"
+      class="page-stage-supporting panel-surface border border-amber-200/80 bg-amber-50/80 px-5 py-5 sm:px-6"
     >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -1103,8 +1135,8 @@ onBeforeUnmount(() => {
 .workspace-phase-enter-active,
 .workspace-phase-leave-active {
   transition:
-    opacity 0.32s var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1)),
-    transform 0.32s var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1));
+    opacity var(--motion-slow, 320ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform var(--motion-slow, 320ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
 .workspace-phase-enter-from,
@@ -1116,12 +1148,17 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .workspace-phase-enter-active,
   .workspace-phase-leave-active {
-    transition: none;
+    transition-duration: 1ms;
   }
+}
 
-  .workspace-phase-enter-from,
-  .workspace-phase-leave-to {
-    transform: none;
-  }
+:global(:root[data-motion='minimal']) .workspace-phase-enter-active,
+:global(:root[data-motion='minimal']) .workspace-phase-leave-active {
+  transition: none;
+}
+
+:global(:root[data-motion='minimal']) .workspace-phase-enter-from,
+:global(:root[data-motion='minimal']) .workspace-phase-leave-to {
+  transform: none;
 }
 </style>

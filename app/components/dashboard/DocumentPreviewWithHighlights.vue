@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DocumentAnchor } from '~~/app/types'
 import { isStructuredOfficeMimeType } from '~~/app/types'
+import { HIGHLIGHT_CONFIDENCE_STYLES } from '~~/app/config/ui-highlight-tokens'
 /** Debe coincidir con el bundle `legacy/build/pdf.mjs`; mezclar con `build/` rompe pdf.js 5.x en runtime. */
 import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 
@@ -126,6 +127,10 @@ const lastPreviewSourceKey = ref('')
 
 /** Solo iframe como último recurso (pdf.js falló); nunca por defecto — iframe+blob falla en Firefox/Safari. */
 const shouldUseNativePdfEmbed = computed(() => isPdf.value && useNativePdfEmbed.value)
+const shouldShowPdfLoadingState = computed(
+  () =>
+    isPdf.value && !shouldUseNativePdfEmbed.value && !renderedPages.value.length && !pdfError.value,
+)
 
 const normalizedGroups = computed(() =>
   props.groups.map((group) => ({
@@ -250,20 +255,43 @@ function focusPageForActiveKey() {
   pageElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
-function resolveConfidenceClass(confidence: number | undefined) {
+type HighlightConfidenceLevel = keyof typeof HIGHLIGHT_CONFIDENCE_STYLES
+
+function resolveConfidenceLevel(confidence: number | undefined): HighlightConfidenceLevel {
   if (typeof confidence !== 'number' || Number.isNaN(confidence)) {
-    return 'highlight-neutral'
+    return 'neutral'
   }
 
   if (confidence >= 0.8) {
-    return 'highlight-high'
+    return 'high'
   }
 
   if (confidence >= 0.5) {
-    return 'highlight-medium'
+    return 'medium'
   }
 
-  return 'highlight-low'
+  return 'low'
+}
+
+function resolveConfidenceClass(confidence: number | undefined) {
+  return `highlight-${resolveConfidenceLevel(confidence)}`
+}
+
+function resolveConfidenceLabel(confidence: number | undefined) {
+  const level = resolveConfidenceLevel(confidence)
+  if (level === 'high') return 'confianza alta'
+  if (level === 'medium') return 'confianza media'
+  if (level === 'low') return 'confianza baja'
+  return 'confianza no especificada'
+}
+
+function resolveHighlightColorStyle(confidence: number | undefined) {
+  const level = resolveConfidenceLevel(confidence)
+  const style = HIGHLIGHT_CONFIDENCE_STYLES[level]
+  return {
+    '--highlight-bg': style.background,
+    '--highlight-border': style.border,
+  }
 }
 
 function isHighlightActive(key: string) {
@@ -624,7 +652,10 @@ watch(
             left: `${item.anchor.x * 100}%`,
             width: `${item.anchor.width * 100}%`,
             height: `${item.anchor.height * 100}%`,
+            ...resolveHighlightColorStyle(item.confidence),
           }"
+          :data-confidence-level="resolveConfidenceLevel(item.confidence)"
+          :aria-label="`${item.label} (${resolveConfidenceLabel(item.confidence)})`"
           :title="item.label"
           @click.stop="handleHighlightClick(item.key)"
         />
@@ -649,11 +680,6 @@ watch(
           <p class="font-semibold text-text">No pudimos identificar el tipo del archivo.</p>
           <p class="text-sm text-text-muted">Vuelve a cargarlo para mostrar la vista previa.</p>
         </template>
-      </div>
-
-      <div v-else-if="!isReadyToRender" class="document-viewer-empty">
-        <UIcon name="i-lucide-loader-circle" class="size-8 animate-spin text-sipac-700" />
-        <p class="font-semibold text-text">Preparando la vista previa…</p>
       </div>
 
       <div v-else-if="shouldUseNativePdfEmbed" class="pdf-embed-fallback">
@@ -692,7 +718,10 @@ watch(
                 left: `${item.anchor.x * 100}%`,
                 width: `${item.anchor.width * 100}%`,
                 height: `${item.anchor.height * 100}%`,
+                ...resolveHighlightColorStyle(item.confidence),
               }"
+              :data-confidence-level="resolveConfidenceLevel(item.confidence)"
+              :aria-label="`${item.label} (${resolveConfidenceLabel(item.confidence)})`"
               :title="item.label"
               @click.stop="handleHighlightClick(item.key)"
             />
@@ -708,9 +737,13 @@ watch(
         </p>
       </div>
 
-      <div v-else-if="renderingPdf" class="document-viewer-empty">
+      <div v-else-if="shouldShowPdfLoadingState" class="document-viewer-empty">
         <UIcon name="i-lucide-loader-circle" class="size-8 animate-spin text-sipac-700" />
-        <p class="font-semibold text-text">Renderizando vista previa del PDF…</p>
+        <p class="font-semibold text-text">
+          {{
+            isReadyToRender ? 'Renderizando vista previa del PDF…' : 'Preparando la vista previa…'
+          }}
+        </p>
       </div>
 
       <div v-else-if="pdfError" class="document-viewer-empty">
@@ -814,6 +847,10 @@ watch(
 
 .highlight-box {
   position: absolute;
+  --highlight-bg: rgb(59 130 246 / 0.18);
+  --highlight-border: rgb(37 99 235 / 0.6);
+  background: var(--highlight-bg);
+  border-color: var(--highlight-border);
   border-width: 2px;
   border-style: solid;
   border-radius: 0.45rem;
@@ -829,23 +866,30 @@ watch(
 }
 
 .highlight-neutral {
-  background: rgb(59 130 246 / 0.18);
-  border-color: rgb(37 99 235 / 0.6);
+  border-style: solid;
 }
 
 .highlight-high {
-  background: rgb(16 185 129 / 0.2);
-  border-color: rgb(4 120 87 / 0.72);
+  border-style: solid;
 }
 
 .highlight-medium {
-  background: rgb(245 158 11 / 0.2);
-  border-color: rgb(180 83 9 / 0.72);
+  border-style: dashed;
 }
 
 .highlight-low {
-  background: rgb(239 68 68 / 0.2);
-  border-color: rgb(185 28 28 / 0.72);
+  border-style: dotted;
+}
+
+.highlight-box[data-confidence-level='medium'],
+.highlight-box[data-confidence-level='low'] {
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgb(255 255 255 / 0.2) 0,
+    rgb(255 255 255 / 0.2) 4px,
+    transparent 4px,
+    transparent 8px
+  );
 }
 
 .highlight-active {

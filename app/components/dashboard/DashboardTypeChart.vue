@@ -2,6 +2,10 @@
 import { computed } from 'vue'
 import { Chart as ChartJS, Title, Tooltip, ArcElement, type ChartOptions } from 'chart.js'
 import { Doughnut } from 'vue-chartjs'
+import {
+  DASHBOARD_CHART_COLORS,
+  DASHBOARD_CHART_TOOLTIP_COLORS,
+} from '~~/app/config/ui-chart-tokens'
 import { WORKSPACE_PRODUCT_TYPE_OPTIONS } from '~~/app/config/workspace-product-type-options'
 import type { ProductDashboardSummary } from '~~/app/types'
 
@@ -12,21 +16,6 @@ const props = defineProps<{
   loading?: boolean
 }>()
 
-const chartColors = [
-  '#2f855a',
-  '#2b6cb0',
-  '#b7791f',
-  '#805ad5',
-  '#0f766e',
-  '#be123c',
-  '#0369a1',
-  '#7c3aed',
-  '#15803d',
-  '#a16207',
-  '#4f46e5',
-  '#b45309',
-]
-
 const chartOptions: ChartOptions<'doughnut'> = {
   responsive: true,
   maintainAspectRatio: false,
@@ -36,9 +25,9 @@ const chartOptions: ChartOptions<'doughnut'> = {
       display: false,
     },
     tooltip: {
-      backgroundColor: '#112e1d',
-      titleColor: '#fff',
-      bodyColor: '#fff',
+      backgroundColor: DASHBOARD_CHART_TOOLTIP_COLORS.background,
+      titleColor: DASHBOARD_CHART_TOOLTIP_COLORS.title,
+      bodyColor: DASHBOARD_CHART_TOOLTIP_COLORS.body,
       padding: 12,
       cornerRadius: 8,
     },
@@ -58,7 +47,9 @@ const chartData = computed(() => {
     datasets: [
       {
         data,
-        backgroundColor: data.map((_, index) => chartColors[index % chartColors.length]),
+        backgroundColor: data.map(
+          (_, index) => DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length],
+        ),
         borderWidth: 2,
         borderColor: '#ffffff',
         hoverOffset: 4,
@@ -66,6 +57,10 @@ const chartData = computed(() => {
     ],
   }
 })
+
+const shouldShowLoadingState = computed(
+  () => Boolean(props.loading) && chartData.value.labels.length === 0,
+)
 </script>
 
 <template>
@@ -84,18 +79,23 @@ const chartData = computed(() => {
       </div>
     </div>
 
-    <div v-if="loading" class="flex-1 flex items-center justify-center animate-pulse h-[220px]">
-      <div class="w-40 h-40 rounded-full border-8 border-surface-muted"></div>
-    </div>
-    <div
-      v-else-if="!chartData.labels.length"
-      class="flex-1 flex flex-col items-center justify-center text-text-soft"
-    >
-      <UIcon name="i-lucide-file-x-2" class="size-10 mb-2 opacity-30" />
-      <p class="text-sm">Sin datos de distribución disponibles</p>
-    </div>
-    <div v-else class="flex-1 h-[220px] relative">
-      <Doughnut :data="chartData" :options="chartOptions" />
-    </div>
+    <Transition name="fade" mode="out-in">
+      <div
+        v-if="shouldShowLoadingState"
+        class="flex-1 flex items-center justify-center animate-pulse h-[220px]"
+      >
+        <div class="w-40 h-40 rounded-full border-8 border-surface-muted"></div>
+      </div>
+      <div
+        v-else-if="!chartData.labels.length"
+        class="flex-1 flex flex-col items-center justify-center text-text-soft"
+      >
+        <UIcon name="i-lucide-file-x-2" class="size-10 mb-2 opacity-30" />
+        <p class="text-sm">Sin datos de distribución disponibles</p>
+      </div>
+      <div v-else class="flex-1 h-[220px] relative">
+        <Doughnut :data="chartData" :options="chartOptions" />
+      </div>
+    </Transition>
   </div>
 </template>

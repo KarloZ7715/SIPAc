@@ -15,7 +15,7 @@ let globalProgressTimer: NodeJS.Timeout | null = null
 let globalHighlightTimer: NodeJS.Timeout | null = null
 
 export function useWorkspaceAnalysisFeedback() {
-  const prefersReducedMotion = useState('workspace-analysis-prefersReducedMotion', () => false)
+  const { prefersReducedMotion } = useUiPreferences()
   const analysisProgress = useState('workspace-analysis-progress', () => 0)
   const analysisHighlights = useState<WorkspaceAnalysisHighlightItem[]>(
     'workspace-analysis-highlights',
@@ -35,8 +35,6 @@ export function useWorkspaceAnalysisFeedback() {
     'workspace-analysis-removalTimers',
     () => [],
   )
-
-  let localRemoveReducedMotionListener: (() => void) | undefined
 
   const processingMessages = WORKSPACE_ANALYSIS_PROCESSING_MESSAGES
 
@@ -148,25 +146,6 @@ export function useWorkspaceAnalysisFeedback() {
     highlightCursor.value = 0
     highlightSerial.value = 0
   }
-
-  onMounted(() => {
-    if (!import.meta.client) {
-      return
-    }
-    const mq = matchMedia('(prefers-reduced-motion: reduce)')
-    prefersReducedMotion.value = mq.matches
-    const onMotionPreferenceChange = () => {
-      prefersReducedMotion.value = mq.matches
-    }
-    mq.addEventListener('change', onMotionPreferenceChange)
-    localRemoveReducedMotionListener = () =>
-      mq.removeEventListener('change', onMotionPreferenceChange)
-  })
-
-  onBeforeUnmount(() => {
-    localRemoveReducedMotionListener?.()
-    // Not stopping processing feedback so it persists across page navigations
-  })
 
   return {
     prefersReducedMotion,

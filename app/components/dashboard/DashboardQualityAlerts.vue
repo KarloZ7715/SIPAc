@@ -43,6 +43,7 @@ const {
 const productsToReview = computed(() => alertsData.value || [])
 const loading = computed(() => status.value === 'pending')
 const hasError = computed(() => status.value === 'error')
+const shouldShowLoadingState = computed(() => loading.value && productsToReview.value.length === 0)
 
 onMounted(() => {
   if (status.value === 'error') {
@@ -87,7 +88,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="loading" class="flex flex-col gap-3 animate-pulse">
+    <div v-if="shouldShowLoadingState" class="flex flex-col gap-3 animate-pulse">
       <div v-for="i in 3" :key="i" class="h-16 bg-surface-muted rounded-xl"></div>
     </div>
 
@@ -122,7 +123,7 @@ onMounted(() => {
           <h4 class="truncate font-display text-sm font-medium leading-snug text-text">
             {{ prod.title || 'Documento sin título' }}
           </h4>
-          <p class="text-xs text-text-soft flex items-center mt-1.5 gap-2">
+          <p class="mt-1.5 flex items-center gap-2 text-sm text-text-soft">
             <UBadge color="neutral" variant="solid" size="xs">{{
               getProductTypeLabel(prod.productType)
             }}</UBadge>
@@ -132,7 +133,7 @@ onMounted(() => {
             <div
               v-for="(flag, i) in getRedFlags(prod)"
               :key="i"
-              class="text-[10px] text-warning bg-warning/10 px-2 py-0.5 rounded border border-warning/20 flex items-center gap-1"
+              class="flex items-center gap-1 rounded border border-warning/20 bg-warning/10 px-2 py-0.5 text-[0.72rem] text-warning"
             >
               <UIcon name="i-lucide-flag" class="size-3" />
               {{ flag }}

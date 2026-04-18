@@ -31,8 +31,9 @@ const integrationEnvFixture = {
   nerSegmentationMinSegmentChars: 400,
   nerSegmentationModelId: 'gemini-2.5-flash-lite',
   rateLimitDocumentsPerHour: 15,
-  resendApiKey: '',
-  resendFromEmail: '',
+  brevoApiKey: '',
+  brevoFromEmail: '',
+  brevoFromName: '',
 }
 
 vi.mock('~~/server/utils/env', () => ({

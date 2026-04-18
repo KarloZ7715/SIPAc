@@ -145,9 +145,13 @@ onMounted(() => {
   <div class="dashboard-page space-y-5">
     <div class="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-6">
       <section class="min-w-0 space-y-5 xl:col-span-8">
-        <DashboardQualityAlerts />
+        <div class="page-stage-primary">
+          <DashboardQualityAlerts />
+        </div>
 
-        <div class="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+        <div
+          class="page-stage-grid page-stage-grid--tight grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4"
+        >
           <UCard class="interactive-card" :ui="{ body: 'p-5' }">
             <div
               class="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-text-soft"
@@ -209,25 +213,29 @@ onMounted(() => {
           </UCard>
         </div>
 
-        <div class="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
+        <div
+          class="page-stage-grid page-stage-grid--tight grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6"
+        >
           <DashboardTypeChart :summary="summary ?? null" :loading="loading" />
           <DashboardYearChart :summary="summary ?? null" :loading="loading" />
         </div>
 
-        <DashboardInsights
-          :product-types="filters.productTypes"
-          :owner="filters.owner"
-          :from="filters.from"
-          :to="filters.to"
-          :is-admin="isAdmin"
-        />
+        <div class="page-stage-supporting">
+          <DashboardInsights
+            :product-types="filters.productTypes"
+            :owner="filters.owner"
+            :from="filters.from"
+            :to="filters.to"
+            :is-admin="isAdmin"
+          />
+        </div>
       </section>
 
-      <aside class="min-w-0 xl:col-span-4">
+      <aside class="page-stage-supporting min-w-0 xl:col-span-4">
         <div
           class="space-y-5 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:pr-1"
         >
-          <section class="panel-surface fade-up overflow-hidden p-5 sm:p-6">
+          <section class="panel-surface overflow-hidden p-5 sm:p-6">
             <h3 class="mb-4 flex items-center gap-2 font-display text-sm font-medium text-text">
               <UIcon name="i-lucide-sliders-horizontal" class="size-4 text-text-soft" />
               Filtros del tablero

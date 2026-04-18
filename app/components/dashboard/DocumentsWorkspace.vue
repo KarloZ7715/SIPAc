@@ -16,7 +16,7 @@ watch(selectedFile, async (file) => {
 </script>
 
 <template>
-  <div class="panel-surface fade-up stagger-2 space-y-5 p-6 sm:p-7">
+  <div class="page-stage-primary panel-surface space-y-5 p-6 sm:p-7">
     <div class="space-y-3">
       <p class="section-chip">Documentos</p>
       <h2 class="max-w-2xl font-display text-3xl font-medium leading-[1.15] text-text">

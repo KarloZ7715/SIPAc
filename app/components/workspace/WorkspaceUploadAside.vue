@@ -52,7 +52,7 @@ const emit = defineEmits<{
 
 <template>
   <aside
-    class="workspace-upload-aside panel-surface fade-up stagger-2 space-y-4 p-5 sm:p-6 lg:top-28 lg:self-start xl:top-40 xl:self-start"
+    class="workspace-upload-aside panel-surface space-y-4 p-5 sm:p-6 lg:top-28 lg:self-start xl:top-40 xl:self-start"
     aria-label="Cargar archivo y acciones del documento"
     data-testid="workspace-upload-aside"
   >

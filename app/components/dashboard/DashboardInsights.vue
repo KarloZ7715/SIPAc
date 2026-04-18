@@ -54,6 +54,7 @@ const {
 const insights = computed(() => insightsPayload.value?.data ?? [])
 const loading = computed(() => status.value === 'pending')
 const hasError = computed(() => status.value === 'error')
+const shouldShowLoadingState = computed(() => loading.value && insights.value.length === 0)
 
 /** Conserva focus, fromInsight u otros query del CTA principal al abrir otro producto de ejemplo. */
 function exampleWorkspaceUrl(productId: string, insight: DashboardInsightItem): string {
@@ -106,109 +107,111 @@ onMounted(() => {
       </UButton>
     </div>
 
-    <div v-if="loading" class="flex flex-col gap-4 animate-pulse">
-      <div v-for="i in 2" :key="i" class="h-24 bg-surface-muted rounded-xl"></div>
-    </div>
+    <Transition name="fade" mode="out-in">
+      <div v-if="shouldShowLoadingState" class="flex flex-col gap-4 animate-pulse">
+        <div v-for="i in 2" :key="i" class="h-24 bg-surface-muted rounded-xl"></div>
+      </div>
 
-    <div
-      v-else-if="hasError"
-      class="flex flex-col items-center justify-center text-center py-6 text-text-soft gap-3"
-    >
-      <UIcon name="i-lucide-cloud-off" class="size-10 opacity-70" />
-      <p class="text-sm">No fue posible calcular insights en este momento.</p>
-      <UButton
-        size="sm"
-        color="neutral"
-        variant="soft"
-        icon="i-lucide-refresh-cw"
-        @click="refresh()"
-      >
-        Reintentar
-      </UButton>
-    </div>
-
-    <div v-else-if="insights.length" class="flex flex-col gap-3">
       <div
-        v-for="insight in insights"
-        :key="insight.id"
-        class="border border-border/60 rounded-xl p-4 transition-all hover:border-primary/40 hover:shadow-sm relative overflow-hidden group"
+        v-else-if="hasError"
+        class="flex flex-col items-center justify-center text-center py-6 text-text-soft gap-3"
       >
-        <div
-          class="absolute left-0 top-0 bottom-0 w-1"
-          :class="{
-            'bg-yellow-500': insight.severity === 'warning',
-            'bg-primary-500': insight.severity === 'success',
-            'bg-sky-500': insight.severity === 'info',
-          }"
-        ></div>
+        <UIcon name="i-lucide-cloud-off" class="size-10 opacity-70" />
+        <p class="text-sm">No fue posible calcular insights en este momento.</p>
+        <UButton
+          size="sm"
+          color="neutral"
+          variant="soft"
+          icon="i-lucide-refresh-cw"
+          @click="refresh()"
+        >
+          Reintentar
+        </UButton>
+      </div>
 
-        <div class="pl-2">
-          <h4
-            class="flex items-center gap-2 font-display text-sm font-medium leading-snug text-text"
-          >
-            <UIcon
-              :name="
-                insight.severity === 'warning'
-                  ? 'i-lucide-alert-triangle'
-                  : insight.severity === 'success'
-                    ? 'i-lucide-trending-up'
-                    : 'i-lucide-info'
-              "
-              :class="{
-                'text-yellow-600': insight.severity === 'warning',
-                'text-primary-600': insight.severity === 'success',
-                'text-sky-600': insight.severity === 'info',
-              }"
-              class="size-4"
-            />
-            {{ insight.title }}
-          </h4>
-          <p class="mt-1.5 text-xs leading-[1.43] text-text-muted">{{ insight.description }}</p>
+      <div v-else-if="insights.length" class="flex flex-col gap-3">
+        <div
+          v-for="insight in insights"
+          :key="insight.id"
+          class="border border-border/60 rounded-xl p-4 transition-all hover:border-primary/40 hover:shadow-sm relative overflow-hidden group"
+        >
           <div
-            v-if="insight.sampleProductIds?.length && insight.sampleProductIds.length > 1"
-            class="mt-2 flex flex-wrap gap-1.5"
-          >
-            <span class="text-[10px] uppercase tracking-wide text-text-soft">Ejemplos:</span>
-            <UButton
-              v-for="pid in insight.sampleProductIds.slice(0, 3)"
-              :key="`${insight.id}-${pid}`"
-              :to="exampleWorkspaceUrl(pid, insight)"
-              size="xs"
-              color="neutral"
-              variant="soft"
-              class="rounded-full"
+            class="absolute left-0 top-0 bottom-0 w-1"
+            :class="{
+              'bg-yellow-500': insight.severity === 'warning',
+              'bg-primary-500': insight.severity === 'success',
+              'bg-sky-500': insight.severity === 'info',
+            }"
+          ></div>
+
+          <div class="pl-2">
+            <h4
+              class="flex items-center gap-2 font-display text-sm font-medium leading-snug text-text"
             >
-              Abrir
-            </UButton>
-          </div>
-          <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
-            <UButton
-              v-if="insight.secondaryHref"
-              :to="insight.secondaryHref"
-              size="xs"
-              color="neutral"
-              variant="soft"
+              <UIcon
+                :name="
+                  insight.severity === 'warning'
+                    ? 'i-lucide-alert-triangle'
+                    : insight.severity === 'success'
+                      ? 'i-lucide-trending-up'
+                      : 'i-lucide-info'
+                "
+                :class="{
+                  'text-yellow-600': insight.severity === 'warning',
+                  'text-primary-600': insight.severity === 'success',
+                  'text-sky-600': insight.severity === 'info',
+                }"
+                class="size-4"
+              />
+              {{ insight.title }}
+            </h4>
+            <p class="mt-1.5 text-xs leading-[1.43] text-text-muted">{{ insight.description }}</p>
+            <div
+              v-if="insight.sampleProductIds?.length && insight.sampleProductIds.length > 1"
+              class="mt-2 flex flex-wrap gap-1.5"
             >
-              {{ insight.secondaryCtaLabel ?? 'Más acciones' }}
-            </UButton>
-            <UButton
-              :to="insight.href"
-              variant="link"
-              color="primary"
-              size="xs"
-              class="p-0 font-medium group-hover:underline"
-              trailing-icon="i-lucide-arrow-right"
-            >
-              {{ insight.ctaLabel }}
-            </UButton>
+              <span class="text-[10px] uppercase tracking-wide text-text-soft">Ejemplos:</span>
+              <UButton
+                v-for="pid in insight.sampleProductIds.slice(0, 3)"
+                :key="`${insight.id}-${pid}`"
+                :to="exampleWorkspaceUrl(pid, insight)"
+                size="xs"
+                color="neutral"
+                variant="soft"
+                class="rounded-full"
+              >
+                Abrir
+              </UButton>
+            </div>
+            <div class="mt-3 flex flex-wrap items-center justify-end gap-2">
+              <UButton
+                v-if="insight.secondaryHref"
+                :to="insight.secondaryHref"
+                size="xs"
+                color="neutral"
+                variant="soft"
+              >
+                {{ insight.secondaryCtaLabel ?? 'Más acciones' }}
+              </UButton>
+              <UButton
+                :to="insight.href"
+                variant="link"
+                color="primary"
+                size="xs"
+                class="p-0 font-medium group-hover:underline"
+                trailing-icon="i-lucide-arrow-right"
+              >
+                {{ insight.ctaLabel }}
+              </UButton>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div v-else class="flex flex-col items-center justify-center text-center py-6 text-text-soft">
-      <UIcon name="i-lucide-check-circle-2" class="size-10 mb-2 opacity-50" />
-      <p class="text-sm">Sin alertas con los filtros actuales. Buen trabajo.</p>
-    </div>
+      <div v-else class="flex flex-col items-center justify-center text-center py-6 text-text-soft">
+        <UIcon name="i-lucide-check-circle-2" class="size-10 mb-2 opacity-50" />
+        <p class="text-sm">Sin alertas con los filtros actuales. Buen trabajo.</p>
+      </div>
+    </Transition>
   </div>
 </template>

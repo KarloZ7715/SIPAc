@@ -1,8 +1,7 @@
-import { Resend } from 'resend'
 import type { NotificationType } from '~~/app/types'
 import Notification from '~~/server/models/Notification'
 import User from '~~/server/models/User'
-import { validateEnv } from '~~/server/utils/env'
+import { sendEmail } from '~~/server/services/email/send-email'
 
 interface NotifyDocumentProcessingInput {
   recipientId: string
@@ -46,26 +45,11 @@ async function sendNotificationEmail(input: {
   title: string
   message: string
 }): Promise<boolean> {
-  const env = validateEnv(useRuntimeConfig())
-
-  if (!env.resendApiKey || !env.resendFromEmail) {
-    return false
-  }
-
-  const resend = new Resend(env.resendApiKey)
-
-  try {
-    await resend.emails.send({
-      from: env.resendFromEmail,
-      to: input.to,
-      subject: input.title,
-      html: `<p>Hola ${input.fullName},</p><p>${input.message}</p><p>SIPAc</p>`,
-    })
-    return true
-  } catch (error) {
-    console.error('[Notifications] Error al enviar correo:', error)
-    return false
-  }
+  return sendEmail({
+    to: input.to,
+    subject: input.title,
+    html: `<p>Hola ${input.fullName},</p><p>${input.message}</p><p>SIPAc</p>`,
+  })
 }
 
 export async function notifyDocumentProcessing(

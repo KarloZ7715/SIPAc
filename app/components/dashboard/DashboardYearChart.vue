@@ -10,6 +10,11 @@ import {
   type ChartOptions,
 } from 'chart.js'
 import { Bar } from 'vue-chartjs'
+import {
+  DASHBOARD_CHART_AXIS_COLORS,
+  DASHBOARD_CHART_COLORS,
+  DASHBOARD_CHART_TOOLTIP_COLORS,
+} from '~~/app/config/ui-chart-tokens'
 import type { ProductDashboardSummary } from '~~/app/types'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip)
@@ -20,7 +25,6 @@ const props = defineProps<{
 }>()
 
 const skeletonHeights = ['32%', '56%', '74%', '48%', '68%']
-const barPalette = ['#2f855a', '#2b6cb0', '#b7791f', '#805ad5', '#0f766e', '#be123c', '#0369a1']
 
 const chartOptions: ChartOptions<'bar'> = {
   responsive: true,
@@ -28,9 +32,9 @@ const chartOptions: ChartOptions<'bar'> = {
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: '#112e1d',
-      titleColor: '#fff',
-      bodyColor: '#fff',
+      backgroundColor: DASHBOARD_CHART_TOOLTIP_COLORS.background,
+      titleColor: DASHBOARD_CHART_TOOLTIP_COLORS.title,
+      bodyColor: DASHBOARD_CHART_TOOLTIP_COLORS.body,
       padding: 12,
       cornerRadius: 8,
     },
@@ -39,10 +43,10 @@ const chartOptions: ChartOptions<'bar'> = {
     x: {
       grid: { display: false },
       border: { display: false },
-      ticks: { color: '#5f6f64' },
+      ticks: { color: DASHBOARD_CHART_AXIS_COLORS.ticks },
     },
     y: {
-      grid: { color: 'rgba(16, 35, 25, 0.06)' },
+      grid: { color: DASHBOARD_CHART_AXIS_COLORS.grid },
       border: { display: false },
       beginAtZero: true,
       ticks: { precision: 0 },
@@ -63,12 +67,20 @@ const chartData = computed(() => {
       {
         label: 'Documentos',
         data,
-        backgroundColor: data.map((_, index) => barPalette[index % barPalette.length]),
-        hoverBackgroundColor: data.map((_, index) => barPalette[index % barPalette.length]),
+        backgroundColor: data.map(
+          (_, index) => DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length],
+        ),
+        hoverBackgroundColor: data.map(
+          (_, index) => DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length],
+        ),
       },
     ],
   }
 })
+
+const shouldShowLoadingState = computed(
+  () => Boolean(props.loading) && chartData.value.labels.length === 0,
+)
 </script>
 
 <template>
@@ -85,23 +97,28 @@ const chartData = computed(() => {
       </div>
     </div>
 
-    <div v-if="loading" class="flex-1 flex items-end gap-2 animate-pulse h-[220px]">
+    <Transition name="fade" mode="out-in">
       <div
-        v-for="(height, i) in skeletonHeights"
-        :key="`skeleton-${i}`"
-        class="bg-surface-muted rounded-t-md flex-1"
-        :style="{ height }"
-      ></div>
-    </div>
-    <div
-      v-else-if="!chartData.labels.length"
-      class="flex-1 flex flex-col items-center justify-center text-text-soft"
-    >
-      <UIcon name="i-lucide-file-x-2" class="size-10 mb-2 opacity-30" />
-      <p class="text-sm">Sin histórico disponible para este filtro</p>
-    </div>
-    <div v-else class="flex-1 h-[220px] relative">
-      <Bar :data="chartData" :options="chartOptions" />
-    </div>
+        v-if="shouldShowLoadingState"
+        class="flex-1 flex items-end gap-2 animate-pulse h-[220px]"
+      >
+        <div
+          v-for="(height, i) in skeletonHeights"
+          :key="`skeleton-${i}`"
+          class="bg-surface-muted rounded-t-md flex-1"
+          :style="{ height }"
+        ></div>
+      </div>
+      <div
+        v-else-if="!chartData.labels.length"
+        class="flex-1 flex flex-col items-center justify-center text-text-soft"
+      >
+        <UIcon name="i-lucide-file-x-2" class="size-10 mb-2 opacity-30" />
+        <p class="text-sm">Sin histórico disponible para este filtro</p>
+      </div>
+      <div v-else class="flex-1 h-[220px] relative">
+        <Bar :data="chartData" :options="chartOptions" />
+      </div>
+    </Transition>
   </div>
 </template>
