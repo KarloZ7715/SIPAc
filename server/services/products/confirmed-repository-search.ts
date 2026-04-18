@@ -1,6 +1,8 @@
 import AcademicProduct from '~~/server/models/AcademicProduct'
 import { PAGINATION, PRODUCT_TYPES, type ProductType } from '~~/app/types'
 
+export type RepositoryCatalogSortBy = 'date_desc' | 'date_asc' | 'title_asc' | 'title_desc'
+
 export interface ConfirmedRepositorySearchFilters {
   productType?: ProductType
   owner?: string
@@ -14,11 +16,27 @@ export interface ConfirmedRepositorySearchFilters {
   year?: string
   yearFrom?: number
   yearTo?: number
+  program?: string
+  faculty?: string
 }
 
 export interface ConfirmedRepositorySearchOptions {
   page?: number
   limit?: number
+  sortBy?: RepositoryCatalogSortBy
+}
+
+export interface RepositoryFacetCount {
+  value: string
+  count: number
+}
+
+export interface RepositorySearchTelemetry {
+  executionMs: number
+  sortBy: RepositoryCatalogSortBy
+  page: number
+  limit: number
+  resultCount: number
 }
 
 export const CONFIRMED_REPOSITORY_INSTITUTION_FIELDS = [
@@ -79,6 +97,9 @@ export const CONFIRMED_REPOSITORY_KEYWORD_FIELDS = [
   'patentClassification',
 ] as const
 
+export const CONFIRMED_REPOSITORY_PROGRAM_FIELDS = ['program', 'programOrCall'] as const
+export const CONFIRMED_REPOSITORY_FACULTY_FIELDS = ['faculty'] as const
+
 export const CONFIRMED_REPOSITORY_GENERIC_SEARCH_FIELDS = [
   ...CONFIRMED_REPOSITORY_TITLE_FIELDS,
   ...CONFIRMED_REPOSITORY_AUTHOR_FIELDS,
@@ -127,6 +148,8 @@ export function normalizeConfirmedRepositoryFilters(
     year: normalizeTextFilter(filters.year),
     yearFrom: typeof filters.yearFrom === 'number' ? filters.yearFrom : undefined,
     yearTo: typeof filters.yearTo === 'number' ? filters.yearTo : undefined,
+    program: normalizeTextFilter(filters.program),
+    faculty: normalizeTextFilter(filters.faculty),
   }
 }
 
@@ -161,6 +184,16 @@ function buildRegexConditions(filters: ConfirmedRepositorySearchFilters) {
   const keyword = normalizeTextFilter(filters.keyword)
   if (keyword) {
     conditions.push(buildRegexOrCondition(CONFIRMED_REPOSITORY_KEYWORD_FIELDS, keyword))
+  }
+
+  const program = normalizeTextFilter(filters.program)
+  if (program) {
+    conditions.push(buildRegexOrCondition(CONFIRMED_REPOSITORY_PROGRAM_FIELDS, program))
+  }
+
+  const faculty = normalizeTextFilter(filters.faculty)
+  if (faculty) {
+    conditions.push(buildRegexOrCondition(CONFIRMED_REPOSITORY_FACULTY_FIELDS, faculty))
   }
 
   const search = normalizeTextFilter(filters.search)
@@ -239,6 +272,7 @@ function buildEffectiveDateConditions(filters: ConfirmedRepositorySearchFilters)
   return { $expr: { $and: dateConditions } }
 }
 
+/** Construye el filtro Mongo para el catálogo. Siempre restringe a productos confirmados. */
 export function buildConfirmedRepositoryFilter(filters: ConfirmedRepositorySearchFilters) {
   const normalizedFilters = normalizeConfirmedRepositoryFilters(filters)
   const baseFilter: Record<string, unknown> = {
@@ -265,26 +299,81 @@ export function buildConfirmedRepositoryFilter(filters: ConfirmedRepositorySearc
   return baseFilter
 }
 
+/**
+ * Orden con criterio secundario estable: cuando se ordena por fecha,
+ * los empates se rompen por título (A→Z) y por `createdAt` (desc) para
+ * obtener orden determinístico aun cuando hay fechas iguales o nulas.
+ */
+function buildSortOptions(sortBy: RepositoryCatalogSortBy): Record<string, 1 | -1> {
+  switch (sortBy) {
+    case 'date_asc':
+      return {
+        'manualMetadata.date': 1,
+        'manualMetadata.title': 1,
+        createdAt: 1,
+      }
+    case 'title_asc':
+      return {
+        'manualMetadata.title': 1,
+        'manualMetadata.date': -1,
+        createdAt: -1,
+      }
+    case 'title_desc':
+      return {
+        'manualMetadata.title': -1,
+        'manualMetadata.date': -1,
+        createdAt: -1,
+      }
+    default:
+      return {
+        'manualMetadata.date': -1,
+        'manualMetadata.title': 1,
+        createdAt: -1,
+      }
+  }
+}
+
+function resolveSortBy(sortBy: RepositoryCatalogSortBy | undefined): RepositoryCatalogSortBy {
+  if (
+    sortBy === 'date_asc' ||
+    sortBy === 'date_desc' ||
+    sortBy === 'title_asc' ||
+    sortBy === 'title_desc'
+  ) {
+    return sortBy
+  }
+  return 'date_desc'
+}
+
 export async function searchConfirmedRepositoryProducts(
   filters: ConfirmedRepositorySearchFilters,
   options: ConfirmedRepositorySearchOptions = {},
 ) {
+  const startedAt = Date.now()
   const page = Math.max(1, Number(options.page) || 1)
   const limit = Math.min(
     PAGINATION.MAX_LIMIT,
     Math.max(PAGINATION.MIN_LIMIT, Number(options.limit) || PAGINATION.DEFAULT_LIMIT),
   )
+  const sortBy = resolveSortBy(options.sortBy)
   const skip = (page - 1) * limit
   const filter = buildConfirmedRepositoryFilter(filters)
-  const sortOptions: Record<string, 1 | -1> = {
-    'manualMetadata.date': -1,
-    createdAt: -1,
-  }
+  const sortOptions = buildSortOptions(sortBy)
 
-  const [products, total] = await Promise.all([
+  const [products, total, productTypeFacets] = await Promise.all([
     AcademicProduct.find(filter).sort(sortOptions).skip(skip).limit(limit).lean(),
     AcademicProduct.countDocuments(filter),
+    AcademicProduct.aggregate<{ _id: string; count: number }>([
+      { $match: filter },
+      { $group: { _id: '$productType', count: { $sum: 1 } } },
+      { $sort: { count: -1, _id: 1 } },
+      { $limit: 20 },
+    ]),
   ])
+
+  const facets = {
+    productTypes: productTypeFacets.map((item) => ({ value: item._id, count: item.count })),
+  }
 
   return {
     products,
@@ -292,5 +381,13 @@ export async function searchConfirmedRepositoryProducts(
     page,
     limit,
     hasMore: skip + products.length < total,
+    facets,
+    telemetry: {
+      executionMs: Date.now() - startedAt,
+      sortBy,
+      page,
+      limit,
+      resultCount: products.length,
+    },
   }
 }

@@ -34,4 +34,20 @@ describe('confirmed repository search filters', () => {
     expect(serialized).toContain('proceedingsTitle')
     expect(serialized).not.toContain('"$text"')
   })
+
+  it('siempre limita el catálogo a productos confirmados', () => {
+    const filter = buildConfirmedRepositoryFilter({})
+    expect(filter.reviewStatus).toBe('confirmed')
+  })
+
+  it('incluye filtros de programa y facultad cuando se envían', () => {
+    const filter = buildConfirmedRepositoryFilter({
+      program: 'Ingeniería de Sistemas',
+      faculty: 'Facultad de Ingeniería',
+    })
+    const serialized = JSON.stringify(filter)
+    expect(serialized).toContain('program')
+    expect(serialized).toContain('programOrCall')
+    expect(serialized).toContain('faculty')
+  })
 })

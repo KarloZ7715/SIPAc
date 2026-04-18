@@ -22,12 +22,22 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError'
 }
 
+export type RepositorySortBy = 'date_desc' | 'date_asc' | 'title_asc' | 'title_desc'
+
 export interface RepositoryFilters {
   productType?: ProductType
   year?: string
   owner?: string
   institution?: string
   search?: string
+  title?: string
+  author?: string
+  keyword?: string
+  program?: string
+  faculty?: string
+  dateFrom?: string
+  dateTo?: string
+  sortBy?: RepositorySortBy
   page?: number
   limit?: number
 }
@@ -402,7 +412,7 @@ export const useDocumentsStore = defineStore('documents', () => {
     }
   }
 
-  async function loadDraftProduct(productId: string) {
+  async function loadDraftProduct(productId: string, fetcher: StoreFetch = $fetch) {
     const gen = ++draftLoadGeneration
     draftLoadAbort?.abort()
     draftLoadAbort = new AbortController()
@@ -410,7 +420,7 @@ export const useDocumentsStore = defineStore('documents', () => {
     loadingDraft.value = true
 
     try {
-      const response = await $fetch<ProductDraftResponse>(`/api/products/${productId}`, {
+      const response = await fetcher<ProductDraftResponse>(`/api/products/${productId}`, {
         signal,
       })
 
@@ -466,6 +476,7 @@ export const useDocumentsStore = defineStore('documents', () => {
       if (response.data.draft) {
         applyDraftSnapshot(response.data.draft)
       }
+      repositoryCache.clear()
 
       return response.data.draft
     } finally {
@@ -503,6 +514,7 @@ export const useDocumentsStore = defineStore('documents', () => {
       if (response.data.draft) {
         applyDraftSnapshot(response.data.draft)
       }
+      repositoryCache.clear()
 
       return response.data.draft
     } finally {
@@ -565,50 +577,115 @@ export const useDocumentsStore = defineStore('documents', () => {
 
   const repositoryProducts = ref<AcademicProductPublic[]>([])
   const repositoryLoading = ref(false)
+  const repositoryCache = new Map<string, ProductsListResponse>()
   const repositoryFilters = reactive<RepositoryFilters>({
     productType: undefined,
     year: undefined,
     owner: undefined,
     institution: undefined,
     search: undefined,
+    title: undefined,
+    author: undefined,
+    keyword: undefined,
+    program: undefined,
+    faculty: undefined,
+    dateFrom: undefined,
+    dateTo: undefined,
+    sortBy: 'date_desc',
     page: 1,
-    limit: 20,
+    limit: 10,
   })
   const repositoryMeta = ref<PaginationMeta | null>(null)
 
-  async function fetchProducts(filters?: Partial<RepositoryFilters>) {
-    repositoryLoading.value = true
+  function buildRepositoryQueryParams(filters: RepositoryFilters) {
+    const params = new URLSearchParams()
+    if (filters.productType) {
+      params.set('productType', filters.productType)
+    }
+    if (filters.year) {
+      params.set('year', filters.year)
+    }
+    if (filters.owner) {
+      params.set('owner', filters.owner)
+    }
+    if (filters.institution) {
+      params.set('institution', filters.institution)
+    }
+    if (filters.search) {
+      params.set('search', filters.search)
+    }
+    if (filters.title) {
+      params.set('title', filters.title)
+    }
+    if (filters.author) {
+      params.set('author', filters.author)
+    }
+    if (filters.keyword) {
+      params.set('keyword', filters.keyword)
+    }
+    if (filters.program) {
+      params.set('program', filters.program)
+    }
+    if (filters.faculty) {
+      params.set('faculty', filters.faculty)
+    }
+    if (filters.dateFrom) {
+      params.set('dateFrom', filters.dateFrom)
+    }
+    if (filters.dateTo) {
+      params.set('dateTo', filters.dateTo)
+    }
+    if (filters.sortBy) {
+      params.set('sortBy', filters.sortBy)
+    }
+    params.set('page', String(filters.page ?? 1))
+    params.set('limit', String(filters.limit ?? 10))
+    return params
+  }
 
+  async function prefetchRepositoryPage(page: number) {
+    const nextPage = Math.max(1, page)
+    const nextFilters: RepositoryFilters = {
+      ...repositoryFilters,
+      page: nextPage,
+    }
+    const queryString = buildRepositoryQueryParams(nextFilters).toString()
+    if (repositoryCache.has(queryString)) {
+      return
+    }
+    const url = `/api/products${queryString ? `?${queryString}` : ''}`
+    const response = await $fetch<ProductsListResponse>(url)
+    repositoryCache.set(queryString, response)
+  }
+
+  async function fetchProducts(filters?: Partial<RepositoryFilters>, fetcher: StoreFetch = $fetch) {
     try {
       if (filters) {
         Object.assign(repositoryFilters, filters)
       }
 
-      const params = new URLSearchParams()
-      if (repositoryFilters.productType) {
-        params.set('productType', repositoryFilters.productType)
-      }
-      if (repositoryFilters.year) {
-        params.set('year', repositoryFilters.year)
-      }
-      if (repositoryFilters.owner) {
-        params.set('owner', repositoryFilters.owner)
-      }
-      if (repositoryFilters.institution) {
-        params.set('institution', repositoryFilters.institution)
-      }
-      if (repositoryFilters.search) {
-        params.set('search', repositoryFilters.search)
-      }
-      params.set('page', String(repositoryFilters.page ?? 1))
-      params.set('limit', String(repositoryFilters.limit ?? 20))
+      const params = buildRepositoryQueryParams(repositoryFilters)
 
       const queryString = params.toString()
+      const cached = repositoryCache.get(queryString)
+      if (cached) {
+        repositoryProducts.value = cached.data
+        repositoryMeta.value = cached.meta ?? null
+        return cached
+      }
+
+      repositoryLoading.value = true
       const url = `/api/products${queryString ? `?${queryString}` : ''}`
 
-      const response = await $fetch<ProductsListResponse>(url)
+      const response = await fetcher<ProductsListResponse>(url)
+      repositoryCache.set(queryString, response)
       repositoryProducts.value = response.data
       repositoryMeta.value = response.meta ?? null
+
+      if (response.meta?.hasMore && response.meta.page) {
+        // Cachea la siguiente página para navegación más fluida.
+        void prefetchRepositoryPage(response.meta.page + 1).catch(() => {})
+      }
 
       return response
     } finally {
@@ -622,6 +699,7 @@ export const useDocumentsStore = defineStore('documents', () => {
     })
 
     repositoryProducts.value = repositoryProducts.value.filter((p) => p._id !== productId)
+    repositoryCache.clear()
 
     if (repositoryMeta.value) {
       repositoryMeta.value = {
@@ -639,8 +717,17 @@ export const useDocumentsStore = defineStore('documents', () => {
     repositoryFilters.owner = undefined
     repositoryFilters.institution = undefined
     repositoryFilters.search = undefined
+    repositoryFilters.title = undefined
+    repositoryFilters.author = undefined
+    repositoryFilters.keyword = undefined
+    repositoryFilters.program = undefined
+    repositoryFilters.faculty = undefined
+    repositoryFilters.dateFrom = undefined
+    repositoryFilters.dateTo = undefined
+    repositoryFilters.sortBy = 'date_desc'
     repositoryFilters.page = 1
-    repositoryFilters.limit = 20
+    repositoryFilters.limit = 10
+    repositoryCache.clear()
   }
 
   return {
