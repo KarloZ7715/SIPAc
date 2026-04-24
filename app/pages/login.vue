@@ -3,7 +3,7 @@ import { loginSchema } from '~~/server/utils/schemas/auth'
 
 definePageMeta({ layout: false })
 
-const { login, verify2FA, loading } = useAuth()
+const { login, verify2FA, loading, loginLanding } = useAuth()
 const toast = useToast()
 
 const state = reactive({ email: '', password: '' })
@@ -32,12 +32,28 @@ const valuePillars = [
   },
 ]
 
+// Cookie para evitar redirecciones múltiples en la misma sesión
+const lastLoginLanding = useCookie('last-login-landing', {
+  maxAge: 60 * 10, // 10 minutos
+  sameSite: 'strict',
+})
+
 async function onSubmit() {
   errorMsg.value = ''
   try {
     const outcome = await login(state)
     if (outcome.kind === 'success') {
-      await navigateTo('/')
+      // Verificar si es un login "fresco" (primera navegación post-login)
+      const isFreshLogin = !lastLoginLanding.value
+
+      if (isFreshLogin && loginLanding.value) {
+        // Primera navegación: usar preferencia del usuario
+        lastLoginLanding.value = loginLanding.value
+        await navigateTo(`/${loginLanding.value}`)
+      } else {
+        // Ya navegado o preferencia no disponible: ir a home
+        await navigateTo('/')
+      }
       return
     }
     if (outcome.kind === '2fa') {
@@ -70,7 +86,17 @@ async function onSubmit2FA() {
   errorMsg.value = ''
   try {
     await verify2FA(challengeId.value, otpCode.value)
-    await navigateTo('/')
+    // Verificar si es un login "fresco" (primera navegación post-login)
+    const isFreshLogin = !lastLoginLanding.value
+
+    if (isFreshLogin && loginLanding.value) {
+      // Primera navegación: usar preferencia del usuario
+      lastLoginLanding.value = loginLanding.value
+      await navigateTo(`/${loginLanding.value}`)
+    } else {
+      // Ya navegado o preferencia no disponible: ir a home
+      await navigateTo('/')
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const msg = err?.data?.data?.error?.message || err?.data?.statusMessage || 'Código inválido'
@@ -128,13 +154,15 @@ async function resendVerification() {
     <div class="hero-warm absolute inset-0 -z-10" />
 
     <div
-      class="mx-auto grid min-h-screen max-w-[75rem] items-stretch px-4 py-6 lg:grid-cols-[minmax(0,1.1fr)_30rem] lg:px-6 lg:py-8"
+      class="mx-auto grid min-h-screen max-w-[75rem] items-stretch px-3 py-4 sm:px-4 sm:py-6 lg:grid-cols-[minmax(0,1.1fr)_30rem] lg:px-6 lg:py-8"
     >
       <section class="hidden lg:flex lg:min-h-full lg:flex-col lg:justify-between lg:px-6 lg:py-8">
         <div class="page-stage-hero space-y-6">
           <div class="section-chip">Universidad de Córdoba</div>
           <div class="max-w-2xl space-y-4">
-            <h1 class="font-display text-5xl font-medium leading-[1.1] text-text sm:text-6xl">
+            <h1
+              class="font-display text-3xl font-medium leading-[1.1] text-text sm:text-5xl lg:text-6xl"
+            >
               Un acceso claro para un sistema académico inteligente.
             </h1>
             <p class="max-w-xl text-xl leading-[1.6] text-text-muted">
@@ -167,8 +195,12 @@ async function resendVerification() {
         </div>
       </section>
 
-      <section class="flex items-center justify-center py-8 lg:py-0">
-        <SipacCard id="login-form" variant="subtle" class="page-stage-primary w-full max-w-md">
+      <section class="flex items-center justify-center py-4 sm:py-6 lg:py-0">
+        <SipacCard
+          id="login-form"
+          variant="subtle"
+          class="page-stage-primary w-full max-w-[calc(100vw-2rem)] sm:max-w-md"
+        >
           <SipacSectionHeader
             v-if="step === 'credentials'"
             eyebrow="Sistema Inteligente de Productividad Académica"

@@ -1,7 +1,7 @@
 export function useAuth() {
   const store = useAuthStore()
 
-  const { user, loading, isAuthenticated, isAdmin } = storeToRefs(store)
+  const { user, loading, isAuthenticated, isAdmin, loginLanding } = storeToRefs(store)
 
   return {
     user,
@@ -13,5 +13,7 @@ export function useAuth() {
     register: store.register,
     logout: store.logout,
     fetchUser: store.fetchUser,
+    loginLanding,
+    clearLoginLanding: store.clearLoginLanding,
   }
 }

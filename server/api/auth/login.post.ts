@@ -103,5 +103,9 @@ export default defineEventHandler(async (event) => {
     resource: 'session',
   })
 
-  return ok({ token, user: user.toJSON() })
+  return ok({
+    token,
+    user: user.toJSON(),
+    defaultLanding: user.preferences?.defaultLanding || 'dashboard',
+  })
 })

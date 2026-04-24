@@ -23,13 +23,14 @@ type LoginApiResponse =
   | VerificationPendingResponse
 
 export type LoginOutcome =
-  | { kind: 'success'; user: UserPublic }
+  | { kind: 'success'; user: UserPublic; defaultLanding: string }
   | { kind: '2fa'; challengeId: string; email: string }
   | { kind: 'verification'; email: string }
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<UserPublic | null>(null)
   const loading = ref(false)
+  const loginLanding = ref<string | null>(null)
 
   const isAuthenticated = computed(() => !!user.value)
   const isAdmin = computed(() => user.value?.role === 'admin')
@@ -55,6 +56,10 @@ export const useAuthStore = defineStore('auth', () => {
         body: credentials,
       })
       const payload = data.data as Record<string, unknown>
+
+      // Limpiar landing state antes de cada login
+      loginLanding.value = null
+
       if (payload.requires2FA) {
         return {
           kind: '2fa',
@@ -65,8 +70,13 @@ export const useAuthStore = defineStore('auth', () => {
       if (payload.requiresVerification) {
         return { kind: 'verification', email: payload.email as string }
       }
+
+      // Login exitoso: guardar landing y usuario
+      loginLanding.value = (payload.defaultLanding as string) || 'dashboard'
       user.value = (payload.user as UserPublic) ?? null
-      return { kind: 'success', user: user.value! }
+      user.value.preferences = user.value.preferences || { defaultLanding: 'dashboard' }
+
+      return { kind: 'success', user: user.value!, defaultLanding: loginLanding.value }
     } finally {
       loading.value = false
     }
@@ -100,8 +110,12 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
+    const notificationsStore = useNotificationsStore()
+
     await $fetch('/api/auth/logout' as string, { method: 'POST' })
+    notificationsStore.resetState()
     user.value = null
+    loginLanding.value = null // Limpiar landing preference al logout
     await navigateTo('/login')
   }
 
@@ -116,5 +130,9 @@ export const useAuthStore = defineStore('auth', () => {
     verify2FA,
     register,
     logout,
+    loginLanding, // Exponer para login.vue
+    clearLoginLanding: () => {
+      loginLanding.value = null
+    },
   }
 })

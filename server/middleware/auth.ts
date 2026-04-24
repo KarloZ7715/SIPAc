@@ -50,23 +50,45 @@ export default defineEventHandler(async (event: H3Event) => {
       throw createAuthenticationError('Sesión inválida')
     }
 
-    const [session, user] = await Promise.all([
-      Session.findOne({ jti: payload.jti, userId: payload.sub }).lean(),
-      User.findById(payload.sub).select('tokenVersion isActive').lean(),
-    ])
+    // Check in-memory LRU auth cache before hitting MongoDB
+    const cached = getAuthCache(payload.jti, payload.sub)
+    if (cached) {
+      if (cached.session.revokedAt || cached.session.expiresAt < new Date()) {
+        throw createAuthenticationError('Sesión cerrada o expirada')
+      }
+      if (!cached.user.isActive) {
+        throw createAuthenticationError('Usuario inactivo')
+      }
+      if ((cached.user.tokenVersion ?? 0) !== (payload.tokenVersion ?? 0)) {
+        throw createAuthenticationError('Sesión revocada')
+      }
+    } else {
+      const [session, user] = await Promise.all([
+        Session.findOne({ jti: payload.jti, userId: payload.sub }).lean(),
+        User.findById(payload.sub).select('tokenVersion isActive').lean(),
+      ])
 
-    if (!session || session.revokedAt || session.expiresAt < new Date()) {
-      throw createAuthenticationError('Sesión cerrada o expirada')
-    }
-    if (!user || !user.isActive) {
-      throw createAuthenticationError('Usuario inactivo')
-    }
-    if ((user.tokenVersion ?? 0) !== (payload.tokenVersion ?? 0)) {
-      throw createAuthenticationError('Sesión revocada')
-    }
+      if (!session || session.revokedAt || session.expiresAt < new Date()) {
+        throw createAuthenticationError('Sesión cerrada o expirada')
+      }
+      if (!user || !user.isActive) {
+        throw createAuthenticationError('Usuario inactivo')
+      }
+      if ((user.tokenVersion ?? 0) !== (payload.tokenVersion ?? 0)) {
+        throw createAuthenticationError('Sesión revocada')
+      }
 
-    // best-effort lastSeen update (fire and forget)
-    Session.updateOne({ _id: session._id }, { $set: { lastSeenAt: new Date() } }).catch(() => {})
+      // Cache the successful auth result (TTL 60s)
+      setAuthCache(
+        payload.jti,
+        payload.sub,
+        { _id: session._id, revokedAt: session.revokedAt, expiresAt: session.expiresAt },
+        { tokenVersion: user.tokenVersion, isActive: user.isActive },
+      )
+
+      // best-effort lastSeen update (fire and forget)
+      Session.updateOne({ _id: session._id }, { $set: { lastSeenAt: new Date() } }).catch(() => {})
+    }
   }
 
   event.context.auth = payload
