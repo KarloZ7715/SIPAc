@@ -311,9 +311,9 @@ const stageSteps = computed(() => [
 
 const workspaceShellClass = computed(() => {
   if (currentStage.value === 'empty') {
-    return 'grid w-full gap-6 md:grid-cols-2 md:items-start lg:mx-auto lg:max-w-6xl'
+    return 'grid w-full gap-4 sm:gap-6 md:grid-cols-2 md:items-start lg:mx-auto lg:max-w-6xl'
   }
-  return 'grid w-full gap-6 lg:grid-cols-[19rem_minmax(0,1fr)] xl:grid-cols-[19rem_minmax(0,1fr)]'
+  return 'grid w-full gap-4 sm:gap-6 lg:grid-cols-[16rem_minmax(0,1fr)] xl:grid-cols-[19rem_minmax(0,1fr)]'
 })
 
 const needsMobileSavePadding = computed(
@@ -955,10 +955,10 @@ onBeforeUnmount(() => {
 
       <div
         class="workspace-documents-main min-w-0"
-        :class="{ 'pb-24 xl:pb-0': needsMobileSavePadding }"
+        :class="{ 'pb-20 xl:pb-0': needsMobileSavePadding }"
       >
         <section
-          class="panel-surface overflow-hidden p-5 sm:p-6 lg:p-5"
+          class="panel-surface overflow-hidden p-4 sm:p-6 lg:p-5"
           :aria-busy="currentStage === 'analyzing' ? 'true' : undefined"
         >
           <Transition :css="!hydratingWorkspace" name="workspace-phase" mode="out-in">

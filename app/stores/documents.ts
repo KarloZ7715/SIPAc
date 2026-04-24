@@ -542,15 +542,25 @@ export const useDocumentsStore = defineStore('documents', () => {
     }
   }
 
-  function startPolling(intervalMs = 5000) {
+  function getPollingInterval(): number {
+    if (!import.meta.client) return 5000
+    const conn = (navigator as { connection?: { effectiveType?: string } }).connection
+    if (conn?.effectiveType === '2g' || conn?.effectiveType === 'slow-2g') return 15000
+    if (conn?.effectiveType === '3g') return 10000
+    return 5000
+  }
+
+  function startPolling(intervalMs?: number) {
     if (!import.meta.client || pollTimer) {
       return
     }
 
+    const interval = intervalMs ?? getPollingInterval()
+
     void pollActiveStatuses()
     pollTimer = setInterval(() => {
       void pollActiveStatuses()
-    }, intervalMs)
+    }, interval)
   }
 
   function refreshOnFocus() {
@@ -564,8 +574,21 @@ export const useDocumentsStore = defineStore('documents', () => {
       }
     }
 
+    // Pause polling when tab is hidden, resume when visible
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopPolling()
+      } else if (activeDocuments.value.length > 0) {
+        startPolling()
+      }
+    }
+
     window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
   }
 
   function stopPolling() {
@@ -577,7 +600,27 @@ export const useDocumentsStore = defineStore('documents', () => {
 
   const repositoryProducts = ref<AcademicProductPublic[]>([])
   const repositoryLoading = ref(false)
-  const repositoryCache = new Map<string, ProductsListResponse>()
+  const repositoryCache = new Map<string, { data: ProductsListResponse; timestamp: number }>()
+  const REPOSITORY_CACHE_MAX = 50
+  const REPOSITORY_CACHE_TTL_MS = 5 * 60 * 1000 // 5 min
+
+  function repositoryCacheSet(key: string, value: ProductsListResponse) {
+    if (repositoryCache.size >= REPOSITORY_CACHE_MAX) {
+      const firstKey = repositoryCache.keys().next().value
+      if (firstKey) repositoryCache.delete(firstKey)
+    }
+    repositoryCache.set(key, { data: value, timestamp: Date.now() })
+  }
+
+  function repositoryCacheGet(key: string): ProductsListResponse | undefined {
+    const entry = repositoryCache.get(key)
+    if (!entry) return undefined
+    if (Date.now() - entry.timestamp > REPOSITORY_CACHE_TTL_MS) {
+      repositoryCache.delete(key)
+      return undefined
+    }
+    return entry.data
+  }
   const repositoryFilters = reactive<RepositoryFilters>({
     productType: undefined,
     year: undefined,
@@ -650,12 +693,12 @@ export const useDocumentsStore = defineStore('documents', () => {
       page: nextPage,
     }
     const queryString = buildRepositoryQueryParams(nextFilters).toString()
-    if (repositoryCache.has(queryString)) {
+    if (repositoryCacheGet(queryString)) {
       return
     }
     const url = `/api/products${queryString ? `?${queryString}` : ''}`
     const response = await $fetch<ProductsListResponse>(url)
-    repositoryCache.set(queryString, response)
+    repositoryCacheSet(queryString, response)
   }
 
   async function fetchProducts(filters?: Partial<RepositoryFilters>, fetcher: StoreFetch = $fetch) {
@@ -667,7 +710,7 @@ export const useDocumentsStore = defineStore('documents', () => {
       const params = buildRepositoryQueryParams(repositoryFilters)
 
       const queryString = params.toString()
-      const cached = repositoryCache.get(queryString)
+      const cached = repositoryCacheGet(queryString)
       if (cached) {
         repositoryProducts.value = cached.data
         repositoryMeta.value = cached.meta ?? null
@@ -678,7 +721,7 @@ export const useDocumentsStore = defineStore('documents', () => {
       const url = `/api/products${queryString ? `?${queryString}` : ''}`
 
       const response = await fetcher<ProductsListResponse>(url)
-      repositoryCache.set(queryString, response)
+      repositoryCacheSet(queryString, response)
       repositoryProducts.value = response.data
       repositoryMeta.value = response.meta ?? null
 

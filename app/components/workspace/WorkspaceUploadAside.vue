@@ -52,14 +52,14 @@ const emit = defineEmits<{
 
 <template>
   <aside
-    class="workspace-upload-aside panel-surface space-y-4 p-5 sm:p-6 lg:top-28 lg:self-start xl:top-40 xl:self-start"
+    class="workspace-upload-aside panel-surface space-y-4 p-4 sm:p-6 lg:top-28 lg:self-start xl:top-40 xl:self-start"
     aria-label="Cargar archivo y acciones del documento"
     data-testid="workspace-upload-aside"
   >
     <div class="space-y-2">
       <p class="section-chip">Subir archivo</p>
-      <p class="text-xl font-semibold text-text">Tu documento</p>
-      <p class="text-sm leading-6 text-text-muted">
+      <p class="text-lg font-semibold text-text sm:text-xl">Tu documento</p>
+      <p class="text-sm leading-[1.55] text-text-muted sm:leading-6">
         Adjunta un PDF, una imagen o un Office (.docx, .xlsx, .pptx, ODF…); en esta misma página lo
         revisas y lo guardas cuando quieras.
       </p>

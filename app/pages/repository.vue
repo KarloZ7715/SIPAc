@@ -20,7 +20,7 @@
           color="primary"
           icon="i-lucide-file-plus-2"
           size="lg"
-          class="rounded-xl"
+          class="w-full rounded-xl sm:w-auto"
         >
           Registrar o subir producto
         </UButton>
@@ -30,15 +30,34 @@
           variant="soft"
           icon="i-lucide-layout-dashboard"
           size="lg"
-          class="rounded-xl"
+          class="w-full rounded-xl sm:w-auto"
         >
           Ver tablero analítico
         </UButton>
       </template>
     </ExperiencePageHero>
 
-    <div class="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:items-start xl:gap-6">
-      <aside class="page-stage-supporting min-w-0 xl:col-span-4">
+    <div class="page-stage-inline lg:hidden">
+      <UButton
+        color="neutral"
+        variant="soft"
+        class="w-full justify-between rounded-xl"
+        :icon="showFiltersPanel ? 'i-lucide-chevron-up' : 'i-lucide-sliders-horizontal'"
+        @click="showFiltersPanel = !showFiltersPanel"
+      >
+        {{
+          showFiltersPanel
+            ? 'Ocultar filtros'
+            : `Mostrar filtros${activeFilterChips.length ? ` (${activeFilterChips.length})` : ''}`
+        }}
+      </UButton>
+    </div>
+
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:items-start lg:gap-6">
+      <aside
+        class="page-stage-supporting min-w-0 lg:col-span-4"
+        :class="showFiltersPanel ? 'block' : 'hidden lg:block'"
+      >
         <RepositoryFiltersPanel
           v-model:only-mine="onlyMine"
           v-model:product-type="selectedProductType"
@@ -54,12 +73,12 @@
           :author-history="authorHistory"
           :institution-history="institutionHistory"
           :active-filter-chips="activeFilterChips"
-          @apply="applyFilters"
-          @clear="clearFilters"
+          @apply="onApplyFiltersFromPanel"
+          @clear="onClearFiltersFromPanel"
         />
       </aside>
 
-      <div class="min-w-0 space-y-4 xl:col-span-8">
+      <div class="min-w-0 space-y-4 lg:col-span-8">
         <section
           class="page-stage-primary panel-surface flex flex-col gap-4 p-4 sm:flex-row sm:items-end sm:gap-4 sm:p-5"
         >
@@ -81,7 +100,7 @@
           </UFormField>
           <UButton
             color="primary"
-            class="shrink-0 rounded-xl"
+            class="w-full shrink-0 rounded-xl sm:w-auto"
             :loading="documentsStore.repositoryLoading"
             @click="applyFilters"
           >
@@ -352,6 +371,7 @@ const toast = useToast()
 const { user } = useAuth()
 const route = useRoute()
 const router = useRouter()
+const { isMobile } = useResponsive()
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 const isRepositoryRouteActive = computed(() => route.path === '/repository')
 const repositoryViewModeCookie = useCookie<string | undefined>(REPO_VIEW_COOKIE_KEY, {
@@ -399,6 +419,7 @@ const previewProduct = ref<AcademicProductPublic | null>(null)
 const showDeleteModal = ref(false)
 const productToDelete = ref<AcademicProductPublic | null>(null)
 const deletingProduct = ref(false)
+const showFiltersPanel = ref(false)
 
 const viewModeOptions = [
   { value: 'cards' as const, label: 'Tarjetas', icon: 'i-lucide-layout-grid' },
@@ -584,6 +605,28 @@ function syncViewModeFromStorage() {
   repositoryViewModeCookie.value = parsed
 }
 
+function applyMobileDefaultViewMode() {
+  if (!import.meta.client) {
+    return
+  }
+
+  const hasCookieMode = parseRepositoryViewMode(repositoryViewModeCookie.value) !== null
+  const hasStoredMode = parseRepositoryViewMode(localStorage.getItem(REPO_VIEW_KEY)) !== null
+  const queryViewMode =
+    typeof route.query.viewMode === 'string'
+      ? parseRepositoryViewMode(route.query.viewMode)
+      : typeof route.query.view === 'string'
+        ? parseRepositoryViewMode(route.query.view)
+        : null
+
+  if (hasCookieMode || hasStoredMode || queryViewMode !== null || !isMobile.value) {
+    return
+  }
+
+  viewMode.value = 'cards'
+  persistViewMode('cards')
+}
+
 function openPreview(product: AcademicProductPublic) {
   previewProduct.value = product
   previewOpen.value = true
@@ -648,6 +691,7 @@ await useAsyncData(
 
 onMounted(() => {
   if (import.meta.client) {
+    applyMobileDefaultViewMode()
     institutionHistory.value = loadJsonList(HISTORY_INST)
     authorHistory.value = loadJsonList(HISTORY_AUTH)
   }
@@ -763,6 +807,13 @@ async function applyFilters() {
   syncToRoute()
 }
 
+async function onApplyFiltersFromPanel() {
+  await applyFilters()
+  if (import.meta.client && window.innerWidth < 1024) {
+    showFiltersPanel.value = false
+  }
+}
+
 const activeFilterChips = computed(() => {
   const chips: Array<{ key: string; label: string; value: string; onRemove: () => void }> = []
 
@@ -859,6 +910,13 @@ async function clearFilters() {
     suppressPageWatcher.value = false
   }
   syncToRoute()
+}
+
+async function onClearFiltersFromPanel() {
+  await clearFilters()
+  if (import.meta.client && window.innerWidth < 1024) {
+    showFiltersPanel.value = false
+  }
 }
 
 function getProductActions(product: AcademicProductPublic): DropdownMenuItem[][] {

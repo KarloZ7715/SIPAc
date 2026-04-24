@@ -23,25 +23,27 @@ const activeIdx = computed(() => {
 <template>
   <section class="top-20 z-20" aria-labelledby="workspace-stage-title">
     <div
-      class="border-b border-border/55 bg-gradient-to-b from-white/92 via-surface/90 to-surface-muted/88 px-4 py-3 shadow-[0_12px_32px_-26px_rgb(20_20_19/0.1)] backdrop-blur-md sm:px-5"
+      class="border-b border-border/55 bg-gradient-to-b from-white/92 via-surface/90 to-surface-muted/88 px-3 py-2.5 shadow-[0_12px_32px_-26px_rgb(20_20_19/0.1)] backdrop-blur-md sm:px-5 sm:py-3"
     >
-      <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div class="min-w-0">
           <p class="text-[0.72rem] font-semibold tracking-[0.18em] text-text-soft uppercase">
             {{ eyebrow }}
           </p>
           <h1
             id="workspace-stage-title"
-            class="mt-1 font-display text-lg font-medium leading-[1.2] text-text sm:text-xl sm:leading-[1.2]"
+            class="mt-1 font-display text-base font-medium leading-[1.2] text-text sm:text-xl sm:leading-[1.2]"
           >
             {{ title }}
           </h1>
-          <p class="mt-1 line-clamp-2 text-sm leading-[1.6] text-text-muted">
+          <p
+            class="mt-1 line-clamp-2 text-xs leading-[1.5] text-text-muted sm:text-sm sm:leading-[1.6]"
+          >
             {{ description }}
           </p>
         </div>
 
-        <div class="flex flex-col gap-3 xl:min-w-152 xl:max-w-2xl xl:flex-1">
+        <div class="flex flex-col gap-2.5 xl:min-w-152 xl:max-w-2xl xl:flex-1">
           <div
             class="stage-progress-rail"
             role="progressbar"
@@ -78,7 +80,7 @@ const activeIdx = computed(() => {
                 <p class="truncate text-xs font-medium tracking-[0.12em] text-text uppercase">
                   {{ step.label }}
                 </p>
-                <p class="mt-1 line-clamp-2 text-sm text-text-muted">{{ step.hint }}</p>
+                <p class="mt-1 line-clamp-2 text-xs text-text-muted sm:text-sm">{{ step.hint }}</p>
               </div>
             </li>
           </ol>

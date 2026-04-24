@@ -48,7 +48,7 @@ const maxYear = new Date().getFullYear() + 1
       <UFormField
         label="Solo mis aportes"
         name="repository-mine"
-        class="flex flex-row items-center justify-between gap-3 sm:flex-col sm:items-stretch"
+        class="flex items-center justify-between gap-3"
       >
         <USwitch v-model="onlyMine" aria-label="Mostrar únicamente tus productos" />
       </UFormField>
@@ -107,7 +107,7 @@ const maxYear = new Date().getFullYear() + 1
         />
       </UFormField>
 
-      <UFormField label="Rango de fechas (metadato)" name="repository-date-from">
+      <UFormField label="Rango de fechas" name="repository-date-from">
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <UInput v-model="filterDateFrom" type="date" class="w-full" />
           <UInput v-model="filterDateTo" type="date" class="w-full" />

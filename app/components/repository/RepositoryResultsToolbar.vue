@@ -38,7 +38,7 @@ const pageLimit = defineModel<number>('pageLimit', { required: true })
     class="panel-surface flex flex-col gap-3 p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:p-4"
   >
     <div
-      class="flex flex-wrap items-center gap-2"
+      class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
       role="group"
       aria-label="Modo de presentación de resultados"
     >
@@ -59,28 +59,36 @@ const pageLimit = defineModel<number>('pageLimit', { required: true })
         </UButton>
       </div>
     </div>
-    <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-      <label class="text-xs font-medium text-text-soft" for="repository-sort-by">Ordenar por</label>
-      <USelectMenu
-        id="repository-sort-by"
-        v-model="sortBy"
-        :items="sortByOptions"
-        value-key="value"
-        size="sm"
-        class="min-w-[12rem]"
-      />
-      <label class="text-xs font-medium text-text-soft" for="repository-page-size"
-        >Por página</label
-      >
-      <USelectMenu
-        id="repository-page-size"
-        :model-value="pageLimit"
-        :items="pageSizeOptions"
-        value-key="value"
-        size="sm"
-        class="min-w-[5.5rem]"
-        @update:model-value="(value) => emit('change-page-size', value)"
-      />
+    <div class="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
+      <div class="flex w-full items-center gap-2 sm:w-auto">
+        <label class="hidden text-xs font-medium text-text-soft sm:block" for="repository-sort-by"
+          >Ordenar por</label
+        >
+        <USelectMenu
+          id="repository-sort-by"
+          v-model="sortBy"
+          :items="sortByOptions"
+          value-key="value"
+          size="sm"
+          aria-label="Ordenar resultados"
+          class="min-w-0 flex-1 sm:min-w-[12rem] sm:flex-none"
+        />
+      </div>
+      <div class="flex w-full items-center gap-2 sm:w-auto">
+        <label class="hidden text-xs font-medium text-text-soft sm:block" for="repository-page-size"
+          >Por página</label
+        >
+        <USelectMenu
+          id="repository-page-size"
+          :model-value="pageLimit"
+          :items="pageSizeOptions"
+          value-key="value"
+          size="sm"
+          aria-label="Cantidad de resultados por página"
+          class="min-w-0 flex-1 sm:min-w-[5.5rem] sm:flex-none"
+          @update:model-value="(value) => emit('change-page-size', value)"
+        />
+      </div>
     </div>
   </div>
 </template>
