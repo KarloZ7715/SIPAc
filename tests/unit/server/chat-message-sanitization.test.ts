@@ -5,6 +5,36 @@ import { sanitizeChatMessages } from '~~/server/services/chat/conversations'
 import type { ChatUiMessage } from '~~/app/types'
 
 describe('chat message sanitization and tool schema robustness', () => {
+  it('removes private <think> blocks from assistant text without altering user text', () => {
+    const messages: ChatUiMessage[] = [
+      {
+        id: 'user-1',
+        role: 'user',
+        parts: [{ type: 'text', text: 'Necesito el literal <think> en un ejemplo XML.' }],
+      },
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'text',
+            text: '<think>analisis interno sensible</think>Respuesta final para el usuario.',
+          },
+        ],
+      },
+    ]
+
+    const sanitized = sanitizeChatMessages(messages)
+
+    expect(sanitized).toHaveLength(2)
+    expect(sanitized[0]?.parts[0]?.type).toBe('text')
+    expect((sanitized[0]?.parts[0] as { text?: string })?.text).toContain('<think>')
+    expect(sanitized[1]?.parts[0]?.type).toBe('text')
+    expect((sanitized[1]?.parts[0] as { text?: string })?.text).toBe(
+      'Respuesta final para el usuario.',
+    )
+  })
+
   it('strips tool part nulls and unknown keys so validateUIMessages accepts OpenRouter-style tool payloads', async () => {
     const tools = {
       searchRepositoryProducts: tool({
@@ -269,5 +299,17 @@ describe('chat message sanitization and tool schema robustness', () => {
 
     expect(first.reasoning).toBeUndefined()
     expect(first.reasoning_content).toBeUndefined()
+  })
+
+  it('does not crash if a malformed part lacks a string type', () => {
+    const malformed = [
+      {
+        id: 'assistant-malformed',
+        role: 'assistant',
+        parts: [{ text: 'contenido legacy sin type' }],
+      },
+    ] as unknown as ChatUiMessage[]
+
+    expect(() => sanitizeChatMessages(malformed)).not.toThrow()
   })
 })

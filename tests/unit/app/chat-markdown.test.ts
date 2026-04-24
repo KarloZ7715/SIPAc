@@ -25,4 +25,13 @@ describe('renderChatMarkdown', () => {
     expect(html).toContain('<table')
     expect(html).toContain('href="/api/upload/123/file"')
   })
+
+  it('neutraliza enlaces con payload malicioso y esquemas no permitidos', () => {
+    const html = renderChatMarkdown(
+      `[Exploit](https://example.com" onclick="alert('xss'))\n[Unsafe](javascript:alert(1))`,
+    )
+
+    expect(html).not.toContain('onclick=')
+    expect(html).toContain('href="#"')
+  })
 })

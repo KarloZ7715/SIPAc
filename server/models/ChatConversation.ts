@@ -27,6 +27,20 @@ const chatConversationSchema = new Schema<IChatConversation>(
       type: [Schema.Types.Mixed],
       default: [],
     } as never,
+    messageCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    lastMessagePreview: {
+      type: String,
+      trim: true,
+      maxlength: 180,
+    },
+    lastMessageAt: {
+      type: Date,
+      default: Date.now,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -48,6 +62,7 @@ const chatConversationSchema = new Schema<IChatConversation>(
 )
 
 chatConversationSchema.index({ userId: 1, updatedAt: -1 }, { name: 'idx_user_updated' })
+chatConversationSchema.index({ userId: 1, lastMessageAt: -1 }, { name: 'idx_user_last_message_at' })
 chatConversationSchema.index({ userId: 1, chatId: 1 }, { unique: true, name: 'ux_user_chat' })
 chatConversationSchema.index(
   { lastAccessedAt: 1 },

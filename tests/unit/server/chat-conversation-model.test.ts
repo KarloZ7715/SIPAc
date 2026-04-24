@@ -12,4 +12,20 @@ describe('ChatConversation schema', () => {
       ]),
     )
   })
+
+  it('incluye campos de resumen persistido e índice por lastMessageAt', () => {
+    const indexes = ChatConversation.schema.indexes()
+
+    expect(ChatConversation.schema.path('messageCount')).toBeDefined()
+    expect(ChatConversation.schema.path('lastMessagePreview')).toBeDefined()
+    expect(ChatConversation.schema.path('lastMessageAt')).toBeDefined()
+    expect(indexes).toEqual(
+      expect.arrayContaining([
+        [
+          { userId: 1, lastMessageAt: -1 },
+          expect.objectContaining({ name: 'idx_user_last_message_at' }),
+        ],
+      ]),
+    )
+  })
 })

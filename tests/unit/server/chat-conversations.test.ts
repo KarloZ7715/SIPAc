@@ -3,6 +3,9 @@ import type { ChatUiMessage } from '~~/app/types'
 import {
   computeChatLastMessageAtIso,
   sanitizeChatMessages,
+  toChatConversationPublic,
+  toChatConversationSummaryPublic,
+  truncateChatMessagesForPersistence,
 } from '~~/server/services/chat/conversations'
 
 describe('computeChatLastMessageAtIso', () => {
@@ -104,5 +107,107 @@ describe('chat conversation sanitization', () => {
       'user-1',
       'user-2',
     ])
+  })
+
+  it('drops assistant message with empty text when tool part has no output available', () => {
+    const messages = [
+      {
+        id: 'user-1',
+        role: 'user',
+        parts: [{ type: 'text', text: 'Busca tesis de 2024' }],
+      },
+      {
+        id: 'assistant-empty-tool',
+        role: 'assistant',
+        parts: [
+          { type: 'text', text: '   ' },
+          {
+            type: 'tool-searchRepositoryProducts',
+            toolCallId: 'tool-1',
+            state: 'input-available',
+            input: {
+              question: 'Busca tesis de 2024',
+            },
+          },
+        ],
+      },
+      {
+        id: 'user-2',
+        role: 'user',
+        parts: [{ type: 'text', text: 'Ahora busca articulos' }],
+      },
+    ] as ChatUiMessage[]
+
+    const sanitized = sanitizeChatMessages(messages)
+
+    expect(sanitized.map((message) => message.id)).toEqual(['user-1', 'user-2'])
+    expect(sanitized.some((message) => message.role === 'assistant')).toBe(false)
+  })
+
+  it('toChatConversationPublic preserves persisted messages without re-sanitizing on read', () => {
+    const persistedMessages = [
+      {
+        id: 'user-1',
+        role: 'user',
+        parts: [{ type: 'text', text: 'Consulta original' }],
+      },
+      {
+        id: 'assistant-empty',
+        role: 'assistant',
+        parts: [{ type: 'text', text: '   ' }],
+      },
+      {
+        id: 'user-1',
+        role: 'user',
+        parts: [{ type: 'text', text: 'Consulta original' }],
+      },
+    ] as ChatUiMessage[]
+
+    const result = toChatConversationPublic({
+      chatId: 'chat-1',
+      title: 'Chat de prueba',
+      messages: persistedMessages,
+      createdAt: '2026-04-19T00:00:00.000Z',
+      updatedAt: '2026-04-19T00:10:00.000Z',
+    })
+
+    expect(result.messages).toEqual(persistedMessages)
+    expect(result.messages.map((message) => message.id)).toEqual([
+      'user-1',
+      'assistant-empty',
+      'user-1',
+    ])
+    expect(result.messageCount).toBe(3)
+  })
+
+  it('truncateChatMessagesForPersistence conserva los mensajes más recientes dentro del límite', () => {
+    const messages = Array.from({ length: 240 }, (_, index) => ({
+      id: `msg-${index + 1}`,
+      role: (index % 2 === 0 ? 'user' : 'assistant') as const,
+      parts: [{ type: 'text' as const, text: `Mensaje ${index + 1}` }],
+      metadata: { createdAt: 1_700_000_000_000 + index },
+    })) as ChatUiMessage[]
+
+    const truncated = truncateChatMessagesForPersistence(messages)
+
+    expect(truncated.length).toBeLessThanOrEqual(180)
+    expect(truncated[0]?.id).toBe('msg-61')
+    expect(truncated[truncated.length - 1]?.id).toBe('msg-240')
+  })
+
+  it('toChatConversationSummaryPublic usa los campos persistidos cuando están disponibles', () => {
+    const summary = toChatConversationSummaryPublic({
+      chatId: 'chat-42',
+      title: 'Resumen persistido',
+      messageCount: 77,
+      lastMessagePreview: 'Vista previa persistida',
+      lastMessageAt: '2026-04-19T12:34:56.000Z',
+      createdAt: '2026-04-19T12:00:00.000Z',
+      updatedAt: '2026-04-19T12:35:00.000Z',
+    })
+
+    expect(summary.messageCount).toBe(77)
+    expect(summary.lastMessagePreview).toBe('Vista previa persistida')
+    expect(summary.lastMessageAt).toBe('2026-04-19T12:34:56.000Z')
   })
 })

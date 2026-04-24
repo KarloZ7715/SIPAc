@@ -8,7 +8,8 @@ export type StructuredLlmProvider = 'gemini' | 'cerebras' | 'groq' | 'openrouter
 const GROQ_GPT_OSS_120B_MODEL_ID = 'openai/gpt-oss-120b'
 const GROQ_GPT_OSS_20B_MODEL_ID = 'openai/gpt-oss-20b'
 const CEREBRAS_QWEN_MODEL_ID = 'qwen-3-235b-a22b-instruct-2507'
-const GEMINI_CHAT_MODEL_ID = 'gemini-2.5-flash'
+const GEMINI_CHAT_MODEL_ID = 'gemini-3.1-flash-lite-preview'
+const GEMINI_CHAT_GEMMA_PREVIEW_MODEL_ID = 'gemma-4-31b-it'
 
 const GEMINI_FLASH_PIPELINE_MODEL_IDS = [
   'gemini-3.1-flash-lite-preview',
@@ -42,16 +43,19 @@ const NER_OPENROUTER_MODEL_IDS_ORDERED = [
 /** Modelos extra solo en chat (no alteran la cadena NER). */
 const CHAT_OPENROUTER_MODEL_IDS_ORDERED = [
   ...NER_OPENROUTER_MODEL_IDS_ORDERED,
-  'google/gemma-4-31b-it:free',
   'nvidia/nemotron-3-super-120b-a12b:free',
   'z-ai/glm-4.5-air:free',
 ] as const
 
 const CHAT_NVIDIA_MODEL_IDS_ORDERED = [
-  ...NER_NVIDIA_MODEL_IDS_ORDERED,
+  'moonshotai/kimi-k2-thinking',
   'moonshotai/kimi-k2-instruct-0905',
+  'minimaxai/minimax-m2.7',
+  'mistralai/mistral-large-3-675b-instruct-2512',
+  'z-ai/glm4.7',
+  'deepseek-ai/deepseek-v3.1-terminus',
+  'deepseek-ai/deepseek-v3.2',
 ] as const
-const CHAT_GROQ_MODEL_IDS_ORDERED = [GROQ_GPT_OSS_120B_MODEL_ID, GROQ_GPT_OSS_20B_MODEL_ID] as const
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 
@@ -211,21 +215,13 @@ export function getStructuredModelCandidates(): StructuredModelCandidate[] {
 
 export function getChatModelCandidates(): StructuredModelCandidate[] {
   const env = validateEnv(getRuntimeConfigSafe())
+  const google = createGoogleGenerativeAI({ apiKey: env.googleApiKey })
   const cerebras =
     env.cerebrasApiKey.length > 0
       ? createOpenAICompatible({
           name: 'cerebras',
           apiKey: env.cerebrasApiKey,
           baseURL: 'https://api.cerebras.ai/v1',
-          supportsStructuredOutputs: true,
-        })
-      : null
-  const groq =
-    env.groqApiKey.length > 0
-      ? createOpenAICompatible({
-          name: 'groq',
-          apiKey: env.groqApiKey,
-          baseURL: 'https://api.groq.com/openai/v1',
           supportsStructuredOutputs: true,
         })
       : null
@@ -258,14 +254,6 @@ export function getChatModelCandidates(): StructuredModelCandidate[] {
   const candidates: StructuredModelCandidate[] = []
   const seen = new Set<string>()
 
-  if (cerebras) {
-    pushCandidate(seen, candidates, {
-      name: 'cerebras',
-      modelId: CEREBRAS_QWEN_MODEL_ID,
-      model: cerebras(CEREBRAS_QWEN_MODEL_ID),
-    })
-  }
-
   if (nvidia) {
     for (const modelId of CHAT_NVIDIA_MODEL_IDS_ORDERED) {
       pushCandidate(seen, candidates, {
@@ -274,22 +262,6 @@ export function getChatModelCandidates(): StructuredModelCandidate[] {
         model: nvidia(modelId),
       })
     }
-  }
-
-  if (groq) {
-    pushCandidate(seen, candidates, {
-      name: 'groq',
-      modelId: GROQ_GPT_OSS_120B_MODEL_ID,
-      model: groq(GROQ_GPT_OSS_120B_MODEL_ID),
-    })
-  }
-
-  if (groq) {
-    pushCandidate(seen, candidates, {
-      name: 'groq',
-      modelId: GROQ_GPT_OSS_20B_MODEL_ID,
-      model: groq(GROQ_GPT_OSS_20B_MODEL_ID),
-    })
   }
 
   if (openrouter) {
@@ -301,6 +273,25 @@ export function getChatModelCandidates(): StructuredModelCandidate[] {
       })
     }
   }
+
+  if (cerebras) {
+    pushCandidate(seen, candidates, {
+      name: 'cerebras',
+      modelId: CEREBRAS_QWEN_MODEL_ID,
+      model: cerebras(CEREBRAS_QWEN_MODEL_ID),
+    })
+  }
+
+  pushCandidate(seen, candidates, {
+    name: 'gemini',
+    modelId: GEMINI_CHAT_MODEL_ID,
+    model: google(GEMINI_CHAT_MODEL_ID),
+  })
+  pushCandidate(seen, candidates, {
+    name: 'gemini',
+    modelId: GEMINI_CHAT_GEMMA_PREVIEW_MODEL_ID,
+    model: google(GEMINI_CHAT_GEMMA_PREVIEW_MODEL_ID),
+  })
 
   return candidates
 }
@@ -321,16 +312,6 @@ export function getExperimentalChatModelCandidates(): StructuredModelCandidate[]
         })
       : null
 
-  const groq =
-    env.groqApiKey.length > 0
-      ? createOpenAICompatible({
-          name: 'groq',
-          apiKey: env.groqApiKey,
-          baseURL: 'https://api.groq.com/openai/v1',
-          supportsStructuredOutputs: true,
-        })
-      : null
-
   const nvidia =
     env.nvidiaApiKey.length > 0
       ? createOpenAICompatible({
@@ -367,16 +348,6 @@ export function getExperimentalChatModelCandidates(): StructuredModelCandidate[]
     })
   }
 
-  if (groq) {
-    for (const modelId of CHAT_GROQ_MODEL_IDS_ORDERED) {
-      pushCandidate(seen, candidates, {
-        name: 'groq',
-        modelId,
-        model: groq(modelId),
-      })
-    }
-  }
-
   if (nvidia) {
     for (const modelId of CHAT_NVIDIA_MODEL_IDS_ORDERED) {
       pushCandidate(seen, candidates, {
@@ -397,12 +368,16 @@ export function getExperimentalChatModelCandidates(): StructuredModelCandidate[]
     }
   }
 
-  // Gemini queda fuera de la política normal del chat. Se deja disponible solo
-  // como candidato excepcional para diagnóstico futuro si se decide exponerlo.
+  // Gemini 3.1 Flash Lite se expone para uso manual y como fallback final.
   pushCandidate(seen, candidates, {
     name: 'gemini',
     modelId: GEMINI_CHAT_MODEL_ID,
     model: google(GEMINI_CHAT_MODEL_ID),
+  })
+  pushCandidate(seen, candidates, {
+    name: 'gemini',
+    modelId: GEMINI_CHAT_GEMMA_PREVIEW_MODEL_ID,
+    model: google(GEMINI_CHAT_GEMMA_PREVIEW_MODEL_ID),
   })
 
   return candidates

@@ -16,10 +16,10 @@ describe('chat model selection', () => {
     getExperimentalChatModelCandidatesMock.mockReset()
   })
 
-  it('incluye Gemini entre las opciones manuales sin meterlo en la cadena automática', async () => {
+  it('incluye Gemini 3.1 Flash Lite Preview entre las opciones manuales', async () => {
     getExperimentalChatModelCandidatesMock.mockReturnValue([
       { name: 'cerebras', modelId: 'qwen-3-235b-a22b-instruct-2507', model: {} },
-      { name: 'gemini', modelId: 'gemini-2.5-flash', model: {} },
+      { name: 'gemini', modelId: 'gemini-3.1-flash-lite-preview', model: {} },
     ])
 
     const { getManualChatModelOptions, getDisabledChatModelOptions } =
@@ -34,7 +34,11 @@ describe('chat model selection', () => {
 
   it('permite seleccionar Gemini manualmente cuando está habilitado en candidatos experimentales', async () => {
     getExperimentalChatModelCandidatesMock.mockReturnValue([
-      { name: 'gemini', modelId: 'gemini-2.5-flash', model: { provider: 'gemini' } },
+      {
+        name: 'gemini',
+        modelId: 'gemini-3.1-flash-lite-preview',
+        model: { provider: 'gemini' },
+      },
     ])
 
     const { resolveChatModelCandidates } =
@@ -43,7 +47,7 @@ describe('chat model selection', () => {
     expect(
       resolveChatModelCandidates({
         provider: 'gemini',
-        modelId: 'gemini-2.5-flash',
+        modelId: 'gemini-3.1-flash-lite-preview',
       }),
     ).toHaveLength(1)
   })

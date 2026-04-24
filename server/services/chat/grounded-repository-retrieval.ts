@@ -277,7 +277,19 @@ function inferSearchPhraseFromQuestion(question: string) {
     .join(' ')
     .trim()
 
-  return cleaned.length >= 6 ? cleaned : undefined
+  if (cleaned.length >= 6) {
+    return cleaned
+  }
+
+  const lenient = normalizedQuestion
+    .replace(/[¿?!.;,]/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length >= 3 && !QUESTION_STOPWORDS.has(normalizeComparableText(token)))
+    .slice(0, 4)
+    .join(' ')
+    .trim()
+
+  return lenient.length >= 3 ? lenient : undefined
 }
 
 function buildNormalizedFilters(input: ChatSearchToolInput): ChatSearchFilters {
@@ -602,7 +614,147 @@ function buildMatchedFields(product: AcademicProductPublic, normalizedFilters: C
     }
   }
 
+  if (normalizedFilters.productType && product.productType === normalizedFilters.productType) {
+    matched.add('productType')
+  }
+
+  const referenceDate = resolveProductReferenceDate(product)
+  if (referenceDate) {
+    const parsedReferenceDate = new Date(referenceDate)
+    if (!Number.isNaN(parsedReferenceDate.getTime())) {
+      const hasDateFilter = Boolean(
+        normalizedFilters.yearFrom ||
+        normalizedFilters.yearTo ||
+        normalizedFilters.dateFrom ||
+        normalizedFilters.dateTo,
+      )
+
+      if (hasDateFilter) {
+        const referenceYear = parsedReferenceDate.getUTCFullYear()
+        const yearMatches =
+          (!normalizedFilters.yearFrom || referenceYear >= normalizedFilters.yearFrom) &&
+          (!normalizedFilters.yearTo || referenceYear <= normalizedFilters.yearTo)
+
+        const parsedDateFrom = normalizedFilters.dateFrom
+          ? new Date(normalizedFilters.dateFrom)
+          : undefined
+        const parsedDateTo = normalizedFilters.dateTo
+          ? new Date(normalizedFilters.dateTo)
+          : undefined
+        const normalizedDateFrom =
+          parsedDateFrom && !Number.isNaN(parsedDateFrom.getTime())
+            ? new Date(parsedDateFrom.getTime())
+            : undefined
+        const normalizedDateTo =
+          parsedDateTo && !Number.isNaN(parsedDateTo.getTime())
+            ? new Date(parsedDateTo.getTime())
+            : undefined
+        const hasInvalidDateFilter =
+          (Boolean(normalizedFilters.dateFrom) && !normalizedDateFrom) ||
+          (Boolean(normalizedFilters.dateTo) && !normalizedDateTo)
+
+        if (normalizedDateTo) {
+          normalizedDateTo.setUTCHours(23, 59, 59, 999)
+        }
+
+        const dateFromMatches = !normalizedDateFrom || parsedReferenceDate >= normalizedDateFrom
+        const dateToMatches = !normalizedDateTo || parsedReferenceDate <= normalizedDateTo
+
+        if (!hasInvalidDateFilter && yearMatches && dateFromMatches && dateToMatches) {
+          matched.add('referenceDate')
+        }
+      }
+    }
+  }
+
   return [...matched]
+}
+
+function buildResultConsistencyNotes(results: ChatSearchResult[]) {
+  const notes: string[] = []
+  const byTitle = new Map<string, { years: Set<number>; institutions: Set<string> }>()
+
+  for (const result of results) {
+    const key = normalizeComparableText(result.title)
+    if (!key) {
+      continue
+    }
+
+    const current = byTitle.get(key) ?? {
+      years: new Set<number>(),
+      institutions: new Set<string>(),
+    }
+
+    if (typeof result.year === 'number' && Number.isFinite(result.year)) {
+      current.years.add(result.year)
+    }
+
+    if (typeof result.institution === 'string' && result.institution.trim().length > 0) {
+      current.institutions.add(normalizeComparableText(result.institution))
+    }
+
+    byTitle.set(key, current)
+  }
+
+  for (const [titleKey, values] of byTitle) {
+    if (values.years.size > 1) {
+      notes.push(
+        `Se detectaron años distintos para resultados con título similar (${titleKey.slice(0, 48)}...).`,
+      )
+    }
+
+    if (values.institutions.size > 1) {
+      notes.push(
+        `Se detectaron instituciones distintas para resultados con título similar (${titleKey.slice(0, 48)}...).`,
+      )
+    }
+  }
+
+  return notes.slice(0, 2)
+}
+
+function joinNaturalLanguageReasons(reasons: string[]) {
+  if (reasons.length <= 1) {
+    return reasons[0] ?? ''
+  }
+
+  return `${reasons.slice(0, -1).join(', ')} y ${reasons.at(-1)}`
+}
+
+function buildBroadenedRelatedReason(
+  matchedFields: string[],
+  requestedProductType?: ProductType,
+): string | undefined {
+  if (!requestedProductType) {
+    return undefined
+  }
+
+  const expectedType = formatChatProductType(requestedProductType).toLowerCase()
+  const hasTemporalMatch = matchedFields.includes('referenceDate')
+  const hasInstitutionMatch = matchedFields.some((field) =>
+    field.toLowerCase().includes('institution'),
+  )
+  const hasAuthorMatch = matchedFields.some((field) => field.toLowerCase().includes('author'))
+  const hasTopicMatch = matchedFields.some(
+    (field) =>
+      field !== 'referenceDate' &&
+      field !== 'productType' &&
+      !field.toLowerCase().includes('institution') &&
+      !field.toLowerCase().includes('author'),
+  )
+
+  const reasons = [
+    hasInstitutionMatch ? 'institucion' : undefined,
+    hasAuthorMatch ? 'autor' : undefined,
+    hasTemporalMatch ? 'periodo' : undefined,
+    hasTopicMatch ? 'tema' : undefined,
+  ].filter(Boolean) as string[]
+
+  if (reasons.length === 0) {
+    return `Resultado relacionado encontrado al ampliar filtros, pero no como ${expectedType}.`
+  }
+
+  return `Coincide por ${joinNaturalLanguageReasons(reasons)}, pero no como ${expectedType}.`
 }
 
 function buildSearchTerms(normalizedFilters: ChatSearchFilters, question: string) {
@@ -669,7 +821,7 @@ function toSearchResult(
   normalizedFilters: ChatSearchFilters,
   strategyUsed: ChatSearchStrategy,
   ocrText?: string,
-  relatedReason?: string,
+  relatedReason?: string | ((matchedFields: string[]) => string | undefined),
 ): ChatSearchResult {
   const referenceDate = resolveProductReferenceDate(product)
   const matchedFields = buildMatchedFields(product, normalizedFilters)
@@ -704,7 +856,8 @@ function toSearchResult(
     evidenceSnippets,
     score: matchedFields.length + evidenceSnippets.length,
     searchStrategy: strategyUsed,
-    relatedReason,
+    relatedReason:
+      typeof relatedReason === 'function' ? relatedReason(matchedFields) : relatedReason,
     viewUrl: `/api/upload/${product.sourceFile}/file`,
     downloadUrl: `/api/upload/${product.sourceFile}/file?download=1`,
   }
@@ -714,7 +867,7 @@ async function enrichResults(
   products: AcademicProductPublic[],
   normalizedFilters: ChatSearchFilters,
   strategyUsed: ChatSearchStrategy,
-  relatedReason?: string,
+  relatedReason?: string | ((matchedFields: string[]) => string | undefined),
 ) {
   const sourceTextMap = await fetchSourceTextMap(products.map((product) => product.sourceFile))
 
@@ -860,6 +1013,15 @@ export async function executeGroundedRepositoryRetrieval(
   const exactSearch = await runStructuredSearch(normalizedFilters, safeLimit)
   if (exactSearch.total > 0) {
     const results = await enrichResults(exactSearch.products, normalizedFilters, 'structured_exact')
+    const consistencyNotes = buildResultConsistencyNotes(results)
+    const diagnosticInfo: ChatSearchDiagnosticInfo = {
+      broadened: false,
+      droppedFilters: [],
+      notes: [
+        'La coincidencia se resolvió con búsqueda estructurada exacta sobre productos confirmados.',
+        ...consistencyNotes,
+      ],
+    }
 
     return {
       filters: {
@@ -885,13 +1047,7 @@ export async function executeGroundedRepositoryRetrieval(
       matchedFields: uniqueStrings(results.flatMap((result) => result.matchedFields)),
       evidenceSnippets: results.flatMap((result) => result.evidenceSnippets).slice(0, 6),
       toolCallKey,
-      diagnosticInfo: {
-        broadened: false,
-        droppedFilters: [],
-        notes: [
-          'La coincidencia se resolvió con búsqueda estructurada exacta sobre productos confirmados.',
-        ],
-      },
+      diagnosticInfo,
       results,
     }
   }
@@ -916,39 +1072,52 @@ export async function executeGroundedRepositoryRetrieval(
 
     const broadenedSearch = await runStructuredSearch(broadenedFilters, safeLimit)
     if (broadenedSearch.total > 0) {
-      const results = await enrichResults(
-        broadenedSearch.products,
-        broadenedFilters,
-        'diagnostic_broadened',
-        `Coincide con la institución/tema consultado, pero no como ${normalizedFilters.productType}.`,
+      const relevantBroadenedProducts = broadenedSearch.products.filter(
+        (product) => buildMatchedFields(product, broadenedFilters).length > 0,
       )
 
-      return {
-        filters: {
-          search: input.search,
-          title: input.title,
-          author: input.author,
-          institution: input.institution,
-          keyword: input.keyword,
-          productType: input.productType,
-          dateFrom: input.dateFrom,
-          dateTo: input.dateTo,
-          yearFrom: input.yearFrom,
-          yearTo: input.yearTo,
-          limit: safeLimit,
-        },
-        normalizedFilters: {
-          ...normalizedFilters,
-          limit: safeLimit,
-        },
-        total: broadenedSearch.total,
-        limitedTo: safeLimit,
-        strategyUsed: 'diagnostic_broadened',
-        matchedFields: uniqueStrings(results.flatMap((result) => result.matchedFields)),
-        evidenceSnippets: results.flatMap((result) => result.evidenceSnippets).slice(0, 6),
-        toolCallKey,
-        diagnosticInfo,
-        results,
+      if (relevantBroadenedProducts.length === 0) {
+        diagnosticInfo.notes.push(
+          'Se descartaron coincidencias ampliadas por baja relevancia con los filtros consultados.',
+        )
+      } else {
+        const results = await enrichResults(
+          relevantBroadenedProducts,
+          broadenedFilters,
+          'diagnostic_broadened',
+          (matchedFields) =>
+            buildBroadenedRelatedReason(matchedFields, normalizedFilters.productType),
+        )
+        const consistencyNotes = buildResultConsistencyNotes(results)
+        diagnosticInfo.notes.push(...consistencyNotes)
+
+        return {
+          filters: {
+            search: input.search,
+            title: input.title,
+            author: input.author,
+            institution: input.institution,
+            keyword: input.keyword,
+            productType: input.productType,
+            dateFrom: input.dateFrom,
+            dateTo: input.dateTo,
+            yearFrom: input.yearFrom,
+            yearTo: input.yearTo,
+            limit: safeLimit,
+          },
+          normalizedFilters: {
+            ...normalizedFilters,
+            limit: safeLimit,
+          },
+          total: relevantBroadenedProducts.length,
+          limitedTo: safeLimit,
+          strategyUsed: 'diagnostic_broadened',
+          matchedFields: uniqueStrings(results.flatMap((result) => result.matchedFields)),
+          evidenceSnippets: results.flatMap((result) => result.evidenceSnippets).slice(0, 6),
+          toolCallKey,
+          diagnosticInfo,
+          results,
+        }
       }
     }
   }
@@ -968,6 +1137,8 @@ export async function executeGroundedRepositoryRetrieval(
         ? `Este resultado apareció al buscar también dentro del texto del archivo; puede no ser exactamente una ${formatChatProductType(normalizedFilters.productType).toLowerCase()}.`
         : undefined,
     )
+    const consistencyNotes = buildResultConsistencyNotes(results)
+    diagnosticInfo.notes.push(...consistencyNotes)
 
     return {
       filters: {

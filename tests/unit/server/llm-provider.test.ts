@@ -180,21 +180,21 @@ describe('LLM provider candidates', () => {
     ])
   })
 
-  it('chat: usa una cadena inteligente multi-proveedor y excluye Gemini del flujo automático', async () => {
+  it('chat: usa una cadena inteligente multi-proveedor con Gemini Flash Lite + Gemma preview', async () => {
     mockValidateEnv.mockReturnValue(baseEnv)
 
     const { getChatModelCandidates } = await import('../../../server/services/llm/provider')
 
     const chat = getChatModelCandidates()
-    expect(chat.map((candidate) => candidate.name)).toEqual(['cerebras', 'groq', 'groq'])
+    expect(chat.map((candidate) => candidate.name)).toEqual(['cerebras', 'gemini', 'gemini'])
     expect(chat.map((candidate) => candidate.modelId)).toEqual([
       'qwen-3-235b-a22b-instruct-2507',
-      'openai/gpt-oss-120b',
-      'openai/gpt-oss-20b',
+      'gemini-3.1-flash-lite-preview',
+      'gemma-4-31b-it',
     ])
   })
 
-  it('chat experimental: expone proveedores adicionales cuando hay credenciales', async () => {
+  it('chat experimental: expone proveedores adicionales cuando hay credenciales y omite Groq', async () => {
     mockValidateEnv.mockReturnValue({
       ...baseEnv,
       nvidiaApiKey: 'nv-key',
@@ -208,9 +208,38 @@ describe('LLM provider candidates', () => {
     const experimental = getExperimentalChatModelCandidates()
 
     expect(experimental.some((candidate) => candidate.name === 'cerebras')).toBe(true)
-    expect(experimental.some((candidate) => candidate.name === 'groq')).toBe(true)
+    expect(experimental.some((candidate) => candidate.name === 'groq')).toBe(false)
     expect(experimental.some((candidate) => candidate.name === 'nvidia')).toBe(true)
     expect(experimental.some((candidate) => candidate.name === 'openrouter')).toBe(true)
     expect(experimental.some((candidate) => candidate.name === 'gemini')).toBe(true)
+    expect(
+      experimental.some(
+        (candidate) =>
+          candidate.name === 'gemini' && candidate.modelId === 'gemini-3.1-flash-lite-preview',
+      ),
+    ).toBe(true)
+    expect(
+      experimental.some(
+        (candidate) => candidate.name === 'gemini' && candidate.modelId === 'gemma-4-31b-it',
+      ),
+    ).toBe(true)
+    expect(
+      experimental.some(
+        (candidate) =>
+          candidate.name === 'nvidia' && candidate.modelId === 'moonshotai/kimi-k2-thinking',
+      ),
+    ).toBe(true)
+    expect(
+      experimental.some(
+        (candidate) =>
+          candidate.name === 'nvidia' && candidate.modelId === 'minimaxai/minimax-m2.7',
+      ),
+    ).toBe(true)
+    expect(
+      experimental.some(
+        (candidate) =>
+          candidate.name === 'openrouter' && candidate.modelId === 'google/gemma-4-31b-it:free',
+      ),
+    ).toBe(false)
   })
 })

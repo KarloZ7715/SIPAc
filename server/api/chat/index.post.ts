@@ -8,6 +8,7 @@ import {
   tool,
   validateUIMessages,
 } from 'ai'
+import type { H3Event } from 'h3'
 import { z } from 'zod'
 import type { ChatModelSelection, ChatUiMessage } from '~~/app/types'
 import { logAudit } from '~~/server/utils/audit'
@@ -24,13 +25,21 @@ import {
   createRepositorySearchToolExecutor,
   chatSearchToolInputSchema,
 } from '~~/server/services/chat/repository-search-tool'
+import {
+  CHAT_MAX_INCOMING_MESSAGES,
+  extractLatestIncomingUserMessage,
+  isIncomingUserMessageWithinLimits,
+} from '~~/server/services/chat/incoming-message'
 import { probeUiMessageStream } from '~~/server/services/chat/stream-probe'
 import type { StructuredModelCandidate } from '~~/server/services/llm/provider'
-import { markLastAssistantMessageStopped } from '~~/app/utils/chat-message-text'
+import {
+  hasAssistantMessageAfterIndex,
+  markLastAssistantMessageStopped,
+} from '~~/app/utils/chat-message-text'
 
 const postChatBodySchema = z.object({
   id: z.string().trim().min(1).max(120),
-  messages: z.array(z.unknown()).default([]),
+  messages: z.array(z.unknown()).max(CHAT_MAX_INCOMING_MESSAGES).default([]),
   trigger: z.enum(['submit-message', 'regenerate-message']).optional(),
   messageId: z.string().trim().min(1).max(120).optional(),
   selectedModel: z
@@ -41,11 +50,8 @@ const postChatBodySchema = z.object({
     .optional(),
 })
 
-const CHAT_MAX_STEPS = 3
-
-function extractLatestUserMessage(messages: ChatUiMessage[]) {
-  return [...messages].reverse().find((message) => message.role === 'user')
-}
+const CHAT_MAX_STEPS = 5
+const CHAT_MAX_OUTPUT_TOKENS = 2_048
 
 function createChatTools() {
   const executeRepositorySearchTool = createRepositorySearchToolExecutor()
@@ -77,7 +83,6 @@ async function consumeUiMessageSseStream(input: { stream: ReadableStream<string>
 
 function formatProviderErrorMessage(candidate: StructuredModelCandidate, error: unknown) {
   const rawMessage = error instanceof Error && error.message.trim().length > 0 ? error.message : ''
-
   if (
     candidate.name === 'openrouter' &&
     /user not found|invalid api key|unauthorized|401/i.test(rawMessage)
@@ -110,10 +115,42 @@ function stripReasoningForGroqGptOss120b(messages: ChatUiMessage[]): ChatUiMessa
   }))
 }
 
+function createRequestAbortSignal(event: H3Event) {
+  const controller = new AbortController()
+  const request = event.node.req
+  const response = event.node.res
+
+  const abortWithReason = (reason: string) => {
+    if (!controller.signal.aborted) {
+      controller.abort(reason)
+    }
+  }
+
+  const onResponseClose = () => {
+    if (response.writableEnded || response.writableFinished) {
+      return
+    }
+    abortWithReason('Conexión cerrada por el cliente')
+  }
+  const onAborted = () => abortWithReason('Solicitud abortada por el cliente')
+
+  response.on('close', onResponseClose)
+  request.on('aborted', onAborted)
+
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      response.removeListener('close', onResponseClose)
+      request.removeListener('aborted', onAborted)
+    },
+  }
+}
+
 async function buildCandidateUiStream(
   candidate: StructuredModelCandidate,
   messages: ChatUiMessage[],
   tools: ReturnType<typeof createChatTools>,
+  abortSignal?: AbortSignal,
 ) {
   const candidateMessages =
     candidate.name === 'groq' && candidate.modelId.includes('gpt-oss-120b')
@@ -141,7 +178,9 @@ async function buildCandidateUiStream(
     system: buildChatSystemPrompt(),
     messages: modelMessages,
     tools,
+    abortSignal,
     stopWhen: stepCountIs(CHAT_MAX_STEPS),
+    maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS,
     temperature: 0.2,
   })
 
@@ -172,6 +211,31 @@ async function buildCandidateUiStream(
   })
 }
 
+async function saveChatConversationWithRetry(input: {
+  userId: string
+  chatId: string
+  messages: ChatUiMessage[]
+}) {
+  try {
+    return await saveUserChatConversation(input)
+  } catch (firstError) {
+    console.error(
+      `[Chat] Fallo al persistir la conversación ${input.chatId}; reintentando una vez:`,
+      firstError,
+    )
+  }
+
+  try {
+    return await saveUserChatConversation(input)
+  } catch (secondError) {
+    console.error(
+      `[Chat] No se pudo persistir la conversación ${input.chatId} tras reintento:`,
+      secondError,
+    )
+    return null
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const auth = requireAuth(event)
   await enforceChatRateLimit(event, auth.sub)
@@ -185,8 +249,25 @@ export default defineEventHandler(async (event) => {
     )
   }
 
+  const requestAbort = createRequestAbortSignal(event)
+
+  if (requestAbort.signal.aborted) {
+    throw createBadRequestError('La solicitud fue cancelada por el cliente antes de procesarse.')
+  }
+
   const { id: chatId, trigger, selectedModel } = parsedBody.data
-  const incomingMessages = sanitizeChatMessages(parsedBody.data.messages as ChatUiMessage[])
+  const incomingMessages = parsedBody.data.messages as ChatUiMessage[]
+  const latestIncomingUserMessage = extractLatestIncomingUserMessage(incomingMessages)
+
+  if (latestIncomingUserMessage && !isIncomingUserMessageWithinLimits(latestIncomingUserMessage)) {
+    throw createBadRequestError(
+      'El mensaje es demasiado largo. Reduce el texto y vuelve a intentarlo.',
+    )
+  }
+
+  if (requestAbort.signal.aborted) {
+    throw createBadRequestError('La solicitud fue cancelada por el cliente durante la preparación.')
+  }
 
   const existingConversation = await getUserChatConversation(auth.sub, chatId)
   const persistedMessages = sanitizeChatMessages(
@@ -196,17 +277,19 @@ export default defineEventHandler(async (event) => {
   let messagesForProcessing = persistedMessages
 
   if (trigger === 'submit-message' || !trigger) {
-    const latestUserMessage = extractLatestUserMessage(incomingMessages)
-    if (!latestUserMessage) {
+    if (!latestIncomingUserMessage) {
       throw createBadRequestError(
         'No encontramos el mensaje que querías enviar. Vuelve a escribirlo e inténtalo de nuevo.',
       )
     }
 
-    messagesForProcessing =
-      persistedMessages.length > 0
-        ? sanitizeChatMessages([...persistedMessages, latestUserMessage])
-        : incomingMessages
+    messagesForProcessing = sanitizeChatMessages([...persistedMessages, latestIncomingUserMessage])
+  }
+
+  if (trigger === 'regenerate-message' && persistedMessages.length === 0) {
+    throw createBadRequestError(
+      'No encontramos historial para regenerar la respuesta. Envía una nueva pregunta para iniciar la conversación.',
+    )
   }
 
   const tools = createChatTools()
@@ -215,6 +298,7 @@ export default defineEventHandler(async (event) => {
     messages: messagesForProcessing,
     tools,
   })) as ChatUiMessage[]
+  const preStreamMessageCount = validatedMessages.length
   const selectedCandidates = resolveChatModelCandidates(
     selectedModel as ChatModelSelection | undefined,
   )
@@ -233,24 +317,55 @@ export default defineEventHandler(async (event) => {
         'No pude completar la respuesta en este momento. Intenta de nuevo en unos segundos.'
       let fallbackCount = 0
 
-      for (const candidate of selectedCandidates) {
-        const candidateStream = await buildCandidateUiStream(candidate, validatedMessages, tools)
-        const probe = await probeUiMessageStream(candidateStream)
+      if (requestAbort.signal.aborted) {
+        writer.write({
+          type: 'error',
+          errorText: 'Solicitud cancelada por el cliente antes de iniciar el stream.',
+        })
+        return
+      }
 
-        if (probe.ok) {
-          console.info(
-            `[Chat] Stream iniciado con ${candidate.name}/${candidate.modelId} en ${Date.now() - startedAt} ms tras ${fallbackCount} fallback(s)`,
-          )
-          writer.merge(probe.stream)
+      for (const candidate of selectedCandidates) {
+        if (requestAbort.signal.aborted) {
+          writer.write({
+            type: 'error',
+            errorText: 'Solicitud cancelada por el cliente durante la generación.',
+          })
           return
         }
 
-        lastErrorText = probe.errorText
-        fallbackCount += 1
-        void candidateStream.cancel(probe.errorText).catch(() => {})
-        console.warn(
-          `[Chat] Fallback activado tras fallo de ${candidate.name}/${candidate.modelId}: ${probe.errorText}`,
-        )
+        try {
+          const candidateStream = await buildCandidateUiStream(
+            candidate,
+            validatedMessages,
+            tools,
+            requestAbort.signal,
+          )
+          const probe = await probeUiMessageStream(candidateStream)
+
+          if (probe.ok) {
+            console.info(
+              `[Chat] Stream iniciado con ${candidate.name}/${candidate.modelId} en ${Date.now() - startedAt} ms tras ${fallbackCount} fallback(s)`,
+            )
+            writer.merge(probe.stream)
+            return
+          }
+
+          lastErrorText = probe.errorText
+          fallbackCount += 1
+          void candidateStream.cancel(probe.errorText).catch(() => {})
+          console.warn(
+            `[Chat] Fallback activado tras fallo de ${candidate.name}/${candidate.modelId}: ${probe.errorText}`,
+          )
+        } catch (error) {
+          const providerErrorText = formatProviderErrorMessage(candidate, error)
+          lastErrorText = providerErrorText
+          fallbackCount += 1
+          console.warn(
+            `[Chat] Fallback activado por excepción en ${candidate.name}/${candidate.modelId}: ${providerErrorText}`,
+            error,
+          )
+        }
       }
 
       writer.write({
@@ -259,19 +374,33 @@ export default defineEventHandler(async (event) => {
       })
     },
     onError: (error) => {
+      requestAbort.dispose()
       console.error('[Chat] Error al generar respuesta:', error)
       return 'No pude completar la respuesta en este momento. Intenta de nuevo en unos segundos.'
     },
     onFinish: async ({ messages, isAborted }) => {
-      const finalMessages = isAborted
-        ? markLastAssistantMessageStopped(messages as ChatUiMessage[])
-        : (messages as ChatUiMessage[])
+      requestAbort.dispose()
 
-      const savedConversation = await saveUserChatConversation({
+      const generatedMessages = messages as ChatUiMessage[]
+      const hasNewAssistantInCurrentTurn = hasAssistantMessageAfterIndex(
+        generatedMessages,
+        preStreamMessageCount - 1,
+      )
+
+      const finalMessages =
+        isAborted && hasNewAssistantInCurrentTurn
+          ? markLastAssistantMessageStopped(generatedMessages)
+          : generatedMessages
+
+      const savedConversation = await saveChatConversationWithRetry({
         userId: auth.sub,
         chatId,
         messages: finalMessages,
       })
+
+      if (!savedConversation) {
+        return
+      }
 
       if (isAborted) {
         console.info(
@@ -279,15 +408,19 @@ export default defineEventHandler(async (event) => {
         )
       }
 
-      if (!existingConversation) {
-        await logAudit(event, {
-          userId: auth.sub,
-          userName: auth.email,
-          action: 'create',
-          resource: 'chat_conversation',
-          resourceId: savedConversation?._id,
-          details: `Conversación de chat creada: ${chatId}`,
-        })
+      if (!existingConversation && savedConversation?._id) {
+        try {
+          await logAudit(event, {
+            userId: auth.sub,
+            userName: auth.email,
+            action: 'create',
+            resource: 'chat_conversation',
+            resourceId: savedConversation._id,
+            details: `Conversación de chat creada: ${chatId}`,
+          })
+        } catch (error) {
+          console.error(`[Chat] No se pudo registrar auditoría para ${chatId}:`, error)
+        }
       }
     },
   })

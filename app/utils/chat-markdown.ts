@@ -7,9 +7,31 @@ function escapeHtml(value: string) {
     .replaceAll("'", '&#39;')
 }
 
+function escapeHtmlAttribute(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
 function sanitizeHref(value: string) {
-  if (/^(https?:\/\/|\/)/i.test(value)) {
-    return value
+  const candidate = value.trim()
+  if (!candidate) {
+    return '#'
+  }
+
+  if (/^https?:\/\//i.test(candidate)) {
+    try {
+      return escapeHtmlAttribute(new URL(candidate).toString())
+    } catch {
+      return '#'
+    }
+  }
+
+  if (candidate.startsWith('/') && !candidate.startsWith('//')) {
+    return escapeHtmlAttribute(candidate)
   }
 
   return '#'

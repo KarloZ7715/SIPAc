@@ -16,19 +16,19 @@ import { createBadRequestError } from '~~/server/utils/errors'
  */
 const CHAT_MODEL_PICKER_LABELS: Record<string, string> = {
   'cerebras::qwen-3-235b-a22b-instruct-2507': 'Qwen 3 235B Instruct',
-  'groq::openai/gpt-oss-120b': 'GPT-OSS 120B',
-  'groq::openai/gpt-oss-20b': 'GPT-OSS 20B',
+  'gemini::gemini-3.1-flash-lite-preview': 'Gemini 3.1 Flash Lite (preview)',
+  'gemini::gemma-4-31b-it': 'Gemma 4 31B (preview)',
   'nvidia::z-ai/glm4.7': 'GLM 4.7',
   'nvidia::deepseek-ai/deepseek-v3.1-terminus': 'DeepSeek V3.1 Terminus',
   'nvidia::mistralai/mistral-large-3-675b-instruct-2512': 'Mistral Large 3',
   'nvidia::deepseek-ai/deepseek-v3.2': 'DeepSeek V3.2',
+  'nvidia::moonshotai/kimi-k2-thinking': 'Kimi K2 Thinking',
   'nvidia::moonshotai/kimi-k2-instruct-0905': 'Kimi K2 Instruct',
+  'nvidia::minimaxai/minimax-m2.7': 'MiniMax M2.7',
   'openrouter::minimax/minimax-m2.5:free': 'MiniMax M2.5 (gratis)',
   'openrouter::openai/gpt-oss-120b:free': 'GPT-OSS 120B (gratis)',
-  'openrouter::google/gemma-4-31b-it:free': 'Gemma 4 31B IT (gratis)',
-  'openrouter::nvidia/nemotron-3-super-120b-a12b:free': 'Nemotron 3 Super 120B (gratis)',
+  'openrouter::nvidia/nemotron-3-super-120b-a12b:free': 'Nemotron 3 Super 120B (preview)',
   'openrouter::z-ai/glm-4.5-air:free': 'GLM 4.5 Air (gratis)',
-  'gemini::gemini-2.5-flash': 'Gemini 2.5 Flash',
 }
 
 export function publicChatModelPickerLabel(provider: ChatModelProvider, modelId: string): string {
@@ -41,7 +41,7 @@ export function publicChatModelPickerLabel(provider: ChatModelProvider, modelId:
 function inferStreamReliability(
   candidate: StructuredModelCandidate,
 ): ChatModelOptionPublic['streamReliability'] {
-  if (candidate.name === 'groq') {
+  if (candidate.name === 'nvidia') {
     return 'high'
   }
 
@@ -59,6 +59,8 @@ function inferReasoningTier(
     candidate.modelId.includes('120b') ||
     candidate.modelId.includes('235b') ||
     candidate.modelId.includes('675b') ||
+    candidate.modelId.includes('k2-thinking') ||
+    candidate.modelId.includes('m2.7') ||
     candidate.modelId.includes('glm4.7') ||
     candidate.modelId.includes('deepseek-v3.2')
   ) {

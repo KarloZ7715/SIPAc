@@ -119,6 +119,9 @@ export interface IChatConversation {
   userId: DatabaseId
   title: string
   messages: ChatUiMessage[]
+  messageCount?: number
+  lastMessagePreview?: string
+  lastMessageAt?: Date
   isActive: boolean
   lastAccessedAt: Date
   createdAt: Date

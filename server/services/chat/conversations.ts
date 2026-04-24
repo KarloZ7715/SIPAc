@@ -3,7 +3,11 @@ import type {
   ChatConversationSummaryPublic,
   ChatUiMessage,
 } from '~~/app/types'
+import { stripPrivateThinkingBlocks } from '~~/app/utils/chat-private-thinking'
 import ChatConversation from '~~/server/models/ChatConversation'
+
+const MAX_PERSISTED_CHAT_MESSAGES = 180
+const MAX_PERSISTED_CHAT_MESSAGES_JSON_BYTES = 1_000_000
 
 function normalizeWhitespace(value: string) {
   return value.replace(/\s+/g, ' ').trim()
@@ -87,16 +91,34 @@ function clampToolLimit(limit: unknown) {
 }
 
 function normalizeMessagePart(
+  messageRole: ChatUiMessage['role'],
   part: ChatUiMessage['parts'][number],
 ): ChatUiMessage['parts'][number] | null {
+  const partType = typeof part.type === 'string' ? part.type : ''
+
   part = stripNullProviderMetadataFields(part)
 
-  if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
+  if (partType.startsWith('tool-')) {
     part = sanitizeToolUIPart(part)
   }
 
-  if (part.type === 'reasoning' || part.type.startsWith('reasoning-')) {
+  if (partType === 'reasoning' || partType.startsWith('reasoning-')) {
     return null
+  }
+
+  if (messageRole === 'assistant' && part.type === 'text') {
+    const sanitizedText = stripPrivateThinkingBlocks(part.text)
+
+    if (sanitizedText.trim().length === 0) {
+      return null
+    }
+
+    if (sanitizedText !== part.text) {
+      return {
+        ...part,
+        text: sanitizedText,
+      }
+    }
   }
 
   if (part.type === 'tool-searchRepositoryProducts') {
@@ -129,7 +151,7 @@ function normalizeMessageParts(message: ChatUiMessage): ChatUiMessage {
   const parts = [] as ChatUiMessage['parts']
 
   for (const part of message.parts) {
-    const normalizedPart = normalizeMessagePart(part)
+    const normalizedPart = normalizeMessagePart(message.role, part)
     if (normalizedPart) {
       parts.push(normalizedPart)
     }
@@ -146,14 +168,30 @@ function normalizeMessageParts(message: ChatUiMessage): ChatUiMessage {
 }
 
 function hasRenderablePart(message: ChatUiMessage) {
+  if (!Array.isArray(message.parts) || message.parts.length === 0) {
+    return false
+  }
+
+  const hasRenderableText = message.parts.some(
+    (part) => part.type === 'text' && part.text.trim().length > 0,
+  )
+  const hasRenderableToolOutput = message.parts.some(
+    (part) => part.type === 'tool-searchRepositoryProducts' && part.state === 'output-available',
+  )
+
+  if (message.role === 'assistant') {
+    // Evita persistir turnos assistant sin texto visible, aunque incluyan tool parts transitorios.
+    return hasRenderableText || hasRenderableToolOutput
+  }
+
   return (
-    Array.isArray(message.parts) &&
+    hasRenderableText ||
     message.parts.some((part) => {
-      if (part.type === 'text') {
-        return part.text.trim().length > 0
+      if (part.type === 'tool-searchRepositoryProducts') {
+        return part.state === 'output-available'
       }
 
-      return true
+      return part.type !== 'text'
     })
   )
 }
@@ -213,6 +251,23 @@ function extractLastMessagePreview(messages: ChatUiMessage[]) {
   return trimmed.length < rawText.length ? `${trimmed}...` : trimmed
 }
 
+function estimateUtf8Bytes(value: string) {
+  return new TextEncoder().encode(value).length
+}
+
+export function truncateChatMessagesForPersistence(messages: ChatUiMessage[]) {
+  let truncated = messages.slice(-MAX_PERSISTED_CHAT_MESSAGES)
+
+  while (
+    truncated.length > 1 &&
+    estimateUtf8Bytes(JSON.stringify(truncated)) > MAX_PERSISTED_CHAT_MESSAGES_JSON_BYTES
+  ) {
+    truncated = truncated.slice(1)
+  }
+
+  return truncated
+}
+
 /**
  * Marca temporal para historial: último mensaje con `metadata.createdAt`;
  * si no hay timestamps en mensajes pero hay mensajes, se usa `updatedAt`;
@@ -245,20 +300,33 @@ export function computeChatLastMessageAtIso(
 function serializeSummary(conversation: {
   chatId: string
   title: string
-  messages: ChatUiMessage[]
+  messages?: ChatUiMessage[]
+  messageCount?: number
+  lastMessagePreview?: string
+  lastMessageAt?: Date | string
   createdAt: Date | string
   updatedAt: Date | string
 }): ChatConversationSummaryPublic {
+  const messages = Array.isArray(conversation.messages) ? conversation.messages : []
+  const messageCount =
+    typeof conversation.messageCount === 'number' && Number.isFinite(conversation.messageCount)
+      ? Math.max(0, Math.trunc(conversation.messageCount))
+      : messages.length
+  const lastMessagePreview =
+    typeof conversation.lastMessagePreview === 'string'
+      ? conversation.lastMessagePreview
+      : extractLastMessagePreview(messages)
+  const lastMessageAt =
+    conversation.lastMessageAt !== undefined
+      ? new Date(conversation.lastMessageAt).toISOString()
+      : computeChatLastMessageAtIso(messages, conversation.updatedAt, conversation.createdAt)
+
   return {
     id: conversation.chatId,
     title: conversation.title,
-    messageCount: conversation.messages.length,
-    lastMessagePreview: extractLastMessagePreview(conversation.messages),
-    lastMessageAt: computeChatLastMessageAtIso(
-      conversation.messages,
-      conversation.updatedAt,
-      conversation.createdAt,
-    ),
+    messageCount,
+    lastMessagePreview,
+    lastMessageAt,
     createdAt: new Date(conversation.createdAt).toISOString(),
     updatedAt: new Date(conversation.updatedAt).toISOString(),
   }
@@ -267,7 +335,10 @@ function serializeSummary(conversation: {
 export function toChatConversationSummaryPublic(conversation: {
   chatId: string
   title: string
-  messages: ChatUiMessage[]
+  messages?: ChatUiMessage[]
+  messageCount?: number
+  lastMessagePreview?: string
+  lastMessageAt?: Date | string
   createdAt: Date | string
   updatedAt: Date | string
 }) {
@@ -278,10 +349,13 @@ export function toChatConversationPublic(conversation: {
   chatId: string
   title: string
   messages: ChatUiMessage[]
+  messageCount?: number
+  lastMessagePreview?: string
+  lastMessageAt?: Date | string
   createdAt: Date | string
   updatedAt: Date | string
 }): ChatConversationPublic {
-  const messages = sanitizeChatMessages(conversation.messages)
+  const messages = conversation.messages
 
   return {
     ...serializeSummary({
@@ -293,21 +367,72 @@ export function toChatConversationPublic(conversation: {
 }
 
 export async function listUserChatConversations(userId: string, limit = 20) {
-  const fetchCap = Math.min(200, Math.max(limit * 15, 60))
-  const conversations = await ChatConversation.find({
-    userId,
-    isActive: true,
-  })
-    .sort({ updatedAt: -1 })
-    .limit(fetchCap)
+  const conversations = await ChatConversation.find(
+    {
+      userId,
+      isActive: true,
+    },
+    {
+      chatId: 1,
+      title: 1,
+      messageCount: 1,
+      lastMessagePreview: 1,
+      lastMessageAt: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  )
+    .sort({ lastMessageAt: -1, updatedAt: -1 })
+    .limit(limit)
     .lean()
 
-  const summaries = conversations.map(toChatConversationSummaryPublic)
+  const missingSummaryChatIds = conversations
+    .filter(
+      (conversation) =>
+        typeof conversation.messageCount !== 'number' || conversation.lastMessageAt === undefined,
+    )
+    .map((conversation) => conversation.chatId)
+
+  if (missingSummaryChatIds.length === 0) {
+    return conversations.map(toChatConversationSummaryPublic)
+  }
+
+  const legacyConversations = await ChatConversation.find(
+    {
+      userId,
+      isActive: true,
+      chatId: { $in: missingSummaryChatIds },
+    },
+    {
+      chatId: 1,
+      title: 1,
+      messages: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ).lean()
+
+  const legacySummaries = new Map(
+    legacyConversations.map((conversation) => [
+      conversation.chatId,
+      toChatConversationSummaryPublic(conversation),
+    ]),
+  )
+
+  const summaries = conversations.map((conversation) => {
+    const legacySummary = legacySummaries.get(conversation.chatId)
+    if (legacySummary) {
+      return legacySummary
+    }
+
+    return toChatConversationSummaryPublic(conversation)
+  })
+
   summaries.sort(
     (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
   )
 
-  return summaries.slice(0, limit)
+  return summaries
 }
 
 export async function getUserChatConversation(userId: string, chatId: string) {
@@ -323,9 +448,13 @@ export async function saveUserChatConversation(input: {
   chatId: string
   messages: ChatUiMessage[]
 }) {
-  const messages = sanitizeChatMessages(input.messages)
-  const title = extractConversationTitle(messages)
+  const sanitizedMessages = sanitizeChatMessages(input.messages)
+  const messages = truncateChatMessagesForPersistence(sanitizedMessages)
   const now = new Date()
+  const title = extractConversationTitle(sanitizedMessages)
+  const messageCount = messages.length
+  const lastMessagePreview = extractLastMessagePreview(messages)
+  const lastMessageAt = new Date(computeChatLastMessageAtIso(messages, now, now))
 
   return ChatConversation.findOneAndUpdate(
     {
@@ -336,6 +465,9 @@ export async function saveUserChatConversation(input: {
       $set: {
         title,
         messages,
+        messageCount,
+        lastMessagePreview,
+        lastMessageAt,
         isActive: true,
         lastAccessedAt: now,
       },

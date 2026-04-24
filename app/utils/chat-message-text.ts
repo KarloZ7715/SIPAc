@@ -1,15 +1,23 @@
 import type { ChatUiMessage } from '~~/app/types'
+import { stripPrivateThinkingBlocks } from '~~/app/utils/chat-private-thinking'
 
 export function chatMessagePlainText(message: ChatUiMessage): string {
   return message.parts
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
-    .map((part) => part.text.trim())
+    .map((part) => stripPrivateThinkingBlocks(part.text).trim())
     .filter(Boolean)
     .join('\n\n')
 }
 
 export function isStoppedAssistantMessage(message: ChatUiMessage): boolean {
   return message.role === 'assistant' && message.metadata?.stoppedByUser === true
+}
+
+export function hasAssistantMessageAfterIndex(messages: ChatUiMessage[], index: number): boolean {
+  const safeStart = Math.max(-1, Math.trunc(index))
+  return messages.some(
+    (message, messageIndex) => messageIndex > safeStart && message.role === 'assistant',
+  )
 }
 
 export function markLastAssistantMessageStopped(messages: ChatUiMessage[]): ChatUiMessage[] {

@@ -1,19 +1,12 @@
 import type { InferUIMessageChunk, UIMessage } from 'ai'
 
-const SUCCESSFUL_STREAM_CHUNK_TYPES = new Set([
-  // No se consideran éxito: start/start-step/finish por sí solos.
-  // Debe existir contenido o actividad útil (texto, tool, source o archivo).
-  'text-start',
-  'text-delta',
+const NON_TEXT_SUCCESSFUL_CHUNK_TYPES = new Set([
   'tool-input-start',
   'tool-input-available',
   'tool-output-available',
-  'source-url',
-  'source-document',
-  'file',
 ])
 
-export const DEFAULT_CHAT_STREAM_PROBE_TIMEOUT_MS = 5000
+export const DEFAULT_CHAT_STREAM_PROBE_TIMEOUT_MS = 10_000
 
 class StreamProbeTimeoutError extends Error {
   constructor(timeoutMs: number) {
@@ -32,8 +25,23 @@ interface AbortProbeChunk {
   reason?: string
 }
 
+function hasUsefulTextDelta<T extends UIMessage>(chunk: InferUIMessageChunk<T>) {
+  if (chunk.type !== 'text-delta') {
+    return false
+  }
+
+  const textCandidate =
+    'delta' in chunk && typeof chunk.delta === 'string'
+      ? chunk.delta
+      : 'text' in chunk && typeof chunk.text === 'string'
+        ? chunk.text
+        : ''
+
+  return textCandidate.trim().length > 0
+}
+
 function isSuccessfulProbeChunk<T extends UIMessage>(chunk: InferUIMessageChunk<T>) {
-  return SUCCESSFUL_STREAM_CHUNK_TYPES.has(chunk.type)
+  return hasUsefulTextDelta(chunk) || NON_TEXT_SUCCESSFUL_CHUNK_TYPES.has(chunk.type)
 }
 
 async function readChunkWithTimeout<T extends UIMessage>(
