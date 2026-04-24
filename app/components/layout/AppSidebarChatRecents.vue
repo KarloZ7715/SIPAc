@@ -14,6 +14,8 @@ const mobileSidebarOpen = useState<boolean>('sipac-mobile-sidebar-open')
 
 const VISIBLE_COUNT = 6
 const showAllModal = ref(false)
+const editingId = ref<string | null>(null)
+const editTitleValue = ref('')
 
 const activeId = computed(() => {
   const id = route.query.id
@@ -34,6 +36,22 @@ function startNewConversation() {
   })
   closeMobile()
 }
+
+// Global shortcut para nueva conversación
+function handleGlobalKeydown(e: KeyboardEvent) {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault()
+    startNewConversation()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown)
+})
 
 function navigateToConversation(id: string) {
   void router.push({ path: '/chat', query: { id } })
@@ -61,9 +79,17 @@ function formatRelativeShort(iso: string) {
   return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
 }
 
-function menuItemsFor(id: string): DropdownMenuItem[][] {
+function menuItemsFor(id: string, currentTitle: string): DropdownMenuItem[][] {
   return [
     [
+      {
+        label: 'Renombrar',
+        icon: 'i-lucide-pencil',
+        onSelect: () => {
+          editingId.value = id
+          editTitleValue.value = currentTitle
+        },
+      },
       {
         label: 'Eliminar',
         icon: 'i-lucide-trash-2',
@@ -77,6 +103,18 @@ function menuItemsFor(id: string): DropdownMenuItem[][] {
       },
     ],
   ]
+}
+
+async function saveRename(id: string) {
+  if (!editingId.value) return
+  if (editTitleValue.value.trim().length > 0) {
+    try {
+      await chatStore.renameConversation(id, editTitleValue.value.trim())
+    } catch {
+      console.warn('Rename error ignored')
+    }
+  }
+  editingId.value = null
 }
 
 const visibleConversations = computed(() => chatStore.conversations.slice(0, VISIBLE_COUNT))
@@ -147,7 +185,17 @@ const shouldShowBootLoading = computed(
               : 'border-transparent hover:bg-surface-muted/50'
           "
         >
+          <div v-if="editingId === c.id" class="min-w-0 flex-1 px-2 py-1.5 flex gap-1 items-center">
+            <input
+              v-model="editTitleValue"
+              class="text-sm font-medium border border-border/50 rounded-sm px-1 py-0.5 w-full outline-none focus:ring-1 ring-sipac-500 bg-white"
+              @keyup.enter="saveRename(c.id)"
+              @blur="saveRename(c.id)"
+              @keydown.esc="editingId = null"
+            />
+          </div>
           <button
+            v-else
             type="button"
             class="min-w-0 flex-1 px-2 py-1.5 text-left"
             @click="navigateToConversation(c.id)"
@@ -159,7 +207,7 @@ const shouldShowBootLoading = computed(
               {{ formatRelativeShort(c.lastMessageAt) }}
             </span>
           </button>
-          <UDropdownMenu :items="menuItemsFor(c.id)">
+          <UDropdownMenu :items="menuItemsFor(c.id, c.title)">
             <SipacButton
               color="neutral"
               variant="ghost"
@@ -198,7 +246,17 @@ const shouldShowBootLoading = computed(
             class="flex items-start gap-1 rounded-lg border border-border/50 bg-white/80 p-2"
             :class="c.id === activeId ? 'border-sipac-300 bg-sipac-50/80' : ''"
           >
+            <div v-if="editingId === c.id" class="min-w-0 flex-1 flex gap-1 items-center">
+              <input
+                v-model="editTitleValue"
+                class="text-sm font-medium border border-border/50 rounded-sm px-1 py-0.5 w-full outline-none focus:ring-1 ring-sipac-500 bg-white"
+                @keyup.enter="saveRename(c.id)"
+                @blur="saveRename(c.id)"
+                @keydown.esc="editingId = null"
+              />
+            </div>
             <button
+              v-else
               type="button"
               class="min-w-0 flex-1 text-left"
               @click="openConversationFromModal(c.id)"
@@ -208,7 +266,7 @@ const shouldShowBootLoading = computed(
                 {{ formatRelativeShort(c.lastMessageAt) }} · {{ c.messageCount }} mensajes
               </span>
             </button>
-            <UDropdownMenu :items="menuItemsFor(c.id)">
+            <UDropdownMenu :items="menuItemsFor(c.id, c.title)">
               <SipacButton
                 color="neutral"
                 variant="ghost"

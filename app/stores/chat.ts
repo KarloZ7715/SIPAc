@@ -3,6 +3,7 @@ import type {
   ChatConversationPublic,
   ChatConversationSummaryPublic,
   ChatProvidersResponse,
+  ChatUiMessage,
 } from '~~/app/types'
 
 type ChatConversationListResponse = ApiSuccessResponse<{
@@ -25,6 +26,41 @@ export const useChatStore = defineStore('chat', () => {
   const conversationsResolved = ref(false)
   const providersResolved = ref(false)
   const deletingConversationId = ref<string | null>(null)
+
+  // Store branches of regenerated messages locally
+  // Record<parentId, array of sibling variants>
+  const messageBranches = ref<Record<string, ChatUiMessage[]>>({})
+  const activeBranchIndices = ref<Record<string, number>>({})
+
+  function registerMessageVariant(parentId: string, variant: ChatUiMessage) {
+    if (!messageBranches.value[parentId]) {
+      messageBranches.value[parentId] = []
+    }
+    // Prevent duplicates by ID
+    const exists = messageBranches.value[parentId].some((m) => m.id === variant.id)
+    if (!exists) {
+      messageBranches.value[parentId].push(variant)
+    }
+    activeBranchIndices.value[parentId] = messageBranches.value[parentId].length - 1
+  }
+
+  function setActiveBranch(parentId: string, index: number) {
+    if (
+      messageBranches.value[parentId] &&
+      index >= 0 &&
+      index < messageBranches.value[parentId].length
+    ) {
+      activeBranchIndices.value[parentId] = index
+    }
+  }
+
+  function getMessageSiblings(parentId: string): ChatUiMessage[] {
+    return messageBranches.value[parentId] || []
+  }
+
+  function getActiveBranchIndex(parentId: string): number {
+    return activeBranchIndices.value[parentId] || 0
+  }
 
   async function fetchConversations(limit = 20, fetcher: StoreFetch = $fetch) {
     conversationsLoading.value = true
@@ -84,14 +120,30 @@ export const useChatStore = defineStore('chat', () => {
       conversations.value = conversations.value.filter((conversation) => conversation.id !== id)
       if (activeConversation.value?.id === id) {
         activeConversation.value = null
+        messageBranches.value = {}
+        activeBranchIndices.value = {}
       }
     } finally {
       deletingConversationId.value = null
     }
   }
 
+  async function renameConversation(id: string, title: string) {
+    const c = conversations.value.find((conv) => conv.id === id)
+    if (c) {
+      c.title = title
+    }
+
+    await $fetch<unknown>(`/api/chat/conversations/${id}`, {
+      method: 'PATCH',
+      body: { title },
+    })
+  }
+
   function clearActiveConversation() {
     activeConversation.value = null
+    messageBranches.value = {}
+    activeBranchIndices.value = {}
   }
 
   return {
@@ -104,10 +156,17 @@ export const useChatStore = defineStore('chat', () => {
     conversationsResolved,
     providersResolved,
     deletingConversationId,
+    messageBranches,
+    activeBranchIndices,
     fetchConversations,
     fetchConversation,
     fetchProviders,
     deleteConversation,
+    renameConversation,
     clearActiveConversation,
+    registerMessageVariant,
+    setActiveBranch,
+    getMessageSiblings,
+    getActiveBranchIndex,
   }
 })

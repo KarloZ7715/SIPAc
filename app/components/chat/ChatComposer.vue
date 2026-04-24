@@ -16,6 +16,7 @@ const props = withDefaults(
     stopLabel?: string
     placeholder?: string
     showModelPicker?: boolean
+    showToolDock?: boolean
   }>(),
   {
     canStop: false,
@@ -24,6 +25,7 @@ const props = withDefaults(
     stopLabel: 'Detener',
     placeholder: 'Pregunta por autores, tema, institución, fechas o tipo de obra académica…',
     showModelPicker: true,
+    showToolDock: false,
   },
 )
 
@@ -34,6 +36,7 @@ const emit = defineEmits<{
 }>()
 
 const selectedModelKey = defineModel<string>('selectedModelKey', { default: 'default' })
+const quote = defineModel<string>('quote', { default: '' })
 
 const chatStore = useChatStore()
 
@@ -129,32 +132,62 @@ function onKeydown(e: KeyboardEvent) {
       aria-hidden="true"
     />
 
+    <ChatToolDock :show="showToolDock">
+      <template #indicators>
+        <slot name="tool-dock">
+          <!-- Default empty or sample usage if not overridden -->
+        </slot>
+      </template>
+    </ChatToolDock>
+
     <form
-      class="relative flex min-h-0 flex-col overflow-hidden bg-white/95 shadow-[0_12px_40px_-12px_rgb(17_46_29/0.12)] backdrop-blur-sm transition-all duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+      class="composer-surface relative flex min-h-0 flex-col overflow-hidden bg-white/[0.98] backdrop-blur-sm transition-all duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
       :class="[
         layout === 'centered'
-          ? 'rounded-[1.35rem] ring-1 ring-sipac-200/25 border border-border/55'
+          ? 'rounded-[1.75rem] border border-border/60'
           : layout === 'docked'
-            ? 'rounded-2xl border border-border/50 shadow-[0_8px_32px_-20px_rgb(17_46_29/0.12)] sm:rounded-[1.25rem]'
-            : 'rounded-2xl border border-border/55',
+            ? 'rounded-[1.5rem] border border-border/55 sm:rounded-[1.65rem]'
+            : 'rounded-[1.5rem] border border-border/55',
       ]"
       @submit.prevent="emit('submit')"
     >
       <label class="sr-only" for="chat-composer-input">Mensaje para el asistente</label>
-      <div class="focus-glow min-h-0 px-2 pt-2 sm:px-3 sm:pt-3">
+      <div class="min-h-0 px-2 pt-2 sm:px-3 sm:pt-3">
         <div
-          class="composer-textarea-shell max-h-[min(42vh,15.5rem)] overflow-y-auto rounded-xl border border-border-muted/70 bg-surface-elevated/40 sm:max-h-[min(38vh,13.5rem)]"
+          v-if="quote && quote.trim().length > 0"
+          class="group mb-1 ml-1 mr-1 flex items-center gap-2.5 rounded-xl border border-border/60 bg-surface/40 px-3 py-2 transition-colors hover:bg-surface/80"
+        >
+          <div
+            class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sipac-500/10 text-sipac-600"
+          >
+            <UIcon name="i-lucide-quote" class="size-3.5" />
+          </div>
+          <p class="line-clamp-1 flex-1 text-sm text-text-soft" :title="quote">
+            {{ quote }}
+          </p>
+          <button
+            type="button"
+            class="flex shrink-0 items-center justify-center rounded-full p-1.5 text-text-muted transition-colors hover:bg-black/5 hover:text-text focus:outline-none"
+            aria-label="Eliminar cita"
+            @click="quote = ''"
+          >
+            <UIcon name="i-lucide-x" class="size-3.5" />
+          </button>
+        </div>
+
+        <div
+          class="composer-textarea-shell max-h-[min(42vh,15.5rem)] overflow-y-auto sm:max-h-[min(38vh,13.5rem)]"
         >
           <UTextarea
             id="chat-composer-input"
             :model-value="modelValue"
             color="neutral"
-            variant="outline"
+            variant="none"
             autoresize
-            :rows="layout === 'centered' ? 4 : 2"
+            :rows="layout === 'centered' ? 2 : 1"
             :maxrows="layout === 'centered' ? 14 : 12"
             :placeholder="placeholder"
-            class="w-full resize-none border-0 bg-transparent px-3 py-2.5 text-base leading-relaxed text-text shadow-none ring-0 focus-visible:ring-0 sm:px-3.5 sm:py-3"
+            class="w-full resize-none border-0 bg-transparent px-1 py-1 text-[15px] leading-relaxed text-text shadow-none ring-0 max-[380px]:text-[14px] focus-visible:ring-0 sm:px-2 sm:py-1.5"
             @update:model-value="emit('update:modelValue', $event)"
             @keydown="onKeydown"
           />
@@ -162,15 +195,15 @@ function onKeydown(e: KeyboardEvent) {
       </div>
 
       <div
-        class="flex flex-wrap items-center gap-2 border-t border-border-muted/70 px-2 py-2 sm:gap-3 sm:px-3"
+        class="flex flex-col items-stretch gap-2 px-2 py-2.5 max-[380px]:px-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-4 sm:py-3"
       >
         <div
           v-if="showModelPicker"
-          class="flex min-w-0 flex-1 items-center gap-2 sm:max-w-[min(100%,20rem)]"
+          class="flex min-w-0 w-full items-center gap-2 sm:max-w-[min(100%,20rem)]"
         >
           <UIcon
             name="i-lucide-wand-sparkles"
-            class="size-4 shrink-0 text-sipac-600 opacity-80"
+            class="size-4 shrink-0 text-sipac-600 opacity-80 max-[380px]:hidden"
             aria-hidden="true"
           />
           <USelect
@@ -184,12 +217,14 @@ function onKeydown(e: KeyboardEvent) {
             aria-label="Modo de respuesta (opcional)"
           />
         </div>
-        <span v-else class="min-w-0 flex-1" />
+        <span v-else class="hidden min-w-0 sm:block sm:flex-1" />
         <span id="chat-model-hint-composer" class="sr-only">
           Opcional. SIPAc elige por defecto el modo más adecuado para buscar en el repositorio
           compartido.
         </span>
-        <div class="ms-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div
+          class="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:ms-auto sm:w-auto"
+        >
           <SipacButton
             v-if="modelValue.length"
             color="neutral"
@@ -265,27 +300,49 @@ function onKeydown(e: KeyboardEvent) {
 
 .chat-composer-glow {
   position: absolute;
-  inset: -4px;
+  inset: -6px;
   z-index: 0;
   pointer-events: none;
-  background: linear-gradient(
-    120deg,
-    rgb(40 124 73 / 0.14),
-    rgb(125 83 54 / 0.09),
-    rgb(40 124 73 / 0.12)
+  background: radial-gradient(
+    60% 120% at 50% 100%,
+    rgb(201 100 66 / 0.18),
+    rgb(201 100 66 / 0.06) 45%,
+    transparent 72%
   );
-  opacity: 0.42;
-  filter: blur(12px);
+  opacity: 0.55;
+  filter: blur(14px);
+  transition: opacity 400ms ease;
 }
 
 .chat-composer-glow--dock {
-  inset: -2px -4px 10px;
-  opacity: 0.32;
+  inset: -3px -6px 12px;
+  opacity: 0.4;
 }
 
 .chat-composer > form {
   position: relative;
   z-index: 1;
+}
+
+.composer-surface {
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.9) inset,
+    0 1px 2px rgb(28 25 23 / 0.04),
+    0 14px 38px -22px rgb(28 25 23 / 0.14);
+}
+
+.composer-surface:focus-within {
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.9) inset,
+    0 1px 2px rgb(28 25 23 / 0.04),
+    0 14px 38px -22px rgb(28 25 23 / 0.14);
+  /* No heavy ring, just a soft glow */
+}
+
+.chat-composer--centered:focus-within .chat-composer-glow,
+.chat-composer--floating:focus-within .chat-composer-glow,
+.chat-composer--docked:focus-within .chat-composer-glow {
+  opacity: 0.65;
 }
 
 @media (prefers-reduced-motion: reduce) {

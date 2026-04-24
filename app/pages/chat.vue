@@ -11,19 +11,20 @@ await useAsyncData(
     const conversationId =
       typeof route.query.id === 'string' && route.query.id.trim().length > 0 ? route.query.id : null
 
-    const [conversations] = await Promise.all([
+    await Promise.all([
       chatStore.fetchConversations(20, requestFetch),
       chatStore.fetchProviders(requestFetch),
     ])
 
-    if (
-      conversationId &&
-      conversations.some((conversation) => conversation.id === conversationId)
-    ) {
-      await chatStore.fetchConversation(conversationId, requestFetch).catch(() => null)
-    } else {
+    if (!conversationId) {
       chatStore.clearActiveConversation()
+      return true
     }
+
+    await chatStore.fetchConversation(conversationId, requestFetch).catch(() => {
+      chatStore.clearActiveConversation()
+      return null
+    })
 
     return true
   },
@@ -35,6 +36,8 @@ await useAsyncData(
 const {
   chatSession,
   draftInput,
+  draftQuote,
+  handleSetQuote,
   selectedDocument,
   previewOpen,
   selectedModelKey,
@@ -52,6 +55,7 @@ const {
   stopConversation,
   startNewConversation,
   openDocument,
+  handleRegenerate,
 } = useChatPageSession()
 
 const hasThread = computed(() => messages.value.length > 0)
@@ -63,7 +67,7 @@ const showSessionBootState = computed(() => !hasThread.value && initializing.val
 const composerShellClass = computed(() =>
   hasThread.value
     ? 'chat-composer-shell--docked border-t border-border/60 bg-[linear-gradient(rgb(255_255_255/0.96),rgb(247_246_240/0.94))] shadow-[0_-18px_36px_-28px_rgb(20_20_19/0.12),inset_0_1px_0_0_rgb(255_255_255/0.65)] backdrop-blur-xl supports-[backdrop-filter]:bg-surface/78'
-    : 'chat-composer-shell--centered page-stage-primary px-3 pb-6 sm:px-4 sm:pb-10',
+    : 'chat-composer-shell--centered page-stage-primary px-2.5 pb-4 sm:px-4 sm:pb-10',
 )
 
 /** Entrada del compositor al pasar de bienvenida a hilo: resorte (estilo Claude), sin solapar mensajes. */
@@ -131,7 +135,7 @@ const composerDockMotion = computed(() => {
             class="flex min-h-0 flex-1 flex-col items-center justify-center px-3 py-6 sm:px-4 sm:py-10"
           >
             <div
-              class="page-stage-primary chat-boot-state mx-auto flex w-full max-w-2xl flex-col items-center gap-4 rounded-[1.75rem] border border-border/70 bg-white/75 px-6 py-8 text-center shadow-[0_18px_42px_-30px_rgb(20_20_19/0.12)]"
+              class="page-stage-primary chat-boot-state mx-auto flex w-full max-w-2xl flex-col items-center gap-4 rounded-[1.75rem] border border-border/70 bg-white/75 px-4 py-8 text-center shadow-[0_18px_42px_-30px_rgb(20_20_19/0.12)] sm:px-6"
             >
               <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-sipac-700" />
               <div class="space-y-1.5">
@@ -169,6 +173,8 @@ const composerDockMotion = computed(() => {
             :activity-label="assistantActivityLabel"
             :activity-phase="assistantActivityPhase"
             @open-document="openDocument"
+            @regenerate="handleRegenerate"
+            @cite="handleSetQuote"
           />
         </div>
       </Transition>
@@ -184,13 +190,14 @@ const composerDockMotion = computed(() => {
           :class="
             hasThread
               ? densityPreference === 'compact'
-                ? 'w-full px-3 py-1.5 sm:px-6 sm:py-2'
-                : 'w-full px-3 py-2 sm:px-8 sm:py-3'
+                ? 'w-full px-2 py-1.5 sm:px-3 sm:py-2 md:px-6 lg:px-8'
+                : 'w-full px-2 py-2 sm:px-3 sm:py-3 md:px-6 lg:px-8'
               : 'mx-auto w-full max-w-2xl'
           "
         >
           <ChatComposer
             v-model:selected-model-key="selectedModelKey"
+            v-model:quote="draftQuote"
             :model-value="draftInput"
             :layout="composerLayout"
             :can-send="canSend"

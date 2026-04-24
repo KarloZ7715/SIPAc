@@ -15,21 +15,23 @@ const toolbarFeedback = computed(() =>
 
 <template>
   <header
-    class="shrink-0 border-b border-border/50 bg-surface-elevated/90 px-3 py-2.5 backdrop-blur-md sm:px-5 sm:py-3"
+    class="shrink-0 sticky top-0 z-10 border-b border-border/30 bg-surface/60 px-3 py-2 backdrop-blur-xl sm:px-5 sm:py-2.5 transition-all duration-300"
   >
-    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-      <div class="flex min-w-0 flex-1 items-center gap-3">
+    <div class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+      <div class="flex min-w-0 flex-1 items-center gap-2.5">
         <span
-          class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-sipac-50 text-sipac-700 sm:size-10 sm:rounded-2xl"
+          class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-sipac-50/50 text-sipac-700 ring-1 ring-sipac-100 sm:size-8 sm:rounded-xl"
           aria-hidden="true"
         >
-          <UIcon name="i-lucide-messages-square" class="size-[1.15rem] sm:size-5" />
+          <UIcon name="i-lucide-messages-square" class="size-4" />
         </span>
         <div class="min-w-0">
-          <h2 class="truncate font-display text-base font-medium leading-snug text-text sm:text-lg">
+          <h2
+            class="truncate font-display text-[0.95rem] font-semibold tracking-tight text-text sm:text-base"
+          >
             {{ title }}
           </h2>
-          <p class="text-xs text-text-muted sm:text-sm">
+          <p class="text-[0.7rem] text-text-muted sm:text-xs">
             <template v-if="docCount">
               {{ docCount }} documento{{ docCount === 1 ? '' : 's' }} citado{{
                 docCount === 1 ? '' : 's'

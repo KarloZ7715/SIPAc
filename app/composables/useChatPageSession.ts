@@ -24,6 +24,7 @@ export function useChatPageSession() {
 
   const chatSession = shallowRef<Chat<ChatUiMessage> | null>(null)
   const draftInput = ref('')
+  const draftQuote = ref('')
   const selectedDocument = ref<ChatSearchResult | null>(null)
   const previewOpen = ref(false)
   function readSelectedModelKeyFromStorage() {
@@ -44,6 +45,7 @@ export function useChatPageSession() {
   let latestInitializationToken = 0
   let historyRecoveryRedirected = false
   let disposed = false
+  let backupMessagesForRecovery: ChatUiMessage[] | null = null
 
   const conversationId = computed(() => {
     const id = route.query.id
@@ -145,7 +147,7 @@ export function useChatPageSession() {
     () =>
       Boolean(chatSession.value) &&
       !initializing.value &&
-      draftInput.value.trim().length > 0 &&
+      (draftInput.value.trim().length > 0 || draftQuote.value.trim().length > 0) &&
       chatStatus.value !== 'submitted' &&
       chatStatus.value !== 'streaming',
   )
@@ -237,10 +239,6 @@ export function useChatPageSession() {
     })
   }
 
-  function hasConversationSummary(conversationIdValue: string) {
-    return chatStore.conversations.some((conversation) => conversation.id === conversationIdValue)
-  }
-
   async function ensureConversationId() {
     if (conversationId.value) {
       return conversationId.value
@@ -270,7 +268,7 @@ export function useChatPageSession() {
       let initialMessages: ChatUiMessage[] = []
       let loadWarningFeedback: ReturnType<typeof getChatHistoryWarningFeedback> | null = null
 
-      if (!conversationId.value || !hasConversationSummary(nextConversationId)) {
+      if (!conversationId.value) {
         chatStore.clearActiveConversation()
         initialMessages = []
       } else if (chatStore.activeConversation?.id === nextConversationId) {
@@ -344,6 +342,11 @@ export function useChatPageSession() {
           void chatStore.fetchConversations().catch(() => {})
         },
         onError: (error) => {
+          if (backupMessagesForRecovery && chatSession.value) {
+            chatSession.value.messages = [...backupMessagesForRecovery]
+            backupMessagesForRecovery = null
+          }
+
           const feedback = getChatResponseErrorFeedback(error)
           toast.add({
             title: feedback.title,
@@ -380,14 +383,56 @@ export function useChatPageSession() {
       return
     }
 
-    const nextInput = draftInput.value.trim()
+    let nextInput = draftInput.value.trim()
+    if (draftQuote.value.trim()) {
+      const formattedQuote = draftQuote.value
+        .trim()
+        .split('\n')
+        .map((line) => `> ${line}`)
+        .join('\n')
+
+      // Si el usuario no escribió nada, enviamos solo la cita.
+      // Si escribió, separamos por saltos de línea.
+      nextInput = nextInput ? `${formattedQuote}\n\n${nextInput}` : formattedQuote
+    }
+
     draftInput.value = ''
+    draftQuote.value = ''
 
     await ensureConversationIdInRoute(chatSession.value.id)
 
-    await chatSession.value.sendMessage({
-      text: nextInput,
-    })
+    backupMessagesForRecovery = [...chatSession.value.messages]
+
+    try {
+      await chatSession.value.sendMessage({
+        text: nextInput,
+      })
+    } catch {
+      if (backupMessagesForRecovery && chatSession.value) {
+        chatSession.value.messages = [...backupMessagesForRecovery]
+        backupMessagesForRecovery = null
+      }
+    }
+  }
+
+  async function handleSetQuote(text: string) {
+    draftQuote.value = text
+  }
+
+  async function handleRegenerate(messageId: string, modelKey?: string) {
+    if (!chatSession.value) return
+    if (modelKey) selectedModelKey.value = modelKey
+
+    backupMessagesForRecovery = [...chatSession.value.messages]
+
+    try {
+      await chatSession.value.regenerate({ messageId })
+    } catch {
+      if (backupMessagesForRecovery && chatSession.value) {
+        chatSession.value.messages = [...backupMessagesForRecovery]
+        backupMessagesForRecovery = null
+      }
+    }
   }
 
   async function stopConversation() {
@@ -401,6 +446,7 @@ export function useChatPageSession() {
   async function startNewConversation() {
     chatStore.clearActiveConversation()
     draftInput.value = ''
+    draftQuote.value = ''
     selectedDocument.value = null
     previewOpen.value = false
 
@@ -441,6 +487,21 @@ export function useChatPageSession() {
 
     await initializeChatSession()
   })
+
+  watch(
+    () => messages.value,
+    (newMessages) => {
+      let lastUserMsgId: string | null = null
+      for (const msg of newMessages) {
+        if (msg.role === 'user') {
+          lastUserMsgId = msg.id
+        } else if (msg.role === 'assistant' && lastUserMsgId) {
+          chatStore.registerMessageVariant(lastUserMsgId, msg)
+        }
+      }
+    },
+    { deep: true, immediate: true },
+  )
 
   watch(
     () => selectedModelKey.value,
@@ -493,6 +554,8 @@ export function useChatPageSession() {
   return {
     chatSession,
     draftInput,
+    draftQuote,
+    handleSetQuote,
     selectedDocument,
     previewOpen,
     selectedModelKey,
@@ -511,6 +574,7 @@ export function useChatPageSession() {
     initializeChatSession,
     handleSubmit,
     stopConversation,
+    handleRegenerate,
     startNewConversation,
     openDocument,
     buildConversationActions,
