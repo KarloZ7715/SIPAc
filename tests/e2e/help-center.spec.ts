@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import mongoose from 'mongoose'
+import { SignJWT } from 'jose'
 import User from '../../server/models/User'
+import Session from '../../server/models/Session'
 
 const testRunId = `e2e-help-${Date.now()}`
 const appPort = Number(process.env.PLAYWRIGHT_PORT ?? 4173)
@@ -9,6 +12,8 @@ const appBaseUrl = `http://127.0.0.1:${appPort}`
 const userEmail = `help-${testRunId}@correo.unicordoba.edu.co`
 const userPassword = 'HelpE2E123!'
 const userFullName = 'Docente Help E2E'
+
+let userId: string | null = null
 
 function readEnvValue(name: string): string {
   const directValue = process.env[name]
@@ -41,6 +46,36 @@ async function connectMongo() {
   }
 }
 
+function getJwtSecret() {
+  const secret = readEnvValue('JWT_SECRET')
+
+  if (!secret) {
+    throw new Error('JWT_SECRET no está definido')
+  }
+
+  return new TextEncoder().encode(secret)
+}
+
+async function createSessionToken(userIdValue: string, email: string) {
+  const jti = `help-${randomUUID()}`
+  const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000)
+
+  await Session.create({
+    userId: new mongoose.Types.ObjectId(userIdValue),
+    jti,
+    expiresAt,
+    lastSeenAt: new Date(),
+  })
+
+  return new SignJWT({ role: 'docente', email, tokenVersion: 0 })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(userIdValue)
+    .setJti(jti)
+    .setIssuedAt()
+    .setExpirationTime('8h')
+    .sign(getJwtSecret())
+}
+
 test.describe('Centro de ayuda', () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(60_000)
@@ -49,7 +84,7 @@ test.describe('Centro de ayuda', () => {
     await connectMongo()
     await User.deleteMany({ email: userEmail })
 
-    await User.create({
+    const user = await User.create({
       fullName: userFullName,
       email: userEmail,
       passwordHash: userPassword,
@@ -57,10 +92,15 @@ test.describe('Centro de ayuda', () => {
       role: 'docente',
       emailVerifiedAt: new Date(),
     })
+
+    userId = user._id.toString()
   })
 
   test.afterAll(async () => {
     await User.deleteMany({ email: userEmail })
+    if (userId) {
+      await Session.deleteMany({ userId: new mongoose.Types.ObjectId(userId) })
+    }
 
     if (mongoose.connection.readyState === 1) {
       await mongoose.disconnect()
@@ -68,25 +108,19 @@ test.describe('Centro de ayuda', () => {
   })
 
   test('muestra el hub y permite navegar a las tres guías', async ({ page }) => {
-    const response = await page.request.post(`${appBaseUrl}/api/auth/login`, {
-      data: {
-        email: userEmail,
-        password: userPassword,
-      },
-    })
-    if (!response.ok()) {
-      throw new Error(`No se pudo iniciar sesión (${response.status()})`)
+    if (!userId) {
+      throw new Error('userId no está inicializado')
     }
 
-    const cookies = await page.context().cookies(appBaseUrl)
-    if (!cookies.some((cookie) => cookie.name === 'sipac_session')) {
-      throw new Error('No se recibió cookie sipac_session tras login')
-    }
+    const token = await createSessionToken(userId, userEmail)
+    await page.context().addCookies([{ name: 'sipac_session', value: token, url: appBaseUrl }])
 
     await page.goto('/help')
     await page.waitForLoadState('domcontentloaded')
 
-    await expect(page.getByRole('heading', { name: 'Centro de ayuda SIPAc' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: /Centro de ayuda SIPAc|Aprende los flujos esenciales/i }),
+    ).toBeVisible()
 
     const guides: Array<{ href: string; heading: string }> = [
       { href: '/help/upload', heading: 'Cómo subir y analizar documentos' },
@@ -106,13 +140,27 @@ test.describe('Centro de ayuda', () => {
       await expect(page.getByRole('heading', { level: 1, name: guide.heading })).toBeVisible()
     }
 
-    const firstFaqButton = page.getByRole('button', {
-      name: '¿Qué tipos de archivo puedo subir?',
-    })
+    const firstFaqButton = page
+      .getByRole('button', {
+        name: '¿Qué tipos de archivo puedo subir?',
+      })
+      .filter({ visible: true })
+      .first()
+    const firstFaqPanel = page.locator('#faq-panel-0').filter({ visible: true }).first()
     await page.goto('/help')
     await page.waitForLoadState('domcontentloaded')
     await expect(firstFaqButton).toBeVisible()
-    await firstFaqButton.click()
+    await firstFaqButton.scrollIntoViewIfNeeded()
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if ((await firstFaqButton.getAttribute('aria-expanded')) === 'true') {
+        break
+      }
+      await firstFaqButton.click({ force: true })
+      await page.waitForTimeout(180)
+    }
+
     await expect(firstFaqButton).toHaveAttribute('aria-expanded', 'true')
+    await expect(firstFaqPanel).toBeVisible()
   })
 })

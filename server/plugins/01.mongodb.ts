@@ -15,8 +15,10 @@ export default defineNitroPlugin(async () => {
   try {
     await mongoose.connect(config.mongodbUri, {
       maxPoolSize: 10,
+      minPoolSize: 2,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
+      autoIndex: process.env.NODE_ENV !== 'production',
     })
 
     console.info(`[MongoDB] Conectado a ${mongoose.connection.host}/${mongoose.connection.name}`)

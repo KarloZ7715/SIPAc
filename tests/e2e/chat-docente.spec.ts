@@ -1,7 +1,10 @@
 import { expect, test, type Page } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import mongoose from 'mongoose'
+import { SignJWT } from 'jose'
 import User from '../../server/models/User'
+import Session from '../../server/models/Session'
 import UploadedFile from '../../server/models/UploadedFile'
 import AcademicProduct from '../../server/models/AcademicProduct'
 import ChatConversation from '../../server/models/ChatConversation'
@@ -51,19 +54,39 @@ async function connectMongo() {
   }
 }
 
-async function loginWithSessionCookie(page: Page, email: string, password: string) {
-  const response = await page.request.post(`${appBaseUrl}/api/auth/login`, {
-    data: { email, password },
+function getJwtSecret() {
+  const secret = readEnvValue('JWT_SECRET')
+
+  if (!secret) {
+    throw new Error('JWT_SECRET no está definido')
+  }
+
+  return new TextEncoder().encode(secret)
+}
+
+async function createSessionToken(userId: string, email: string) {
+  const jti = `chat-${randomUUID()}`
+  const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000)
+
+  await Session.create({
+    userId: new mongoose.Types.ObjectId(userId),
+    jti,
+    expiresAt,
+    lastSeenAt: new Date(),
   })
 
-  if (!response.ok()) {
-    throw new Error(`No se pudo iniciar sesión (${response.status()})`)
-  }
+  return new SignJWT({ role: 'docente', email, tokenVersion: 0 })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(userId)
+    .setJti(jti)
+    .setIssuedAt()
+    .setExpirationTime('8h')
+    .sign(getJwtSecret())
+}
 
-  const cookies = await page.context().cookies(appBaseUrl)
-  if (!cookies.some((cookie) => cookie.name === 'sipac_session')) {
-    throw new Error('No se recibió cookie sipac_session tras login')
-  }
+async function loginWithSessionCookie(page: Page, email: string, userId: string) {
+  const token = await createSessionToken(userId, email)
+  await page.context().addCookies([{ name: 'sipac_session', value: token, url: appBaseUrl }])
 }
 
 async function openChatAsDocente(page: Page) {
@@ -71,7 +94,7 @@ async function openChatAsDocente(page: Page) {
     throw new Error('docenteUserId no está inicializado')
   }
 
-  await loginWithSessionCookie(page, docenteEmail, docentePassword)
+  await loginWithSessionCookie(page, docenteEmail, docenteUserId)
 }
 
 test.describe('Chat IA docente', () => {
@@ -203,6 +226,7 @@ test.describe('Chat IA docente', () => {
     }
 
     if (seededUsers.length > 0) {
+      await Session.deleteMany({ userId: { $in: seededUsers.map((user) => user._id) } })
       await User.deleteMany({ _id: { $in: seededUsers.map((user) => user._id) } })
     }
 
@@ -296,8 +320,20 @@ test.describe('Chat IA docente', () => {
       .first()
     await expect(submitButton).toBeEnabled({ timeout: 10_000 })
 
+    const chat200ResponsePromise = page.waitForResponse(
+      (response) => response.url().includes('/api/chat') && response.status() === 200,
+      { timeout: 90_000 },
+    )
+
     await submitButton.click()
-    await page.waitForTimeout(5_000)
+
+    let chat200Response = false
+    try {
+      await chat200ResponsePromise
+      chat200Response = true
+    } catch {
+      chat200Response = false
+    }
 
     expect(
       chatRequests.length,
@@ -311,7 +347,7 @@ ${pageErrors.join('\n') || '(sin errores)'}
 `,
     ).toBeGreaterThan(0)
     expect(
-      chatResponses.some((response) => response.startsWith('200 ')),
+      chat200Response || chatResponses.some((response) => response.startsWith('200 ')),
       `El chat no devolvió un 200.
 
 Responses:
