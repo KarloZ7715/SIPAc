@@ -1,7 +1,6 @@
 import type { NotificationType } from '~~/app/types'
 import Notification from '~~/server/models/Notification'
 import User from '~~/server/models/User'
-import { sendEmail } from '~~/server/services/email/send-email'
 
 interface NotifyDocumentProcessingInput {
   recipientId: string
@@ -39,30 +38,17 @@ function buildNotificationContent(input: NotifyDocumentProcessingInput): {
   }
 }
 
-async function sendNotificationEmail(input: {
-  to: string
-  fullName: string
-  title: string
-  message: string
-}): Promise<boolean> {
-  return sendEmail({
-    to: input.to,
-    subject: input.title,
-    html: `<p>Hola ${input.fullName},</p><p>${input.message}</p><p>SIPAc</p>`,
-  })
-}
-
 export async function notifyDocumentProcessing(
   input: NotifyDocumentProcessingInput,
 ): Promise<void> {
-  const recipient = await User.findById(input.recipientId).select('fullName email').lean()
+  const recipient = await User.findById(input.recipientId).select('_id').lean()
   if (!recipient) {
     return
   }
 
   const content = buildNotificationContent(input)
 
-  const notification = await Notification.create({
+  await Notification.create({
     recipientId: input.recipientId,
     type: content.type,
     title: content.title,
@@ -72,16 +58,4 @@ export async function notifyDocumentProcessing(
       : { kind: 'uploaded_file', id: input.uploadedFileId },
     emailSent: false,
   })
-
-  const emailSent = await sendNotificationEmail({
-    to: recipient.email,
-    fullName: recipient.fullName,
-    title: content.title,
-    message: content.message,
-  })
-
-  if (emailSent) {
-    notification.emailSent = true
-    await notification.save()
-  }
 }
