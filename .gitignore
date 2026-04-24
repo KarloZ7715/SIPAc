@@ -36,6 +36,7 @@ yarn-error.log*
 .github/skills/*
 .github/prompts/*
 .github/plans/*
+.github/test/*
 *.swp
 *.swo
 *~

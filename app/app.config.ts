@@ -11,7 +11,7 @@ export default defineAppConfig({
     },
     card: {
       slots: {
-        root: 'overflow-hidden divide-y-0 ring-0 rounded-2xl border border-border/90 bg-surface/95 shadow-[0_4px_24px_rgba(0,0,0,0.05)] backdrop-blur-sm',
+        root: 'overflow-hidden divide-y-0 ring-0 rounded-[1.15rem] border border-border/90 bg-surface/95 shadow-[0_4px_24px_rgba(0,0,0,0.05)] backdrop-blur-sm',
         header: 'border-0 p-5 sm:px-6',
         body: 'border-0 p-5 sm:p-6',
         footer: 'border-0 p-5 sm:px-6',
@@ -38,7 +38,7 @@ export default defineAppConfig({
     },
     badge: {
       slots: {
-        base: 'inline-flex items-center gap-1 rounded-full border font-semibold tracking-[0.02em]',
+        base: 'inline-flex items-center gap-1 rounded-[0.45rem] border font-semibold tracking-[0.02em]',
       },
       variants: {
         size: {
@@ -88,7 +88,7 @@ export default defineAppConfig({
     },
     alert: {
       slots: {
-        root: 'w-full rounded-2xl border border-border/85 bg-surface/95 p-4 shadow-[0_4px_24px_rgba(0,0,0,0.05)]',
+        root: 'w-full rounded-[1rem] border border-border/85 bg-surface/95 p-4 shadow-[0_4px_24px_rgba(0,0,0,0.05)]',
         title: 'text-sm font-semibold text-text',
         description: 'mt-1 text-sm leading-6 text-text-muted',
         icon: 'size-5 shrink-0',
@@ -126,31 +126,31 @@ export default defineAppConfig({
           color: 'primary',
           variant: 'solid',
           class:
-            'bg-sipac-600 text-[#faf9f5] shadow-[rgb(201,100,66)_0_0_0_0,rgb(201,100,66)_0_0_0_1px] hover:bg-sipac-700 active:bg-sipac-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3898ec]',
+            'bg-sipac-600 text-[#faf9f5] shadow-[rgb(201,100,66)_0_0_0_0,rgb(201,100,66)_0_0_0_1px] hover:bg-sipac-700 active:bg-sipac-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c96442]',
         },
         {
           color: 'neutral',
           variant: 'ghost',
           class:
-            'bg-transparent text-text hover:bg-sipac-50/80 hover:text-text focus-visible:bg-sipac-50/80 focus-visible:ring-2 focus-visible:ring-[#3898ec]/40',
+            'bg-transparent text-text hover:bg-sipac-50/80 hover:text-text focus-visible:bg-sipac-50/80 focus-visible:ring-2 focus-visible:ring-[#c96442]/30',
         },
         {
           color: 'neutral',
           variant: 'soft',
           class:
-            'border border-border/90 bg-[#e8e6dc]/90 text-text shadow-[rgb(232,230,220)_0_0_0_0,rgb(209,207,197)_0_0_0_1px] hover:bg-[#e8e6dc] focus-visible:ring-2 focus-visible:ring-[#3898ec]/40',
+            'border border-border/90 bg-[#e8e6dc]/90 text-text shadow-[rgb(232,230,220)_0_0_0_0,rgb(209,207,197)_0_0_0_1px] hover:bg-[#e8e6dc] focus-visible:ring-2 focus-visible:ring-[#c96442]/30',
         },
         {
           color: 'neutral',
           variant: 'outline',
           class:
-            'border border-border bg-white/90 text-text hover:bg-surface-muted focus-visible:ring-2 focus-visible:ring-[#3898ec]/40',
+            'border border-border bg-white/90 text-text hover:bg-surface-muted focus-visible:ring-2 focus-visible:ring-[#c96442]/30',
         },
         {
           color: 'neutral',
           variant: 'solid',
           class:
-            'bg-[#30302e] text-[#faf9f5] shadow-[rgb(48,48,46)_0_0_0_0,rgb(48,48,46)_0_0_0_1px] hover:bg-[#141413] active:bg-[#141413] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3898ec]',
+            'bg-[#30302e] text-[#faf9f5] shadow-[rgb(48,48,46)_0_0_0_0,rgb(48,48,46)_0_0_0_1px] hover:bg-[#141413] active:bg-[#141413] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c96442]',
         },
       ],
     },
@@ -165,7 +165,7 @@ export default defineAppConfig({
     },
     input: {
       slots: {
-        base: 'w-full rounded-xl border border-border/85 bg-white/95 text-text placeholder:text-text-soft shadow-none transition-[background-color,border-color,box-shadow,color] duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70',
+        base: 'w-full rounded-[0.65rem] border border-border/85 bg-white/95 text-text placeholder:text-text-soft shadow-none transition-[background-color,border-color,box-shadow,color] duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70',
         leadingIcon: 'text-text-soft',
         trailingIcon: 'text-text-soft',
       },
@@ -183,13 +183,13 @@ export default defineAppConfig({
           color: 'neutral',
           variant: ['outline', 'subtle', 'soft'],
           class:
-            'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#3898ec]/45 hover:ring-border/90 focus-visible:border-[#3898ec]',
+            'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#c96442]/35 hover:ring-border/90 focus-visible:border-[#c96442]/70',
         },
         {
           color: 'primary',
           variant: ['outline', 'subtle', 'soft'],
           class:
-            'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#3898ec]/45 hover:ring-border/90 focus-visible:border-[#3898ec]',
+            'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#c96442]/35 hover:ring-border/90 focus-visible:border-[#c96442]/70',
         },
       ],
       defaultVariants: {
@@ -199,7 +199,7 @@ export default defineAppConfig({
     },
     textarea: {
       slots: {
-        base: 'w-full rounded-xl border border-border/85 bg-white/95 text-text placeholder:text-text-soft shadow-none transition-[background-color,border-color,box-shadow,color] duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70',
+        base: 'w-full rounded-[0.65rem] border border-border/85 bg-white/95 text-text placeholder:text-text-soft shadow-none transition-[background-color,border-color,box-shadow,color] duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70',
         leadingIcon: 'text-text-soft',
         trailingIcon: 'text-text-soft',
       },
@@ -217,13 +217,13 @@ export default defineAppConfig({
           color: 'neutral',
           variant: ['outline', 'subtle', 'soft'],
           class:
-            'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#3898ec]/45 hover:ring-border/90 focus-visible:border-[#3898ec]',
+            'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#c96442]/35 hover:ring-border/90 focus-visible:border-[#c96442]/70',
         },
         {
           color: 'primary',
           variant: ['outline', 'subtle', 'soft'],
           class:
-            'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#3898ec]/45 hover:ring-border/90 focus-visible:border-[#3898ec]',
+            'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#c96442]/35 hover:ring-border/90 focus-visible:border-[#c96442]/70',
         },
       ],
       defaultVariants: {
@@ -233,9 +233,9 @@ export default defineAppConfig({
     },
     select: {
       slots: {
-        base: 'relative inline-flex items-center rounded-xl border border-border/85 bg-white/95 text-text transition-[background-color,border-color,box-shadow,color] duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70',
+        base: 'relative inline-flex items-center rounded-[0.65rem] border border-border/85 bg-white/95 text-text transition-[background-color,border-color,box-shadow,color] duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70',
         content:
-          'max-h-60 w-(--reka-select-trigger-width) rounded-2xl border border-border/85 bg-surface/98 shadow-[0_4px_24px_rgba(0,0,0,0.06)] backdrop-blur-md overflow-hidden pointer-events-auto flex flex-col',
+          'max-h-60 w-(--reka-select-trigger-width) rounded-[0.85rem] border border-border/85 bg-surface/98 shadow-[0_4px_24px_rgba(0,0,0,0.06)] backdrop-blur-md overflow-hidden pointer-events-auto flex flex-col',
         viewport:
           'relative divide-y divide-border-muted/80 scroll-py-1 overflow-y-auto flex-1 text-text',
         group: 'p-1 isolate',
@@ -263,13 +263,13 @@ export default defineAppConfig({
           color: 'neutral',
           variant: ['outline', 'subtle', 'soft'],
           class:
-            'focus:ring-2 focus:ring-inset focus:ring-[#3898ec]/45 hover:ring-border/90 focus:border-[#3898ec]',
+            'focus:ring-2 focus:ring-inset focus:ring-[#c96442]/35 hover:ring-border/90 focus:border-[#c96442]/70',
         },
         {
           color: 'primary',
           variant: ['outline', 'subtle', 'soft'],
           class:
-            'focus:ring-2 focus:ring-inset focus:ring-[#3898ec]/45 hover:ring-border/90 focus:border-[#3898ec]',
+            'focus:ring-2 focus:ring-inset focus:ring-[#c96442]/35 hover:ring-border/90 focus:border-[#c96442]/70',
         },
       ],
       defaultVariants: {
@@ -279,14 +279,14 @@ export default defineAppConfig({
     },
     selectMenu: {
       slots: {
-        base: 'relative inline-flex items-center rounded-xl border border-border/85 bg-white/95 text-text transition-[background-color,border-color,box-shadow,color] duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70',
+        base: 'relative inline-flex items-center rounded-[0.65rem] border border-border/85 bg-white/95 text-text transition-[background-color,border-color,box-shadow,color] duration-200 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70',
         leadingIcon: 'text-text-soft',
         trailingIcon: 'text-text-soft',
         placeholder: 'truncate text-text-soft',
         value: 'truncate text-text',
         arrow: 'text-text-soft',
         content:
-          'max-h-60 w-(--reka-combobox-trigger-width) rounded-2xl border border-border/85 bg-surface/98 text-text shadow-[0_4px_24px_rgba(0,0,0,0.06)] backdrop-blur-md overflow-hidden pointer-events-auto flex flex-col ring-0',
+          'max-h-60 w-(--reka-combobox-trigger-width) rounded-[0.85rem] border border-border/85 bg-surface/98 text-text shadow-[0_4px_24px_rgba(0,0,0,0.06)] backdrop-blur-md overflow-hidden pointer-events-auto flex flex-col ring-0',
         viewport:
           'sipac-select-menu-viewport relative divide-y divide-border-muted/80 scroll-py-1 overflow-y-auto flex-1 text-text',
         group: 'p-1 isolate',
@@ -314,13 +314,13 @@ export default defineAppConfig({
           color: 'neutral',
           variant: ['outline', 'subtle', 'soft'],
           class:
-            'focus:ring-2 focus:ring-inset focus:ring-[#3898ec]/45 hover:ring-border/90 focus:border-[#3898ec]',
+            'focus:ring-2 focus:ring-inset focus:ring-[#c96442]/35 hover:ring-border/90 focus:border-[#c96442]/70',
         },
         {
           color: 'primary',
           variant: ['outline', 'subtle', 'soft'],
           class:
-            'focus:ring-2 focus:ring-inset focus:ring-[#3898ec]/45 hover:ring-border/90 focus:border-[#3898ec]',
+            'focus:ring-2 focus:ring-inset focus:ring-[#c96442]/35 hover:ring-border/90 focus:border-[#c96442]/70',
         },
       ],
       defaultVariants: {
@@ -331,7 +331,7 @@ export default defineAppConfig({
     dropdownMenu: {
       slots: {
         content:
-          'min-w-44 rounded-2xl border border-border/85 bg-surface/98 shadow-[0_4px_24px_rgba(0,0,0,0.08)] ring-0 overflow-hidden data-[state=open]:animate-[scale-in_120ms_ease-out] data-[state=closed]:animate-[scale-out_100ms_ease-in] origin-(--reka-dropdown-menu-content-transform-origin) flex flex-col backdrop-blur-md',
+          'min-w-44 rounded-[0.85rem] border border-border/85 bg-surface/98 shadow-[0_4px_24px_rgba(0,0,0,0.08)] ring-0 overflow-hidden data-[state=open]:animate-[scale-in_120ms_ease-out] data-[state=closed]:animate-[scale-out_100ms_ease-in] origin-(--reka-dropdown-menu-content-transform-origin) flex flex-col backdrop-blur-md',
         viewport: 'relative divide-y divide-border-muted/80 scroll-py-1 overflow-y-auto flex-1',
         group: 'p-1.5 isolate',
         label: 'w-full flex items-center px-2 py-2 text-sm font-semibold text-text',
@@ -370,7 +370,7 @@ export default defineAppConfig({
         },
       },
       compoundVariants: [
-        { color: 'neutral', class: 'focus-visible:outline-[#3898ec]' },
+        { color: 'neutral', class: 'focus-visible:outline-[#c96442]' },
         { color: 'neutral', highlight: true, class: 'border-sipac-300' },
         {
           interactive: true,
@@ -384,7 +384,7 @@ export default defineAppConfig({
     },
     table: {
       slots: {
-        root: 'relative overflow-auto rounded-2xl border border-border/85 bg-surface/95',
+        root: 'relative overflow-auto rounded-[1rem] border border-border/85 bg-surface/95',
         thead: 'relative bg-surface-muted/72',
         tbody: 'divide-y divide-border-muted/70',
         tr: 'hover:bg-sipac-50/40 transition-colors',
@@ -394,9 +394,9 @@ export default defineAppConfig({
     },
     empty: {
       slots: {
-        root: 'flex flex-col items-center justify-center gap-4 rounded-[1.2rem] border border-border/70 bg-surface-muted/55 p-6 sm:p-8 min-w-0',
+        root: 'flex flex-col items-center justify-center gap-4 rounded-[0.95rem] border border-dashed border-border/70 bg-surface-muted/40 p-6 sm:p-8 min-w-0',
         avatar:
-          'size-11 rounded-2xl border border-sipac-100 bg-white text-sipac-700 shadow-[0_12px_24px_-20px_rgb(20_20_19/0.12)]',
+          'size-11 rounded-[0.75rem] border border-sipac-100 bg-white text-sipac-700 shadow-[0_12px_24px_-20px_rgb(20_20_19/0.12)]',
         title: 'text-base font-semibold text-text',
         description: 'text-sm leading-6 text-text-muted text-center',
       },
@@ -421,7 +421,7 @@ export default defineAppConfig({
       slots: {
         overlay: 'fixed inset-0 bg-[rgba(20,20,19,0.22)] backdrop-blur-[2px]',
         content:
-          'bg-surface/98 border border-border/90 shadow-[0_4px_24px_rgba(0,0,0,0.06)] flex flex-col focus:outline-none rounded-2xl',
+          'bg-surface/98 border border-border/90 shadow-[0_4px_24px_rgba(0,0,0,0.06)] flex flex-col focus:outline-none rounded-[1rem]',
         header: 'flex items-center gap-1.5 p-5 sm:px-6 min-h-16 border-0',
         body: 'flex-1 p-5 sm:p-6 border-0',
         footer: 'flex items-center gap-1.5 p-5 sm:px-6 border-0',
@@ -432,7 +432,7 @@ export default defineAppConfig({
     },
     toast: {
       slots: {
-        root: 'relative group overflow-hidden rounded-2xl border border-border/85 bg-surface/98 p-4 shadow-[0_4px_24px_rgba(0,0,0,0.05)] backdrop-blur-sm focus:outline-none',
+        root: 'relative group overflow-hidden rounded-[0.9rem] border border-border/85 bg-surface/98 p-4 shadow-[0_4px_24px_rgba(0,0,0,0.05)] backdrop-blur-sm focus:outline-none',
         title: 'text-sm font-semibold text-text',
         description: 'text-sm leading-6 text-text-muted',
         icon: 'shrink-0 size-5',
@@ -476,9 +476,9 @@ export default defineAppConfig({
         {
           color: 'info',
           class: {
-            root: 'border-sky-200 bg-sky-50/96',
-            icon: 'text-sky-700',
-            progress: 'bg-sky-500',
+            root: 'border-sipac-200/85 bg-sipac-50/95',
+            icon: 'text-sipac-700',
+            progress: 'bg-sipac-500',
           },
         },
       ],

@@ -17,6 +17,9 @@ if (!isTest) {
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   modules,
+  ui: {
+    colorMode: false,
+  },
   css: ['~/assets/css/main.css'],
 
   typescript: {
@@ -26,6 +29,19 @@ export default defineNuxtConfig({
   vite: {
     server: {
       allowedHosts: ['localhost', '127.0.0.1', '.trycloudflare.com'],
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('chart.js') || id.includes('vue-chartjs')) return 'vendor-charts'
+            if (id.includes('pdfjs-dist')) return 'vendor-pdf'
+            if (id.includes('node_modules/@ai-sdk') || id.includes('node_modules/ai/'))
+              return 'vendor-ai'
+            if (id.includes('node_modules/motion-v')) return 'vendor-motion'
+          },
+        },
+      },
     },
     optimizeDeps: {
       include: [
@@ -125,7 +141,12 @@ export default defineNuxtConfig({
     },
   },
 
+  routeRules: {
+    '/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+  },
+
   nitro: {
+    compressPublicAssets: true,
     experimental: {
       asyncContext: true,
     },
