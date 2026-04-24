@@ -14,6 +14,20 @@ const props = withDefaults(
     secondary: false,
   },
 )
+
+// Map each lucide icon to a distinct micro-animation keyword.
+// The actual keyframes live in main.css under `.sidebar-nav-item__icon[data-anim='…']`.
+const iconAnimationMap: Record<string, string> = {
+  'i-lucide-house': 'bounce',
+  'i-lucide-sparkles': 'twinkle',
+  'i-lucide-folder-up': 'lift',
+  'i-lucide-chart-column-big': 'rise',
+  'i-lucide-library-big': 'flip',
+  'i-lucide-users-round': 'orbit',
+  'i-lucide-shield-ellipsis': 'scan',
+}
+
+const iconAnim = computed(() => iconAnimationMap[props.icon] ?? 'pop')
 </script>
 
 <template>
@@ -27,7 +41,7 @@ const props = withDefaults(
     :data-collapsed="props.collapsed ? 'true' : 'false'"
     :data-secondary="props.secondary ? 'true' : 'false'"
   >
-    <span class="sidebar-nav-item__icon" aria-hidden="true">
+    <span class="sidebar-nav-item__icon" :data-anim="iconAnim" aria-hidden="true">
       <UIcon :name="props.icon" class="size-[1.05rem]" />
     </span>
 

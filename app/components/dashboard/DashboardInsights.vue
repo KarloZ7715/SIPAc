@@ -81,10 +81,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="bg-surface border border-border/80 rounded-2xl p-6 shadow-sm flex flex-col gap-5">
-    <div class="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
+  <div class="insights-panel flex flex-col gap-5">
+    <div class="flex items-center justify-between gap-3 border-b border-border/40 pb-4">
       <div class="flex items-center gap-3">
-        <div class="p-2 bg-primary/10 text-primary-600 rounded-lg">
+        <div class="insights-panel__badge">
           <UIcon name="i-lucide-lightbulb" class="size-5" />
         </div>
         <div>
@@ -108,8 +108,8 @@ onMounted(() => {
     </div>
 
     <Transition name="fade" mode="out-in">
-      <div v-if="shouldShowLoadingState" class="flex flex-col gap-4 animate-pulse">
-        <div v-for="i in 2" :key="i" class="h-24 bg-surface-muted rounded-xl"></div>
+      <div v-if="shouldShowLoadingState" class="flex flex-col gap-4">
+        <div v-for="i in 2" :key="i" class="skeleton-shimmer h-24 rounded-xl"></div>
       </div>
 
       <div
@@ -133,36 +133,27 @@ onMounted(() => {
         <div
           v-for="insight in insights"
           :key="insight.id"
-          class="border border-border/60 rounded-xl p-4 transition-all hover:border-primary/40 hover:shadow-sm relative overflow-hidden group"
+          class="insight-card group"
+          :data-severity="insight.severity"
         >
-          <div
-            class="absolute left-0 top-0 bottom-0 w-1"
-            :class="{
-              'bg-yellow-500': insight.severity === 'warning',
-              'bg-primary-500': insight.severity === 'success',
-              'bg-sky-500': insight.severity === 'info',
-            }"
-          ></div>
+          <div class="insight-card__rail" aria-hidden="true"></div>
 
-          <div class="pl-2">
+          <div class="pl-3">
             <h4
               class="flex items-center gap-2 font-display text-sm font-medium leading-snug text-text"
             >
-              <UIcon
-                :name="
-                  insight.severity === 'warning'
-                    ? 'i-lucide-alert-triangle'
-                    : insight.severity === 'success'
-                      ? 'i-lucide-trending-up'
-                      : 'i-lucide-info'
-                "
-                :class="{
-                  'text-yellow-600': insight.severity === 'warning',
-                  'text-primary-600': insight.severity === 'success',
-                  'text-sky-600': insight.severity === 'info',
-                }"
-                class="size-4"
-              />
+              <span class="insight-card__icon">
+                <UIcon
+                  :name="
+                    insight.severity === 'warning'
+                      ? 'i-lucide-alert-triangle'
+                      : insight.severity === 'success'
+                        ? 'i-lucide-trending-up'
+                        : 'i-lucide-info'
+                  "
+                  class="size-4"
+                />
+              </span>
               {{ insight.title }}
             </h4>
             <p class="mt-1.5 text-xs leading-[1.43] text-text-muted">{{ insight.description }}</p>
@@ -215,3 +206,94 @@ onMounted(() => {
     </Transition>
   </div>
 </template>
+
+<style scoped>
+.insights-panel {
+  position: relative;
+  padding: 1.5rem;
+  border-radius: 1.4rem;
+  border: 1px solid rgb(var(--color-border-rgb, 235 232 222) / 0.85);
+  background:
+    radial-gradient(circle at 0% 0%, rgb(201 100 66 / 0.05), transparent 55%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.96), rgb(250 249 245 / 0.92));
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.8) inset,
+    0 12px 36px -26px rgb(28 25 23 / 0.12);
+  overflow: hidden;
+}
+
+.insights-panel::before {
+  content: '';
+  position: absolute;
+  inset: -1px -1px auto -1px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgb(201 100 66 / 0.28), transparent);
+  pointer-events: none;
+}
+
+.insights-panel__badge {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgb(201 100 66 / 0.14), rgb(201 100 66 / 0.06));
+  color: rgb(201 100 66);
+  box-shadow: inset 0 0 0 1px rgb(201 100 66 / 0.18);
+}
+
+.insight-card {
+  position: relative;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(235 232 222 / 0.85);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.8), rgb(250 249 245 / 0.6));
+  overflow: hidden;
+  transition:
+    border-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.insight-card:hover {
+  border-color: rgb(201 100 66 / 0.35);
+  box-shadow: 0 10px 28px -22px rgb(201 100 66 / 0.35);
+  transform: translateY(-1px);
+}
+
+.insight-card__rail {
+  position: absolute;
+  top: 0.6rem;
+  bottom: 0.6rem;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--rail-color, rgb(201 100 66 / 0.75));
+  opacity: 0.85;
+}
+
+.insight-card__icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.55rem;
+  background: var(--rail-soft, rgb(201 100 66 / 0.12));
+  color: var(--rail-color, rgb(201 100 66));
+}
+
+.insight-card[data-severity='warning'] {
+  --rail-color: rgb(180 83 9);
+  --rail-soft: rgb(180 83 9 / 0.14);
+}
+.insight-card[data-severity='success'] {
+  --rail-color: rgb(66 130 88);
+  --rail-soft: rgb(66 130 88 / 0.14);
+}
+.insight-card[data-severity='info'] {
+  --rail-color: rgb(125 83 54);
+  --rail-soft: rgb(125 83 54 / 0.12);
+}
+</style>

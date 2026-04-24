@@ -64,6 +64,76 @@ useHead({
         </li>
       </ul>
 
+      <h2>Atajos de teclado</h2>
+      <p>
+        El asistente está diseñado para ser rápido. Usa estos atajos visuales y de teclado para
+        navegar sin despegar las manos:
+      </p>
+      <div class="not-prose my-6 grid gap-3 sm:grid-cols-2">
+        <div
+          class="flex items-center gap-3 rounded-xl border border-border/50 bg-surface px-4 py-3 shadow-sm"
+        >
+          <div
+            class="flex shrink-0 items-center gap-1 font-mono text-[0.7rem] font-medium text-text-muted"
+          >
+            <kbd
+              class="min-w-[1.5rem] rounded-md border border-border/60 bg-surface-elevated px-1.5 py-0.5 text-center shadow-sm"
+              >⌘</kbd
+            >
+            <span>+</span>
+            <kbd
+              class="min-w-[1.5rem] rounded-md border border-border/60 bg-surface-elevated px-1.5 py-0.5 text-center shadow-sm"
+              >K</kbd
+            >
+          </div>
+          <span class="text-sm font-medium text-text-soft">Nueva conversación</span>
+        </div>
+        <div
+          class="flex items-center gap-3 rounded-xl border border-border/50 bg-surface px-4 py-3 shadow-sm"
+        >
+          <div
+            class="flex shrink-0 items-center gap-1 font-mono text-[0.7rem] font-medium text-text-muted"
+          >
+            <kbd
+              class="min-w-[1.5rem] rounded-md border border-border/60 bg-surface-elevated px-1.5 py-0.5 text-center shadow-sm"
+              >⇧</kbd
+            >
+            <span>+</span>
+            <kbd
+              class="min-w-[1.5rem] rounded-md border border-border/60 bg-surface-elevated px-1.5 py-0.5 text-center shadow-sm"
+              >↵</kbd
+            >
+          </div>
+          <span class="text-sm font-medium text-text-soft">Salto de línea</span>
+        </div>
+        <div
+          class="flex items-center gap-3 rounded-xl border border-border/50 bg-surface px-4 py-3 shadow-sm"
+        >
+          <div
+            class="flex shrink-0 items-center gap-1 font-mono text-[0.7rem] font-medium text-text-muted"
+          >
+            <kbd
+              class="min-w-[1.5rem] rounded-md border border-border/60 bg-surface-elevated px-1.5 py-0.5 text-center shadow-sm"
+              >↵</kbd
+            >
+          </div>
+          <span class="text-sm font-medium text-text-soft">Enviar mensaje</span>
+        </div>
+        <div
+          class="flex items-center gap-3 rounded-xl border border-border/50 bg-surface px-4 py-3 shadow-sm"
+        >
+          <div
+            class="flex shrink-0 items-center gap-1 font-mono text-[0.7rem] font-medium text-text-muted"
+          >
+            <kbd
+              class="min-w-[1.5rem] rounded-md border border-border/60 bg-surface-elevated px-1.5 py-0.5 text-center shadow-sm"
+              >Esc</kbd
+            >
+          </div>
+          <span class="text-sm font-medium text-text-soft">Detener generación</span>
+        </div>
+      </div>
+
       <h2>Qué hacer si la respuesta no convence</h2>
       <ol>
         <li>Revisa las citas enlazadas: si el extracto no corresponde, repórtalo.</li>

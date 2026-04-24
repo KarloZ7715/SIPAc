@@ -9,7 +9,9 @@ defineProps<{
 </script>
 
 <template>
-  <article class="panel-surface paper-texture relative overflow-hidden px-6 py-8 sm:px-10 sm:py-10">
+  <article
+    class="panel-surface paper-texture relative overflow-hidden px-4 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10"
+  >
     <header class="max-w-3xl space-y-4">
       <div v-if="eyebrow || readingTime" class="flex flex-wrap items-center gap-3">
         <p
@@ -30,13 +32,13 @@ defineProps<{
       <div class="flex items-start gap-4">
         <span
           v-if="icon"
-          class="flex size-12 shrink-0 items-center justify-center rounded-3xl bg-white/85 text-sipac-700 shadow-[0_4px_24px_rgba(0,0,0,0.06)] ring-1 ring-border/80"
+          class="flex size-10 shrink-0 items-center justify-center rounded-3xl bg-white/85 text-sipac-700 shadow-[0_4px_24px_rgba(0,0,0,0.06)] ring-1 ring-border/80 sm:size-12"
         >
           <UIcon :name="icon" class="size-6" />
         </span>
         <div class="min-w-0 space-y-3">
           <h1
-            class="font-display text-[1.875rem] font-medium leading-[1.15] text-text sm:text-[2.25rem] sm:leading-[1.2]"
+            class="font-display text-[1.5rem] font-medium leading-[1.15] text-text sm:text-[1.875rem] md:text-[2.25rem] sm:leading-[1.2]"
           >
             {{ title }}
           </h1>

@@ -98,14 +98,11 @@ const shouldShowLoadingState = computed(
     </div>
 
     <Transition name="fade" mode="out-in">
-      <div
-        v-if="shouldShowLoadingState"
-        class="flex-1 flex items-end gap-2 animate-pulse h-[220px]"
-      >
+      <div v-if="shouldShowLoadingState" class="flex-1 flex items-end gap-2 h-[220px]">
         <div
           v-for="(height, i) in skeletonHeights"
           :key="`skeleton-${i}`"
-          class="bg-surface-muted rounded-t-md flex-1"
+          class="skeleton-shimmer rounded-t-md flex-1"
           :style="{ height }"
         ></div>
       </div>

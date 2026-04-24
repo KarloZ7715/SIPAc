@@ -1,5 +1,14 @@
 <script setup lang="ts">
+import { defineAsyncComponent } from 'vue'
 import type { ApiSuccessResponse, ProductDashboardSummary, ProductType } from '~~/app/types'
+
+/** Lazy-load chart components — defers chart.js + vue-chartjs until dashboard renders. */
+const LazyDashboardTypeChart = defineAsyncComponent(
+  () => import('~/components/dashboard/DashboardTypeChart.vue'),
+)
+const LazyDashboardYearChart = defineAsyncComponent(
+  () => import('~/components/dashboard/DashboardYearChart.vue'),
+)
 
 const productTypeOptions = [
   { label: 'Artículo', value: 'article' },
@@ -143,14 +152,14 @@ onMounted(() => {
 
 <template>
   <div class="dashboard-page space-y-5">
-    <div class="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-6">
-      <section class="min-w-0 space-y-5 xl:col-span-8">
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
+      <section class="min-w-0 space-y-5 lg:col-span-8">
         <div class="page-stage-primary">
           <DashboardQualityAlerts />
         </div>
 
         <div
-          class="page-stage-grid page-stage-grid--tight grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4"
+          class="page-stage-grid page-stage-grid--tight grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 md:gap-4"
         >
           <UCard class="interactive-card" :ui="{ body: 'p-5' }">
             <div
@@ -216,8 +225,8 @@ onMounted(() => {
         <div
           class="page-stage-grid page-stage-grid--tight grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6"
         >
-          <DashboardTypeChart :summary="summary ?? null" :loading="loading" />
-          <DashboardYearChart :summary="summary ?? null" :loading="loading" />
+          <LazyDashboardTypeChart :summary="summary ?? null" :loading="loading" />
+          <LazyDashboardYearChart :summary="summary ?? null" :loading="loading" />
         </div>
 
         <div class="page-stage-supporting">
@@ -231,9 +240,9 @@ onMounted(() => {
         </div>
       </section>
 
-      <aside class="page-stage-supporting min-w-0 xl:col-span-4">
+      <aside class="page-stage-supporting min-w-0 lg:col-span-4">
         <div
-          class="space-y-5 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:pr-1"
+          class="space-y-5 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1"
         >
           <section class="panel-surface overflow-hidden p-5 sm:p-6">
             <h3 class="mb-4 flex items-center gap-2 font-display text-sm font-medium text-text">

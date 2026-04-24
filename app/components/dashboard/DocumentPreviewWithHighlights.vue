@@ -2,8 +2,8 @@
 import type { DocumentAnchor } from '~~/app/types'
 import { isStructuredOfficeMimeType } from '~~/app/types'
 import { HIGHLIGHT_CONFIDENCE_STYLES } from '~~/app/config/ui-highlight-tokens'
-/** Debe coincidir con el bundle `legacy/build/pdf.mjs`; mezclar con `build/` rompe pdf.js 5.x en runtime. */
-import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
+/** Worker URL cargado dinámicamente dentro de renderPdfDocument — evita incluirlo en el bundle inicial. */
+let pdfWorkerSrc: string | undefined
 
 interface HighlightGroup {
   key: string
@@ -348,7 +348,13 @@ async function renderPdfDocument(url: string) {
   pdfDocument = null
 
   try {
-    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const [pdfjs, workerModule] = await Promise.all([
+      import('pdfjs-dist/legacy/build/pdf.mjs'),
+      import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'),
+    ])
+    if (!pdfWorkerSrc) {
+      pdfWorkerSrc = workerModule.default
+    }
     pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerSrc
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pdf: any = await loadPdfWithPdfJs(pdfjs, url)
@@ -769,13 +775,32 @@ watch(
   overflow: auto;
   scrollbar-gutter: stable both-edges;
   max-height: min(70vh, 44rem);
-  border: 1px solid rgb(196 214 202 / 0.85);
-  border-radius: 1.2rem;
-  background: linear-gradient(180deg, rgb(252 255 253 / 0.9), rgb(242 248 244 / 0.92));
-  /* Sin padding superior: el panel exterior ya alinea con la ficha; evita “doble aire” encima del PDF/imagen */
-  padding: 0 0.75rem 0.75rem;
+  border: 1px solid rgb(240 238 230 / 0.95);
+  border-radius: 1.35rem;
+  background:
+    radial-gradient(circle at top, rgb(201 100 66 / 0.04), transparent 42%),
+    linear-gradient(180deg, rgb(250 249 245 / 0.98), rgb(245 244 237 / 0.94));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.72),
+    0 18px 44px -34px rgb(20 20 19 / 0.12);
+  /* Sin padding superior: el panel exterior ya alinea con la ficha; evita "doble aire" encima del PDF/imagen */
+  padding: 0.75rem 0.75rem 0.85rem;
   scrollbar-width: thin;
-  scrollbar-color: rgb(209 213 219 / 0.55) transparent;
+  scrollbar-color: rgb(209 207 197 / 0.55) transparent;
+}
+
+.document-viewer-shell::before {
+  content: '';
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: block;
+  height: 14px;
+  margin: 0 -0.75rem 0.25rem;
+  background: linear-gradient(180deg, rgb(245 244 237 / 0.96), transparent);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .document-viewer-empty {
@@ -801,9 +826,13 @@ watch(
   width: 100%;
   height: auto;
   object-fit: contain;
-  border-radius: 0.9rem;
-  border: 1px solid rgb(196 214 202 / 0.7);
-  background: white;
+  border-radius: 0.95rem;
+  border: 1px solid rgb(235 232 222 / 0.9);
+  background: #ffffff;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.9) inset,
+    0 14px 32px -24px rgb(28 25 23 / 0.22),
+    0 2px 4px -2px rgb(28 25 23 / 0.08);
 }
 
 .pdf-preview-shell {
@@ -825,18 +854,22 @@ watch(
 .pdf-embed-frame {
   width: 100%;
   min-height: 26rem;
-  border: 1px solid rgb(196 214 202 / 0.7);
-  border-radius: 0.9rem;
-  background: white;
+  border: 1px solid rgb(235 232 222 / 0.9);
+  border-radius: 0.95rem;
+  background: #ffffff;
 }
 
 .pdf-page-canvas {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 0.9rem;
-  border: 1px solid rgb(196 214 202 / 0.7);
-  background: white;
+  border-radius: 0.95rem;
+  border: 1px solid rgb(235 232 222 / 0.9);
+  background: #ffffff;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.9) inset,
+    0 14px 32px -24px rgb(28 25 23 / 0.22),
+    0 2px 4px -2px rgb(28 25 23 / 0.08);
 }
 
 .overlay-layer {
@@ -847,8 +880,8 @@ watch(
 
 .highlight-box {
   position: absolute;
-  --highlight-bg: rgb(59 130 246 / 0.18);
-  --highlight-border: rgb(37 99 235 / 0.6);
+  --highlight-bg: rgb(201 100 66 / 0.16);
+  --highlight-border: rgb(201 100 66 / 0.6);
   background: var(--highlight-bg);
   border-color: var(--highlight-border);
   border-width: 2px;
@@ -894,7 +927,7 @@ watch(
 
 .highlight-active {
   opacity: 1;
-  box-shadow: 0 0 0 4px rgb(37 99 235 / 0.22);
+  box-shadow: 0 0 0 4px rgb(201 100 66 / 0.22);
 }
 
 .highlight-dimmed {
@@ -903,7 +936,7 @@ watch(
 
 @media (max-width: 640px) {
   .document-viewer-shell {
-    padding: 0 0.6rem 0.6rem;
+    padding: 0.6rem 0.6rem 0.7rem;
     max-height: 62vh;
   }
 }

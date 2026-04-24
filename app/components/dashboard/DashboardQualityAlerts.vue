@@ -88,8 +88,8 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="shouldShowLoadingState" class="flex flex-col gap-3 animate-pulse">
-      <div v-for="i in 3" :key="i" class="h-16 bg-surface-muted rounded-xl"></div>
+    <div v-if="shouldShowLoadingState" class="flex flex-col gap-3">
+      <div v-for="i in 3" :key="i" class="skeleton-shimmer h-16 rounded-xl"></div>
     </div>
 
     <div

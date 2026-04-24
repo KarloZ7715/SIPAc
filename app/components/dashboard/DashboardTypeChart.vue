@@ -80,11 +80,8 @@ const shouldShowLoadingState = computed(
     </div>
 
     <Transition name="fade" mode="out-in">
-      <div
-        v-if="shouldShowLoadingState"
-        class="flex-1 flex items-center justify-center animate-pulse h-[220px]"
-      >
-        <div class="w-40 h-40 rounded-full border-8 border-surface-muted"></div>
+      <div v-if="shouldShowLoadingState" class="flex-1 flex items-center justify-center h-[220px]">
+        <div class="skeleton-shimmer w-40 h-40 rounded-full"></div>
       </div>
       <div
         v-else-if="!chartData.labels.length"

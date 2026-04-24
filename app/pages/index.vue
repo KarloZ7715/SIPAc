@@ -2,10 +2,19 @@
 import { motion } from 'motion-v'
 import type {
   AcademicProductPublic,
+  AuditLogPublic,
   ApiSuccessResponse,
   ProductType,
   ProfileSummaryResponse,
 } from '~~/app/types'
+
+interface AdminOverviewData {
+  users: { total: number; active: number; inactive: number; admins: number; docentes: number }
+  products: { total: number; confirmed: number; drafts: number; deleted: number }
+  pipeline: { pending: number; processing: number; failed: number; completed: number }
+  activeSessions: number
+  recentActivity: AuditLogPublic[]
+}
 
 interface HomeAction {
   label: string
@@ -81,7 +90,6 @@ interface HomeDockAction {
 }
 
 const { user, isAdmin } = useAuth()
-const usersStore = useUsersStore()
 const chatStore = useChatStore()
 const documentsStore = useDocumentsStore()
 const { prefersReducedMotion, prefersMinimalMotion, densityPreference } = useUiPreferences()
@@ -93,11 +101,20 @@ const { data: homeOverview, pending: homePending } = await useAsyncData(
     const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 
     if (isAdmin.value) {
-      const adminResult = await Promise.allSettled([usersStore.fetchUsers({ page: 1, limit: 6 })])
-
-      return {
-        profileSummary: null,
-        partialFailures: adminResult.some((result) => result.status === 'rejected'),
+      try {
+        const overview =
+          await requestFetch<ApiSuccessResponse<AdminOverviewData>>('/api/admin/overview')
+        return {
+          profileSummary: null,
+          adminOverview: overview.data,
+          partialFailures: false,
+        }
+      } catch {
+        return {
+          profileSummary: null,
+          adminOverview: null,
+          partialFailures: true,
+        }
       }
     }
 
@@ -109,6 +126,7 @@ const { data: homeOverview, pending: homePending } = await useAsyncData(
 
     return {
       profileSummary: profileResult.status === 'fulfilled' ? profileResult.value.data : null,
+      adminOverview: null,
       partialFailures: [profileResult, conversationsResult, draftResult].some(
         (result) => result.status === 'rejected',
       ),
@@ -117,6 +135,7 @@ const { data: homeOverview, pending: homePending } = await useAsyncData(
   {
     default: () => ({
       profileSummary: null,
+      adminOverview: null,
       partialFailures: false,
     }),
   },
@@ -651,31 +670,67 @@ const dockActions = computed<HomeDockAction[]>(() => [
   },
 ])
 
-const adminHighlights = computed(() => [
-  {
-    title: 'Usuarios registrados',
-    value: usersStore.meta?.total ?? usersStore.users.length,
-    icon: 'i-lucide-users-round',
-    trend: '+12%',
-    trendUp: true,
-  },
-  {
-    title: 'Cuentas activas',
-    value: usersStore.users.filter((candidate) => candidate.isActive).length,
-    icon: 'i-lucide-shield-check',
-    trend: 'estable',
-    trendUp: null,
-  },
-  {
-    title: 'Docentes visibles',
-    value: usersStore.users.filter((candidate) => candidate.role === 'docente').length,
-    icon: 'i-lucide-graduation-cap',
-    trend: '+3',
-    trendUp: true,
-  },
-])
+const adminOverview = computed(() => homeOverview.value?.adminOverview ?? null)
 
-const adminPreviewUsers = computed(() => usersStore.users.slice(0, 5))
+const adminHighlights = computed(() => {
+  const ov = adminOverview.value
+  return [
+    {
+      title: 'Usuarios registrados',
+      value: ov?.users.total ?? 0,
+      icon: 'i-lucide-users-round',
+      caption: `${ov?.users.active ?? 0} activos · ${ov?.users.inactive ?? 0} inactivos`,
+    },
+    {
+      title: 'Producción académica',
+      value: ov?.products.confirmed ?? 0,
+      icon: 'i-lucide-library-big',
+      caption: `${ov?.products.drafts ?? 0} borradores · ${ov?.products.deleted ?? 0} eliminados`,
+    },
+    {
+      title: 'Sesiones activas',
+      value: ov?.activeSessions ?? 0,
+      icon: 'i-lucide-activity',
+      caption: 'Últimas 24 horas',
+    },
+  ]
+})
+
+const adminRecentActivity = computed(() => adminOverview.value?.recentActivity ?? [])
+const adminPipeline = computed(() => adminOverview.value?.pipeline ?? null)
+
+function formatAuditAction(action: string) {
+  const labels: Record<string, string> = {
+    create: 'Creó',
+    update: 'Actualizó',
+    delete: 'Eliminó',
+    login: 'Inició sesión',
+    login_failed: 'Falló login',
+  }
+  return labels[action] ?? action
+}
+
+function formatAuditResource(resource: string) {
+  const labels: Record<string, string> = {
+    academic_product: 'producto académico',
+    uploaded_file: 'archivo',
+    user: 'usuario',
+    session: 'sesión',
+    chat_conversation: 'conversación',
+  }
+  return labels[resource] ?? resource
+}
+
+function formatRelativeTime(isoDate: string) {
+  const diff = Date.now() - new Date(isoDate).getTime()
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return 'Justo ahora'
+  if (minutes < 60) return `Hace ${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `Hace ${hours}h`
+  const days = Math.floor(hours / 24)
+  return `Hace ${days}d`
+}
 
 function enterMotion(delay = 0, distance = 18) {
   if (prefersMinimalMotion.value || isPageTransitionActive.value) {
@@ -705,15 +760,6 @@ function getGreeting() {
   if (hour < 12) return `Buenos días, ${firstName.value}`
   if (hour < 18) return `Buenas tardes, ${firstName.value}`
   return `Buenas noches, ${firstName.value}`
-}
-
-function getInitials(name: string) {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((chunk) => chunk[0])
-    .join('')
-    .toUpperCase()
 }
 
 function formatProductType(productType: ProductType) {
@@ -782,7 +828,7 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
     <template v-if="!isAdmin">
       <motion.section v-bind="enterMotion(0, 20)">
         <div
-          class="grid gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(16rem,22rem)] lg:items-start"
+          class="grid gap-3 sm:gap-4 lg:gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(16rem,22rem)] lg:items-start"
         >
           <HomeWorkstage
             :eyebrow="priorityState.eyebrow"
@@ -822,7 +868,7 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
 
       <motion.section
         v-bind="enterMotion(0.2, 26)"
-        class="panel-surface home-dock-shell px-4 py-4 sm:px-5 sm:py-5 md:px-6"
+        class="panel-surface home-dock-shell px-3 py-3 sm:px-4 sm:py-4 md:px-6"
       >
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div class="space-y-1">
@@ -838,7 +884,9 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
           </div>
         </div>
 
-        <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 sm:mt-6">
+        <div
+          class="mt-5 grid grid-cols-1 gap-3 sm:mt-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+        >
           <HomeWorkspaceLauncher
             v-for="action in dockActions"
             :key="action.title"
@@ -857,8 +905,8 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
     <template v-else>
       <ExperiencePageHero
         :eyebrow="getGreeting()"
-        title="Administra SIPAc con una vista clara de la operacion."
-        description="Supervisa cuentas, actividad reciente y accesos criticos sin perder el contexto del dia."
+        title="Administra SIPAc con una vista clara de la operación."
+        description="Supervisa cuentas, producción académica y actividad del sistema sin perder el contexto del día."
         icon="i-lucide-compass"
       >
         <template #badges>
@@ -867,7 +915,7 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
             Administrador
           </SipacBadge>
           <SipacBadge color="neutral" variant="outline" size="lg">
-            {{ user?.program || 'Universidad de Cordoba' }}
+            {{ user?.program || 'Universidad de Córdoba' }}
           </SipacBadge>
         </template>
 
@@ -876,38 +924,56 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
             Gestionar usuarios
           </SipacButton>
           <SipacButton
-            to="/profile"
-            icon="i-lucide-settings"
+            to="/admin/audit-logs"
+            icon="i-lucide-shield-ellipsis"
             color="neutral"
             variant="soft"
             size="lg"
           >
-            Configuracion
+            Auditoría
           </SipacButton>
         </template>
 
         <template #aside>
           <ExperienceContextPanel
-            eyebrow="Resumen del dia"
-            title="Prioriza lo que requiere atencion."
-            description="Empieza por usuarios si hay cambios pendientes y entra al dashboard si necesitas una lectura global."
-            icon="i-lucide-activity"
-            tone="neutral"
+            eyebrow="Resumen del día"
+            title="Prioriza lo que requiere atención."
+            :description="
+              adminPipeline && (adminPipeline.failed > 0 || adminPipeline.pending > 0)
+                ? `${adminPipeline.failed} documentos con error · ${adminPipeline.pending} pendientes de proceso.`
+                : 'Todo el pipeline de documentos opera con normalidad.'
+            "
+            :icon="
+              adminPipeline && adminPipeline.failed > 0
+                ? 'i-lucide-alert-triangle'
+                : 'i-lucide-activity'
+            "
+            :tone="adminPipeline && adminPipeline.failed > 0 ? 'earth' : 'neutral'"
           >
-            <div class="space-y-3">
-              <div class="rounded-xl bg-white/75 p-3">
-                <p class="text-sm font-semibold text-text">Actividad reciente</p>
-                <p class="mt-1 text-sm leading-6 text-text-muted">
-                  Revisa quien entro, que cambio y si hay cuentas que requieren seguimiento.
-                </p>
-              </div>
-              <div class="rounded-xl bg-white/75 p-3">
-                <p class="text-sm font-semibold text-text">Panel institucional</p>
-                <p class="mt-1 text-sm leading-6 text-text-muted">
-                  Manten una lectura rapida del estado del sistema antes de pasar a acciones
-                  especificas.
-                </p>
-              </div>
+            <div class="flex flex-wrap gap-2">
+              <SipacBadge
+                v-if="adminPipeline"
+                :color="adminPipeline.failed > 0 ? 'error' : 'success'"
+                variant="subtle"
+              >
+                <UIcon
+                  :name="
+                    adminPipeline.failed > 0 ? 'i-lucide-alert-circle' : 'i-lucide-check-circle'
+                  "
+                  class="size-3"
+                />
+                {{ adminPipeline.failed > 0 ? `${adminPipeline.failed} errores` : 'Pipeline OK' }}
+              </SipacBadge>
+              <SipacBadge
+                v-if="adminPipeline && adminPipeline.processing > 0"
+                color="warning"
+                variant="outline"
+              >
+                {{ adminPipeline.processing }} procesando
+              </SipacBadge>
+              <SipacBadge v-if="adminPipeline" color="neutral" variant="outline">
+                {{ adminPipeline.completed }} completados
+              </SipacBadge>
             </div>
           </ExperienceContextPanel>
         </template>
@@ -921,102 +987,172 @@ function getAcademicProductTitle(product: AcademicProductPublic) {
           :label="highlight.title"
           :value="highlight.value"
           :icon="highlight.icon"
-          :caption="highlight.trendUp === null ? highlight.trend : 'Tendencia reciente'"
-          :trend="highlight.trendUp !== null ? highlight.trend : ''"
+          :caption="highlight.caption"
         />
       </section>
 
-      <section class="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
+      <section
+        class="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.6fr)] xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]"
+      >
         <SipacCard class="fade-up stagger-2">
           <template #header>
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 class="font-display text-2xl font-medium leading-[1.2] text-text">
-                  Usuarios recientes
+                  Actividad reciente
                 </h2>
                 <p class="mt-1 text-sm text-text-muted">
-                  Vista rapida de las ultimas cuentas registradas.
+                  Últimas acciones registradas en el sistema.
                 </p>
               </div>
               <SipacButton
-                to="/admin/users"
+                to="/admin/audit-logs"
                 icon="i-lucide-arrow-right"
                 trailing
                 color="neutral"
                 variant="soft"
               >
-                Ver todos
+                Ver todo
               </SipacButton>
             </div>
           </template>
 
-          <div v-if="usersStore.loading" class="grid gap-3">
+          <div v-if="homePending" class="grid gap-3">
             <div
               v-for="index in 4"
               :key="index"
-              class="h-16 rounded-2xl skeleton-shimmer bg-surface-muted"
+              class="h-14 rounded-2xl skeleton-shimmer bg-surface-muted"
             />
           </div>
 
-          <div v-else-if="adminPreviewUsers.length" class="space-y-3">
+          <div v-else-if="adminRecentActivity.length" class="space-y-2.5">
             <div
-              v-for="account in adminPreviewUsers"
-              :key="account._id"
-              class="flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-surface-muted/50 p-4 transition-colors hover:bg-surface-muted"
+              v-for="log in adminRecentActivity"
+              :key="log._id"
+              class="flex items-start gap-3 rounded-xl border border-border/60 bg-surface-muted/50 px-4 py-3 transition-colors hover:bg-surface-muted"
             >
-              <div class="flex items-center gap-3">
-                <span class="avatar-initials size-10 text-sm">
-                  {{ getInitials(account.fullName) }}
-                </span>
-                <div class="min-w-0">
-                  <p class="truncate font-semibold text-text">{{ account.fullName }}</p>
-                  <p class="truncate text-sm text-text-muted">{{ account.email }}</p>
-                </div>
+              <span
+                class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-sipac-50 text-sipac-700"
+              >
+                <UIcon
+                  :name="
+                    log.action === 'login'
+                      ? 'i-lucide-log-in'
+                      : log.action === 'create'
+                        ? 'i-lucide-plus'
+                        : log.action === 'delete'
+                          ? 'i-lucide-trash-2'
+                          : 'i-lucide-pencil'
+                  "
+                  class="size-4"
+                />
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm text-text">
+                  <span class="font-semibold">{{ log.userName }}</span>
+                  {{ ' ' }}
+                  <span class="text-text-muted">
+                    {{ formatAuditAction(log.action) }} {{ formatAuditResource(log.resource) }}
+                  </span>
+                </p>
+                <p v-if="log.details" class="mt-0.5 truncate text-xs text-text-muted">
+                  {{ log.details }}
+                </p>
               </div>
-
-              <div class="flex shrink-0 items-center gap-2">
-                <SipacBadge
-                  :color="account.role === 'admin' ? 'warning' : 'primary'"
-                  variant="subtle"
-                >
-                  {{ account.role === 'admin' ? 'Admin' : 'Docente' }}
-                </SipacBadge>
-                <SipacBadge :color="account.isActive ? 'success' : 'error'" variant="outline">
-                  {{ account.isActive ? 'Activo' : 'Inactivo' }}
-                </SipacBadge>
-              </div>
+              <span class="shrink-0 text-xs text-text-soft">
+                {{ formatRelativeTime(log.createdAt) }}
+              </span>
             </div>
           </div>
 
           <UEmpty
             v-else
-            icon="i-lucide-users-round"
-            title="Sin usuarios todavia"
-            description="Cuando se registren usuarios, apareceran aqui."
+            icon="i-lucide-activity"
+            title="Sin actividad reciente"
+            description="Cuando se registren acciones en el sistema, aparecerán aquí."
           />
         </SipacCard>
 
         <div class="space-y-4 fade-up stagger-3">
           <ExperienceContextPanel
-            eyebrow="Panel de administracion"
-            title="Actua con contexto, no a ciegas."
-            description="Usa esta vista para detectar movimientos importantes antes de entrar a una seccion especifica."
-            icon="i-lucide-info"
+            eyebrow="Accesos rápidos"
+            title="Entra directo al módulo correcto."
+            description="Usa estos accesos para navegar sin pasar por el sidebar."
+            icon="i-lucide-compass"
             tone="earth"
-          />
+          >
+            <div class="space-y-2">
+              <SipacButton
+                to="/admin/users"
+                variant="soft"
+                color="neutral"
+                size="sm"
+                block
+                icon="i-lucide-users-round"
+              >
+                Gestión de usuarios
+              </SipacButton>
+              <SipacButton
+                to="/dashboard"
+                variant="soft"
+                color="neutral"
+                size="sm"
+                block
+                icon="i-lucide-chart-column-big"
+              >
+                Dashboard analítico
+              </SipacButton>
+              <SipacButton
+                to="/repository"
+                variant="soft"
+                color="neutral"
+                size="sm"
+                block
+                icon="i-lucide-library-big"
+              >
+                Repositorio académico
+              </SipacButton>
+              <SipacButton
+                to="/admin/audit-logs"
+                variant="soft"
+                color="neutral"
+                size="sm"
+                block
+                icon="i-lucide-shield-ellipsis"
+              >
+                Registros de auditoría
+              </SipacButton>
+            </div>
+          </ExperienceContextPanel>
 
           <ExperienceContextPanel
-            eyebrow="Actividad reciente"
-            title="Consulta el registro cuando necesites contexto."
-            description="El historial te ayuda a entender que paso, quien actuo y que conviene revisar despues."
-            icon="i-lucide-activity"
+            v-if="adminOverview?.users"
+            eyebrow="Distribución de roles"
+            title="Composición del equipo."
+            icon="i-lucide-pie-chart"
             tone="primary"
           >
-            <template #footer>
-              <SipacButton to="/admin/audit-logs" variant="ghost" color="neutral" size="sm">
-                Ver registro completo
-              </SipacButton>
-            </template>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-text-muted">Docentes</span>
+                <span class="font-semibold text-text">{{ adminOverview.users.docentes }}</span>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-text-muted">Administradores</span>
+                <span class="font-semibold text-text">{{ adminOverview.users.admins }}</span>
+              </div>
+              <div class="mt-2 h-2 overflow-hidden rounded-full bg-surface-muted">
+                <div
+                  class="h-full rounded-full bg-sipac-500 transition-all duration-500"
+                  :style="{
+                    width:
+                      adminOverview.users.total > 0
+                        ? `${(adminOverview.users.docentes / adminOverview.users.total) * 100}%`
+                        : '0%',
+                  }"
+                />
+              </div>
+            </div>
           </ExperienceContextPanel>
         </div>
       </section>

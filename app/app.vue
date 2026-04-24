@@ -8,6 +8,16 @@ const {
   syncLayoutRoute,
 } = usePageMotion()
 
+useHead({
+  meta: [
+    {
+      name: 'viewport',
+      content: 'width=device-width, initial-scale=1, interactive-widget=resizes-content',
+    },
+    { name: 'theme-color', content: '#f5f4ed' },
+  ],
+})
+
 function syncPageTransitionRootState(active: boolean) {
   if (!import.meta.client) {
     return

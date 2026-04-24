@@ -87,7 +87,6 @@ const adminSections: SidebarSection[] = [
         icon: 'i-lucide-library-big',
         match: '/repository',
       },
-      { label: 'Chat', to: '/chat', icon: 'i-lucide-sparkles', match: '/chat' },
     ],
   },
   {
@@ -180,7 +179,7 @@ function toggleDesktopSidebar() {
       >
         <span class="sidebar-brand__mark" aria-hidden="true">
           <svg
-            class="w-12 h-12 lg:w-14 lg:h-14"
+            :class="props.mobile ? 'h-10 w-10 sm:h-11 sm:w-11' : 'h-12 w-12 lg:h-14 lg:w-14'"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 100 100"

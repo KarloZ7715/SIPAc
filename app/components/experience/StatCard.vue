@@ -50,7 +50,7 @@ const toneClasses = computed(() => {
             {{ label }}
           </p>
           <p
-            class="mt-3 text-4xl font-semibold tabular-nums counter-animate"
+            class="mt-2.5 text-3xl font-semibold tabular-nums counter-animate sm:mt-3 sm:text-4xl"
             :class="toneClasses.value"
           >
             {{ value }}

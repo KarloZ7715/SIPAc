@@ -32,6 +32,7 @@ const {
   setHighContrastPreference,
   setUnderlineLinksPreference,
 } = useUiPreferences()
+const { isMobile } = useResponsive()
 
 // ---------------- Tabs ----------------
 const TABS = [
@@ -586,47 +587,65 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="page-stage-grid page-stage-grid--relaxed space-y-10">
+  <div class="page-stage-grid page-stage-grid--relaxed space-y-8 sm:space-y-10">
     <!-- Hero editorial -->
     <section
-      class="page-stage-hero relative overflow-hidden rounded-3xl border border-border/60 bg-parchment px-6 py-10 shadow-[0_30px_60px_-48px_rgb(20_20_19/0.35)] md:px-10 md:py-12"
+      class="page-stage-hero relative overflow-hidden rounded-3xl border border-border/60 bg-parchment px-4 py-7 shadow-[0_30px_60px_-48px_rgb(20_20_19/0.35)] sm:px-6 sm:py-10 md:px-10 md:py-12"
     >
       <div
         class="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[radial-gradient(ellipse_at_top,theme(colors.sipac.100/0.6),transparent_70%)]"
         aria-hidden="true"
       />
-      <div class="relative flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
-        <div class="flex items-start gap-5 md:gap-6">
-          <ProfileAvatar :name="user?.fullName || 'Usuario'" :seed="user?.email || ''" size="xl" />
-          <div class="space-y-2">
+      <div
+        class="relative flex flex-col gap-6 sm:gap-8 md:flex-row md:items-center md:justify-between"
+      >
+        <div class="flex flex-col items-start gap-4 sm:flex-row sm:gap-5 md:gap-6">
+          <ProfileAvatar
+            :name="user?.fullName || 'Usuario'"
+            :seed="user?.email || ''"
+            :size="isMobile ? 'lg' : 'xl'"
+          />
+          <div class="min-w-0 space-y-2">
             <p class="text-xs font-semibold tracking-[0.22em] text-text-soft uppercase">
               Cuenta personal · SIPAc
             </p>
-            <h1 class="font-display text-3xl leading-[1.1] font-medium text-text md:text-[2.5rem]">
+            <h1
+              class="font-display text-2xl leading-[1.08] font-medium text-text sm:text-3xl md:text-[2.5rem]"
+            >
               {{ user?.fullName || 'Mi perfil' }}
             </h1>
-            <p class="max-w-lg text-sm leading-[1.7] text-text-muted md:text-base">
+            <p class="max-w-lg text-sm leading-[1.65] text-text-muted md:text-base">
               Un espacio editorial para revisar tu cuenta, ajustar preferencias y cuidar lo que
               compartes con SIPAc.
             </p>
-            <div class="flex flex-wrap items-center gap-2 pt-2">
-              <SipacBadge color="primary" variant="subtle" size="lg">
+            <div class="flex flex-wrap items-center gap-1.5 pt-2 sm:gap-2">
+              <SipacBadge color="primary" variant="subtle" size="lg" class="text-xs sm:text-sm">
                 <UIcon name="i-lucide-shield-check" class="size-3.5" />
                 {{ user?.role === 'admin' ? 'Administrador' : 'Docente' }}
               </SipacBadge>
-              <SipacBadge color="neutral" variant="outline" size="lg">
-                {{ user?.program || 'Universidad de Córdoba' }}
+              <SipacBadge
+                color="neutral"
+                variant="outline"
+                size="lg"
+                class="max-w-full text-xs sm:text-sm"
+              >
+                <span class="truncate">{{ user?.program || 'Universidad de Córdoba' }}</span>
               </SipacBadge>
-              <SipacBadge color="neutral" variant="soft" size="lg">
+              <SipacBadge
+                color="neutral"
+                variant="soft"
+                size="lg"
+                class="max-w-full text-xs sm:text-sm"
+              >
                 <UIcon name="i-lucide-mail" class="size-3.5" />
-                {{ user?.email }}
+                <span class="max-w-[12.5rem] truncate sm:max-w-[17rem]">{{ user?.email }}</span>
               </SipacBadge>
             </div>
           </div>
         </div>
 
         <aside
-          class="grid min-w-[16rem] gap-3 rounded-2xl border border-border/50 bg-white/70 p-4 backdrop-blur-sm sm:grid-cols-2 md:max-w-[22rem] md:grid-cols-1"
+          class="grid w-full grid-cols-1 gap-3 rounded-2xl border border-border/50 bg-white/70 p-4 backdrop-blur-sm sm:grid-cols-2 md:max-w-[22rem] md:grid-cols-1"
         >
           <div>
             <p class="text-[11px] font-semibold tracking-[0.14em] text-text-soft uppercase">
@@ -674,7 +693,7 @@ onMounted(() => {
         description="Un vistazo rápido a tu producción académica, tu actividad reciente y los accesos directos para trabajar más cómodo."
       />
 
-      <div class="grid gap-5 lg:grid-cols-3">
+      <div class="grid gap-3 sm:gap-5 lg:grid-cols-3">
         <ExperienceStatCard
           label="Documentos confirmados"
           :value="profileSummary?.totalOwnProducts ?? 0"

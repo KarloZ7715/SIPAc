@@ -233,6 +233,40 @@ function toggleDesktopSidebarCollapsed() {
   desktopSidebarCollapsed.value = !desktopSidebarCollapsed.value
 }
 
+function onSidebarResizeKeydown(event: KeyboardEvent) {
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    event.preventDefault()
+    const step = event.shiftKey ? 1.5 : 0.5
+    const direction = event.key === 'ArrowRight' ? 1 : -1
+
+    if (desktopSidebarCollapsed.value) {
+      desktopSidebarCollapsed.value = false
+    }
+
+    desktopSidebarWidthRem.value = clampSidebarWidth(
+      desktopSidebarWidthRem.value + step * direction,
+    )
+    return
+  }
+
+  if (event.key === 'Home') {
+    event.preventDefault()
+    if (desktopSidebarCollapsed.value) {
+      desktopSidebarCollapsed.value = false
+    }
+    desktopSidebarWidthRem.value = MIN_SIDEBAR_WIDTH_REM
+    return
+  }
+
+  if (event.key === 'End') {
+    event.preventDefault()
+    if (desktopSidebarCollapsed.value) {
+      desktopSidebarCollapsed.value = false
+    }
+    desktopSidebarWidthRem.value = MAX_SIDEBAR_WIDTH_REM
+  }
+}
+
 const resolvedSidebarWidthRem = computed(() =>
   desktopSidebarCollapsed.value
     ? COLLAPSED_SIDEBAR_WIDTH_REM
@@ -251,7 +285,7 @@ const contentWidthClass = computed(() => {
   }
 
   if (isWideWorkspaceRoute.value) {
-    return 'max-w-[96rem] xl:px-10'
+    return 'max-w-[96rem] lg:px-8 xl:px-10'
   }
 
   return 'max-w-[75rem]'
@@ -263,35 +297,29 @@ const contentSpacingClass = computed(() => {
   }
 
   if (isWideWorkspaceRoute.value) {
-    return isCompactDensity.value ? 'py-3 lg:py-4' : 'py-4 lg:py-5'
+    return isCompactDensity.value ? 'py-2.5 lg:py-3' : 'py-4 lg:py-5'
   }
 
-  return isCompactDensity.value ? 'py-4 lg:py-5' : 'py-5 lg:py-6'
+  return isCompactDensity.value ? 'py-3 lg:py-4' : 'py-5 lg:py-6'
 })
 
 const mainHorizontalPaddingClass = computed(() =>
   isChatRoute.value
     ? isCompactDensity.value
-      ? 'px-2.5 sm:px-3 lg:px-4'
-      : 'px-3 sm:px-4 lg:px-5'
+      ? 'px-2 max-[380px]:px-1.5 sm:px-2.5 lg:px-3.5'
+      : 'px-2.5 max-[380px]:px-2 sm:px-4 lg:px-5'
     : isCompactDensity.value
-      ? 'px-3 sm:px-5 lg:px-6'
-      : 'px-4 sm:px-6 lg:px-8',
+      ? 'px-2.5 max-[380px]:px-2 sm:px-4 lg:px-5'
+      : 'px-3 max-[380px]:px-2.5 sm:px-6 lg:px-8',
 )
 
 const chatMainLayoutClass = computed(() =>
   isChatRoute.value ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : '',
 )
 
-const shellRootClass = computed(() =>
-  isChatRoute.value
-    ? 'app-shell-bg flex h-dvh max-h-dvh flex-col overflow-hidden'
-    : 'app-shell-bg min-h-screen',
-)
+const shellRootClass = computed(() => 'app-shell-bg flex h-dvh max-h-dvh flex-col overflow-hidden')
 
-const shellBodyClass = computed(() =>
-  isChatRoute.value ? 'flex min-h-0 flex-1 overflow-hidden' : 'flex min-h-screen',
-)
+const shellBodyClass = computed(() => 'flex min-h-0 flex-1 overflow-hidden')
 
 const desktopSidebarFrameClass = computed(() => {
   const base = isChatRoute.value
@@ -314,7 +342,7 @@ const desktopSidebarSurfaceClass = computed(() =>
 const mainColumnClass = computed(() =>
   isChatRoute.value
     ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
-    : 'flex min-h-screen min-w-0 flex-1 flex-col',
+    : 'flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto',
 )
 
 watch(
@@ -373,7 +401,7 @@ onBeforeUnmount(() => {
 
     <div :class="shellBodyClass">
       <div
-        :class="[desktopSidebarFrameClass, isSidebarResizing ? '!duration-0' : '']"
+        :class="[desktopSidebarFrameClass, isSidebarResizing ? 'duration-0!' : '']"
         :style="desktopSidebarStyle"
       >
         <aside class="sipac-dashboard-sidebar overflow-hidden" :class="desktopSidebarSurfaceClass">
@@ -387,18 +415,18 @@ onBeforeUnmount(() => {
           type="button"
           class="group absolute inset-y-0 -right-2 z-20 hidden w-4 cursor-col-resize touch-none items-center justify-center lg:flex"
           aria-label="Redimensionar barra lateral"
-          :aria-valuemin="MIN_SIDEBAR_WIDTH_REM"
+          :aria-valuemin="COLLAPSED_SIDEBAR_WIDTH_REM"
           :aria-valuemax="MAX_SIDEBAR_WIDTH_REM"
           :aria-valuenow="resolvedSidebarWidthRem"
           role="separator"
+          aria-orientation="vertical"
           @mousedown.prevent="startSidebarResize"
           @touchstart.prevent="startSidebarResize"
+          @keydown="onSidebarResizeKeydown"
         >
           <span
             class="sipac-sidebar-resize-handle"
-            :class="
-              isSidebarResizing ? 'bg-sipac-400 shadow-[0_0_0_4px_rgb(201_100_66_/_0.12)]' : ''
-            "
+            :class="isSidebarResizing ? 'bg-sipac-400 shadow-[0_0_0_4px_rgb(201_100_66/0.12)]' : ''"
           />
         </button>
       </div>
@@ -408,7 +436,7 @@ onBeforeUnmount(() => {
 
         <main
           id="main-content"
-          class="mx-auto w-full transition-[padding,max-width] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+          class="mx-auto w-full transition-[padding,max-width] duration-320 ease-sipac"
           :class="[
             mainHorizontalPaddingClass,
             contentWidthClass,
@@ -427,7 +455,8 @@ onBeforeUnmount(() => {
       side="left"
       :overlay="true"
       :ui="{
-        content: 'max-w-[18.5rem] border-r border-border/80 bg-surface/98 backdrop-blur-xl',
+        content:
+          'max-w-[min(17rem,88vw)] sm:max-w-[min(18.5rem,90vw)] border-r border-border/80 bg-surface/98 backdrop-blur-xl',
       }"
     >
       <template #body>

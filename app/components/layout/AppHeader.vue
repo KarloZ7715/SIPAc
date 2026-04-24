@@ -24,73 +24,85 @@ const initials = computed(() => {
     .toUpperCase()
 })
 
-const routeMeta = computed(() => {
-  if (layoutRoutePath.value === '/profile') {
+interface RouteMeta {
+  chapter: string
+  title: string
+  description: string
+}
+
+const routeMeta = computed<RouteMeta>(() => {
+  const path = layoutRoutePath.value
+
+  if (path === '/profile') {
     return {
-      eyebrow: 'Cuenta personal',
+      chapter: 'Cuenta',
       title: 'Mi perfil',
       description: 'Información personal y control de credenciales.',
     }
   }
-
-  if (layoutRoutePath.value === '/admin/users') {
+  if (path === '/admin/users') {
     return {
-      eyebrow: 'Administración',
-      title: 'Gestión de usuarios',
+      chapter: 'Administración',
+      title: 'Usuarios',
       description: 'Cuentas, roles y estado de acceso institucional.',
     }
   }
-
-  if (layoutRoutePath.value === '/dashboard') {
+  if (path === '/dashboard') {
     return {
-      eyebrow: 'Analítica',
-      title: 'Dashboard académico',
-      description: 'Revisa tu avance, detecta patrones y entiende cómo va tu producción.',
+      chapter: 'Analítica',
+      title: 'Dashboard',
+      description: 'Avance, patrones y producción, todo en una sola vista.',
     }
   }
-
-  if (layoutRoutePath.value === '/repository') {
+  if (path === '/repository') {
     return {
-      eyebrow: 'Base académica',
+      chapter: 'Catálogo',
       title: 'Repositorio académico',
-      description:
-        'Explora productos confirmados, revisa filtros y encuentra material útil sin salir del flujo.',
+      description: 'Productos confirmados organizados para consulta rápida.',
     }
   }
-
-  if (layoutRoutePath.value === '/chat') {
+  if (path === '/chat') {
     return {
-      eyebrow: 'Consulta asistida',
+      chapter: 'Consulta',
       title: 'Chat con respaldo documental',
-      description:
-        'Haz preguntas en lenguaje natural y revisa los documentos que sustentan cada respuesta.',
+      description: 'Preguntas en lenguaje natural, respuestas fundamentadas.',
     }
   }
-
-  if (layoutRoutePath.value === '/admin/audit-logs') {
+  if (path === '/workspace-documents') {
     return {
-      eyebrow: 'Auditoría',
-      title: 'Registro de auditoría',
-      description: 'Trazabilidad de accesos y operaciones críticas del sistema.',
+      chapter: 'Documentos',
+      title: 'Carga y revisión',
+      description: 'Sube, revisa la ficha propuesta y confirma cuando esté lista.',
     }
   }
-
-  if (layoutRoutePath.value === '/') {
+  if (path === '/admin/audit-logs') {
     return {
-      eyebrow: isAdmin.value ? 'Centro administrativo' : 'Centro de trabajo',
+      chapter: 'Auditoría',
+      title: 'Registro',
+      description: 'Trazabilidad de accesos y operaciones críticas.',
+    }
+  }
+  if (path === '/') {
+    return {
+      chapter: isAdmin.value ? 'Administración' : 'Inicio',
       title: isAdmin.value ? 'Panel institucional' : 'Tu jornada en SIPAc',
       description: isAdmin.value
-        ? 'Supervisa usuarios, actividad y operacion sin perder de vista lo importante.'
-        : 'Retoma consultas, revisa borradores y mantén tu produccion lista para el siguiente paso.',
+        ? 'Supervisión de usuarios, actividad y operación.'
+        : 'Retoma consultas, revisa borradores y continúa tu producción.',
+    }
+  }
+  if (path.startsWith('/help')) {
+    return {
+      chapter: 'Ayuda',
+      title: 'Centro de ayuda',
+      description: 'Guías prácticas para aprovechar SIPAc al máximo.',
     }
   }
 
   return {
-    eyebrow: isAdmin.value ? 'Centro administrativo' : 'Workspace de productividad',
-    title: isAdmin.value ? 'Panel institucional' : 'Bienvenido a SIPAc',
-    description: isAdmin.value
-      ? 'Supervisa usuarios, actividad y operación sin perder de vista lo importante.'
-      : 'Continúa tu trabajo, consulta documentos y organiza nuevas evidencias.',
+    chapter: isAdmin.value ? 'Administración' : 'Workspace',
+    title: 'SIPAc',
+    description: 'Sistema Inteligente de Productividad Académica.',
   }
 })
 
@@ -139,7 +151,7 @@ const unreadCount = computed(() => notificationsStore.unreadCount)
 
 function openNotifications() {
   showNotifications.value = true
-  void notificationsStore.fetchNotifications()
+  void notificationsStore.safeFetchNotifications()
 }
 
 function openMobileSidebar() {
@@ -148,14 +160,19 @@ function openMobileSidebar() {
 
 watch(
   () => user.value?._id,
-  (nextUserId) => {
+  (nextUserId, previousUserId) => {
     if (nextUserId) {
+      if (previousUserId && previousUserId !== nextUserId) {
+        notificationsStore.resetState()
+      }
+
       notificationsStore.startPolling()
       stopNotificationsFocusRefresh?.()
       stopNotificationsFocusRefresh = notificationsStore.refreshOnFocus()
       return
     }
 
+    notificationsStore.resetState()
     notificationsStore.stopPolling()
     stopNotificationsFocusRefresh?.()
     stopNotificationsFocusRefresh = undefined
@@ -171,179 +188,75 @@ onBeforeUnmount(() => {
 
 <template>
   <header
-    class="sticky top-0 z-30 border-b backdrop-blur-md transition-[border-color,background-color] duration-300"
+    class="app-header app-header-editorial sticky! top-0 z-30 shrink-0 w-full border-b backdrop-blur-xl backdrop-saturate-[1.8] backdrop-brightness-[1.04] transition-[border-color,background-color] duration-300"
     :class="
       isHomeSpecial ||
       isChatSpecial ||
       isWorkspaceDocumentsSpecial ||
       isDashboardSpecial ||
       isRepositorySpecial
-        ? 'border-border/50 bg-surface/75 supports-[backdrop-filter]:bg-surface/65'
-        : 'border-border/60 bg-surface/88'
+        ? 'border-border/35 bg-surface/58 supports-backdrop-filter:bg-surface/48'
+        : 'border-border/50 bg-surface/72 supports-backdrop-filter:bg-surface/60'
     "
   >
     <div
-      class="mx-auto flex w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8"
+      class="mx-auto flex w-full items-start justify-between gap-2.5 px-3 max-[380px]:gap-2 sm:items-center sm:gap-4 sm:px-6 lg:px-8"
       :class="
         isHomeSpecial ||
         isChatSpecial ||
         isWorkspaceDocumentsSpecial ||
         isDashboardSpecial ||
         isRepositorySpecial
-          ? 'max-w-[96rem] py-3.5 xl:px-10'
-          : 'max-w-[75rem] py-4'
+          ? 'max-w-384 py-2 sm:py-3.5 xl:px-10'
+          : 'max-w-300 py-2.5 sm:py-4'
       "
     >
-      <div class="flex min-w-0 items-start gap-3">
+      <div class="flex min-w-0 items-start gap-2.5 sm:gap-3">
         <SipacButton
           color="neutral"
           variant="ghost"
-          class="mt-1 rounded-full p-2 lg:hidden"
+          class="mt-0.5 rounded-full p-1.5 lg:hidden"
           aria-label="Abrir navegación principal"
           @click="openMobileSidebar"
         >
-          <UIcon name="i-lucide-panel-left-open" class="size-5" />
+          <UIcon name="i-lucide-panel-left-open" class="size-4.5" />
         </SipacButton>
 
-        <div v-if="isHomeSpecial" class="min-w-0">
-          <div class="flex flex-wrap items-center gap-3">
-            <p class="text-[0.75rem] font-semibold tracking-[0.16em] text-text-soft uppercase">
-              Workspace docente
-            </p>
-            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
-            <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
-              {{ todayLabel }}
-            </SipacBadge>
-          </div>
-          <p class="mt-2 text-sm leading-[1.6] text-text-muted sm:text-base">
-            Vuelve a lo que importa hoy sin cargar el inicio con chrome innecesario.
+        <div class="min-w-0">
+          <p class="app-header-eyebrow max-w-full truncate">
+            <span>{{ routeMeta.chapter }}</span>
+            <span aria-hidden="true" class="hidden opacity-50 sm:inline">·</span>
+            <time class="hidden font-normal tracking-normal capitalize sm:inline">{{
+              todayLabel
+            }}</time>
           </p>
-        </div>
-
-        <div v-else-if="isChatSpecial" class="min-w-0">
-          <div class="flex flex-wrap items-center gap-3">
-            <p class="text-[0.75rem] font-semibold tracking-[0.16em] text-text-soft uppercase">
-              {{ isAdmin ? 'Centro administrativo' : 'Workspace docente' }}
-            </p>
-            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
-            <SipacBadge color="primary" variant="subtle" size="sm" class="gap-1">
-              <UIcon name="i-lucide-shield-check" class="size-3" />
-              Respaldo documental
-            </SipacBadge>
-            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
-            <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
-              {{ todayLabel }}
-            </SipacBadge>
-          </div>
-          <p class="mt-2 text-sm leading-[1.6] text-text-muted sm:text-base">
-            Haz preguntas como lo harías con un colega; las respuestas se apoyan en los documentos
-            que ya subiste a SIPAc.
-          </p>
-        </div>
-
-        <div v-else-if="isWorkspaceDocumentsSpecial" class="min-w-0">
-          <div class="flex flex-wrap items-center gap-3">
-            <p class="text-[0.75rem] font-semibold tracking-[0.16em] text-text-soft uppercase">
-              {{ isAdmin ? 'Centro administrativo' : 'Workspace docente' }}
-            </p>
-            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
-            <SipacBadge color="primary" variant="subtle" size="sm" class="gap-1">
-              <UIcon name="i-lucide-folder-up" class="size-3" />
-              Carga y revisión
-            </SipacBadge>
-            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
-            <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
-              {{ todayLabel }}
-            </SipacBadge>
-          </div>
-          <p class="mt-2 text-sm leading-[1.6] text-text-muted sm:text-base">
-            Sube todo tipo de documentos, revisa la ficha que te proponemos y confirma cuando esté
-            lista.
-          </p>
-        </div>
-
-        <div v-else-if="isDashboardSpecial" class="min-w-0">
-          <div class="flex flex-wrap items-center gap-3">
-            <p class="text-[0.75rem] font-semibold tracking-[0.16em] text-text-soft uppercase">
-              {{ isAdmin ? 'Centro administrativo' : 'Workspace docente' }}
-            </p>
-            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
-            <SipacBadge color="primary" variant="subtle" size="sm" class="gap-1">
-              <UIcon name="i-lucide-chart-column-big" class="size-3" />
-              Analítica
-            </SipacBadge>
-            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
-            <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
-              {{ todayLabel }}
-            </SipacBadge>
-          </div>
-          <p class="mt-2 text-sm leading-[1.6] text-text-muted sm:text-base">
-            Revisa tu avance, detecta patrones y entiende cómo va tu producción con filtros claros.
-          </p>
-        </div>
-
-        <div v-else-if="isRepositorySpecial" class="min-w-0">
-          <div class="flex flex-wrap items-center gap-3">
-            <p class="text-[0.75rem] font-semibold tracking-[0.16em] text-text-soft uppercase">
-              {{ isAdmin ? 'Centro administrativo' : 'Workspace docente' }}
-            </p>
-            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
-            <SipacBadge color="primary" variant="subtle" size="sm" class="gap-1">
-              <UIcon name="i-lucide-library" class="size-3" />
-              Catálogo
-            </SipacBadge>
-            <span class="hidden h-1 w-1 rounded-full bg-border sm:block" />
-            <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
-              {{ todayLabel }}
-            </SipacBadge>
-          </div>
-          <p class="mt-2 text-sm leading-[1.6] text-text-muted sm:text-base">
-            {{ routeMeta.description }}
-          </p>
-        </div>
-
-        <div v-else class="min-w-0">
-          <p class="text-[0.75rem] font-semibold tracking-[0.16em] text-text-soft uppercase">
-            {{ routeMeta.eyebrow }}
-          </p>
-          <div class="flex flex-wrap items-center gap-3">
-            <h2
-              class="font-display text-2xl font-medium leading-[1.2] text-text sm:text-[2rem] sm:leading-[1.2]"
-            >
-              {{ routeMeta.title }}
-            </h2>
-            <SipacBadge color="neutral" variant="outline" size="sm" class="capitalize">
-              {{ todayLabel }}
-            </SipacBadge>
-          </div>
-          <p class="mt-1 max-w-2xl text-sm leading-[1.6] text-text-muted sm:text-base">
+          <h1
+            class="mt-0.5 font-display text-[1.1rem] font-medium leading-[1.1] tracking-[-0.01em] text-text max-[380px]:text-[1.02rem] max-[380px]:leading-[1.08] sm:mt-1.5 sm:text-[1.55rem] sm:leading-[1.1] md:text-[2.1rem]"
+          >
+            {{ routeMeta.title }}
+          </h1>
+          <p
+            class="mt-1 hidden max-w-2xl line-clamp-2 text-sm leading-[1.6] text-text-muted sm:block sm:line-clamp-none sm:text-[0.95rem]"
+          >
             {{ routeMeta.description }}
           </p>
         </div>
       </div>
 
-      <div class="flex shrink-0 items-center gap-2 sm:gap-3">
-        <SipacBadge
-          :color="isAdmin ? 'warning' : 'primary'"
-          variant="outline"
-          class="hidden sm:inline-flex"
-        >
-          {{ isAdmin ? 'Administrador' : 'Docente' }}
-        </SipacBadge>
-
+      <div class="flex shrink-0 items-center gap-1.5 sm:gap-3">
         <div class="relative">
           <SipacButton
             color="neutral"
             variant="ghost"
-            class="rounded-full p-2"
+            class="rounded-full p-1.5 sm:p-2"
             aria-label="Abrir notificaciones"
             @click="openNotifications"
           >
-            <UIcon name="i-lucide-bell" class="size-4.5" />
+            <UIcon name="i-lucide-bell" class="size-4" />
           </SipacButton>
           <span
             v-if="unreadCount"
-            class="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-sipac-600 px-1.5 py-0.5 text-[0.7rem] font-semibold text-[#faf9f5]"
+            class="notification-bell-indicator absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-sipac-600 px-1.5 py-0.5 text-[0.7rem] font-semibold text-[#faf9f5] shadow-[0_4px_10px_-4px_rgb(201_100_66/0.5)]"
           >
             {{ unreadCount > 9 ? '9+' : unreadCount }}
           </span>
@@ -362,7 +275,11 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <UModal v-model:open="showNotifications" title="Notificaciones">
+    <UModal
+      v-model:open="showNotifications"
+      title="Notificaciones"
+      :ui="{ body: 'overflow-y-auto overflow-x-hidden' }"
+    >
       <template #body>
         <DashboardNotificationsInbox />
       </template>
