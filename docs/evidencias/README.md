@@ -49,6 +49,7 @@ Cada documento de evidencia debería contener, cuando aplique, las siguientes se
 | `2026-03-20_compendios-segmentacion-multi-obra.md`              | Compendios PDF: segmentación multi-obra + N productos por archivo, env, UX y migración     |
 | `2026-03-29_m9-chat-grounded-consolidacion.md`                  | Consolidación de M9: chat grounded multi-proveedor, fallback resiliente y persistencia     |
 | `2026-04-09_rediseno-ui-ux-fase-en-desarrollo.md`               | Avance UI/UX en desarrollo: shell, navegación y coherencia visual en consolidación         |
+| `2026-04-23_validacion-visual-responsive-desktop-mobile.md`     | Evidencia visual responsive de páginas clave en desktop y móvil, con capturas verificables |
 
 ## 4. Evidencias complementarias recomendadas
 
