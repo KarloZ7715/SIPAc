@@ -45,7 +45,39 @@ export function useChatPageSession() {
   let latestInitializationToken = 0
   let historyRecoveryRedirected = false
   let disposed = false
-  let backupMessagesForRecovery: ChatUiMessage[] | null = null
+
+  function restoreActiveBranchIfMissing() {
+    if (!chatSession.value) return
+    const msgs = chatSession.value.messages
+    if (msgs.length === 0) return
+
+    const lastMsg = msgs[msgs.length - 1]
+    if (lastMsg?.role === 'user') {
+      const branches = chatStore.messageBranches[lastMsg.id]
+      if (branches && branches.length > 0) {
+        const activeIdx = chatStore.activeBranchIndices[lastMsg.id] || 0
+        const siblingToRestore = branches[activeIdx]
+        if (siblingToRestore && !msgs.some((m) => m.id === siblingToRestore.id)) {
+          chatSession.value.messages = [...msgs, siblingToRestore]
+        }
+      }
+    }
+  }
+
+  function handleSwitchBranch(parentId: string, newIndex: number) {
+    if (!chatSession.value) return
+    const branches = chatStore.messageBranches[parentId]
+    if (!branches) return
+    const sibling = branches[newIndex]
+    if (!sibling) return
+
+    const messages = chatSession.value.messages
+    const parentIndex = messages.findIndex((m) => m.id === parentId)
+    if (parentIndex === -1) return
+
+    const newMessages = [...messages.slice(0, parentIndex + 1), sibling]
+    chatSession.value.messages = newMessages
+  }
 
   const conversationId = computed(() => {
     const id = route.query.id
@@ -342,10 +374,7 @@ export function useChatPageSession() {
           void chatStore.fetchConversations().catch(() => {})
         },
         onError: (error) => {
-          if (backupMessagesForRecovery && chatSession.value) {
-            chatSession.value.messages = [...backupMessagesForRecovery]
-            backupMessagesForRecovery = null
-          }
+          restoreActiveBranchIfMissing()
 
           const feedback = getChatResponseErrorFeedback(error)
           toast.add({
@@ -401,17 +430,12 @@ export function useChatPageSession() {
 
     await ensureConversationIdInRoute(chatSession.value.id)
 
-    backupMessagesForRecovery = [...chatSession.value.messages]
-
     try {
       await chatSession.value.sendMessage({
         text: nextInput,
       })
     } catch {
-      if (backupMessagesForRecovery && chatSession.value) {
-        chatSession.value.messages = [...backupMessagesForRecovery]
-        backupMessagesForRecovery = null
-      }
+      restoreActiveBranchIfMissing()
     }
   }
 
@@ -423,15 +447,10 @@ export function useChatPageSession() {
     if (!chatSession.value) return
     if (modelKey) selectedModelKey.value = modelKey
 
-    backupMessagesForRecovery = [...chatSession.value.messages]
-
     try {
       await chatSession.value.regenerate({ messageId })
     } catch {
-      if (backupMessagesForRecovery && chatSession.value) {
-        chatSession.value.messages = [...backupMessagesForRecovery]
-        backupMessagesForRecovery = null
-      }
+      restoreActiveBranchIfMissing()
     }
   }
 
@@ -575,6 +594,7 @@ export function useChatPageSession() {
     handleSubmit,
     stopConversation,
     handleRegenerate,
+    handleSwitchBranch,
     startNewConversation,
     openDocument,
     buildConversationActions,

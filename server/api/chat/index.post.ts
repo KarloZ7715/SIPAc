@@ -270,11 +270,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const existingConversation = await getUserChatConversation(auth.sub, chatId)
-  const persistedMessages = sanitizeChatMessages(
-    (existingConversation?.messages as ChatUiMessage[] | undefined) ?? [],
-  )
 
-  let messagesForProcessing = persistedMessages
+  const messagesForProcessing = sanitizeChatMessages(incomingMessages)
 
   if (trigger === 'submit-message' || !trigger) {
     if (!latestIncomingUserMessage) {
@@ -282,11 +279,9 @@ export default defineEventHandler(async (event) => {
         'No encontramos el mensaje que querías enviar. Vuelve a escribirlo e inténtalo de nuevo.',
       )
     }
-
-    messagesForProcessing = sanitizeChatMessages([...persistedMessages, latestIncomingUserMessage])
   }
 
-  if (trigger === 'regenerate-message' && persistedMessages.length === 0) {
+  if (trigger === 'regenerate-message' && messagesForProcessing.length === 0) {
     throw createBadRequestError(
       'No encontramos historial para regenerar la respuesta. Envía una nueva pregunta para iniciar la conversación.',
     )

@@ -19,6 +19,7 @@ const emit = defineEmits<{
   openDocument: [result: ChatSearchResult]
   regenerate: [messageId: string, modelKey?: string]
   cite: [text: string]
+  switchBranch: [parentId: string, newIndex: number]
 }>()
 
 const chatStore = useChatStore()
