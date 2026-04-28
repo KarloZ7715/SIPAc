@@ -177,7 +177,12 @@ const currentProcessingErrorAlertTitle = computed(() =>
     ? 'Este documento ya está en el repositorio'
     : 'No pudimos terminar con este archivo',
 )
-const showTestingMetrics = computed(() => runtimeConfig.public.enableTestingMetrics)
+const showTestingMetrics = computed(() => {
+  const rawFlag = runtimeConfig.public.enableTestingMetrics as unknown
+  const normalizedFlag =
+    typeof rawFlag === 'string' ? rawFlag.trim().toLowerCase() === 'true' : rawFlag === true
+  return import.meta.dev && normalizedFlag
+})
 const selectedProductType = computed({
   get: () => workspaceDraftProductType.value,
   set: (value: ProductType) => documentsStore.setWorkspaceProductType(value),

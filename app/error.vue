@@ -10,6 +10,15 @@ const statusCode = computed(() => Number(props.error?.statusCode) || 500)
 
 const story = computed(() => {
   const code = statusCode.value
+  if (code === 400) {
+    return {
+      chapter: 'Error 400 · Solicitud inválida',
+      title: 'La solicitud no pudo procesarse',
+      description:
+        'Los datos enviados no tienen el formato esperado. Revisa la información e inténtalo de nuevo.',
+      icon: 'i-lucide-file-warning',
+    }
+  }
   if (code === 404) {
     return {
       chapter: 'Error 404 · Página no encontrada',
@@ -37,6 +46,50 @@ const story = computed(() => {
       icon: 'i-lucide-key-round',
     }
   }
+  if (code === 408) {
+    return {
+      chapter: 'Error 408 · Tiempo de espera agotado',
+      title: 'La operación tardó demasiado',
+      description: 'No recibimos respuesta a tiempo. Verifica tu conexión e intenta nuevamente.',
+      icon: 'i-lucide-timer-off',
+    }
+  }
+  if (code === 409) {
+    return {
+      chapter: 'Error 409 · Conflicto de estado',
+      title: 'Ya existe un cambio en curso',
+      description:
+        'La acción entra en conflicto con el estado actual del recurso. Actualiza la página y vuelve a intentar.',
+      icon: 'i-lucide-git-compare-arrows',
+    }
+  }
+  if (code === 422) {
+    return {
+      chapter: 'Error 422 · Validación fallida',
+      title: 'No pudimos validar esta información',
+      description:
+        'Algunos campos requieren ajustes para continuar. Corrige los datos y reintenta.',
+      icon: 'i-lucide-list-checks',
+    }
+  }
+  if (code === 429) {
+    return {
+      chapter: 'Error 429 · Demasiadas solicitudes',
+      title: 'Llegaste al límite temporal',
+      description:
+        'Detectamos demasiadas acciones en poco tiempo. Espera un momento antes de volver a intentarlo.',
+      icon: 'i-lucide-hourglass',
+    }
+  }
+  if (code === 502) {
+    return {
+      chapter: 'Error 502 · Respuesta inválida del servicio',
+      title: 'Un servicio externo respondió con error',
+      description:
+        'SIPAc está activo, pero una dependencia no respondió correctamente. Intenta de nuevo en unos minutos.',
+      icon: 'i-lucide-server-crash',
+    }
+  }
   if (code === 503) {
     return {
       chapter: 'Error 503 · Servicio no disponible',
@@ -44,6 +97,14 @@ const story = computed(() => {
       description:
         'El sistema está en mantenimiento o sobrecargado. Intenta de nuevo en unos minutos.',
       icon: 'i-lucide-construction',
+    }
+  }
+  if (code === 504) {
+    return {
+      chapter: 'Error 504 · Tiempo agotado en pasarela',
+      title: 'La respuesta tardó más de lo permitido',
+      description: 'El proceso está tardando demasiado en completarse. Reintenta en breve.',
+      icon: 'i-lucide-timer-reset',
     }
   }
   return {

@@ -6,7 +6,9 @@ const isProduction = process.env.NODE_ENV === 'production'
 const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true'
 const hasSentryDsn = Boolean(process.env.SENTRY_DSN)
 const enableSentry = isProduction && hasSentryDsn
-const enableNuxtDevtools = process.env.NUXT_PUBLIC_ENABLE_DEVTOOLS === 'true'
+const enableNuxtDevtools = !isProduction && process.env.NUXT_PUBLIC_ENABLE_DEVTOOLS === 'true'
+const enableTestingMetrics =
+  !isProduction && process.env.NUXT_PUBLIC_ENABLE_TESTING_METRICS === 'true'
 const modules = ['@nuxt/ui', '@pinia/nuxt', '@nuxt/eslint'] as string[]
 
 if (!isTest) {
@@ -103,7 +105,7 @@ export default defineNuxtConfig({
     public: {
       appName: 'SIPAc',
       appDescription: 'Sistema Inteligente de Productividad Académica',
-      enableTestingMetrics: process.env.NUXT_PUBLIC_ENABLE_TESTING_METRICS === 'true',
+      enableTestingMetrics,
       sentry: {
         dsn: process.env.SENTRY_DSN ?? '',
         environment: process.env.SENTRY_ENV ?? process.env.NODE_ENV ?? 'development',
@@ -151,8 +153,6 @@ export default defineNuxtConfig({
       asyncContext: true,
     },
   },
-
-  ...(isTest ? {} : { devtools: { enabled: enableNuxtDevtools } }),
 
   sentry: enableSentry
     ? {

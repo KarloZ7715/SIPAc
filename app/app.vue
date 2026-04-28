@@ -9,6 +9,10 @@ const {
 } = usePageMotion()
 
 useHead({
+  link: [
+    { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+    { rel: 'shortcut icon', href: '/favicon.svg' },
+  ],
   meta: [
     {
       name: 'viewport',
