@@ -570,10 +570,7 @@ watch(search, () => {
               icon="i-lucide-pencil"
               variant="soft"
               size="sm"
-              @click="
-                showDetail = false
-                openEdit(detailData!.user)
-              "
+              @click="((showDetail = false), openEdit(detailData!.user))"
             >
               Editar
             </SipacButton>
