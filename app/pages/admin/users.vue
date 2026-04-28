@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { h, resolveComponent } from 'vue'
-import type { UserPublic, CreateUserDTO, UpdateUserDTO } from '~~/app/types'
+import type { UserPublic, CreateUserDTO, UpdateUserDTO, AuditLogPublic } from '~~/app/types'
 import { createUserSchema, updateUserSchema } from '~~/server/utils/schemas/user'
+
+interface UserDetailData {
+  user: UserPublic
+  products: { total: number; confirmed: number; drafts: number; deleted: number }
+  recentActivity: AuditLogPublic[]
+  lastSession: { lastSeenAt: string | null; ipAddress: string | null } | null
+}
 
 definePageMeta({ middleware: ['admin'] })
 
@@ -19,9 +26,16 @@ const search = ref('')
 
 const showCreate = ref(false)
 const showEdit = ref(false)
+const showDetail = ref(false)
+const showBulkConfirm = ref(false)
 const editingUser = ref<UserPublic | null>(null)
+const detailData = ref<UserDetailData | null>(null)
+const detailLoading = ref(false)
 const createSubmitting = ref(false)
 const editSubmitting = ref(false)
+const bulkSubmitting = ref(false)
+const selectedIds = ref<Set<string>>(new Set())
+const pendingBulkAction = ref<{ action: string; label: string } | null>(null)
 
 const createState = reactive<CreateUserDTO>({
   fullName: '',
@@ -78,17 +92,37 @@ const columns = [
     },
   },
   {
-    id: 'actions',
-    header: 'Acciones',
+    accessorKey: 'lastLoginAt' as const,
+    header: 'Último login',
     cell: ({ row }: { row: { original: UserPublic } }) => {
-      return h(resolveComponent('SipacButton'), {
-        icon: 'i-lucide-pencil',
-        variant: 'ghost',
-        color: 'neutral',
-        size: 'xs',
-        'aria-label': 'Editar usuario',
-        onClick: () => openEdit(row.original),
-      })
+      const d = row.original.lastLoginAt
+      return d
+        ? new Date(d).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
+        : 'Nunca'
+    },
+  },
+  {
+    id: 'actions',
+    header: '',
+    cell: ({ row }: { row: { original: UserPublic } }) => {
+      return h('div', { class: 'flex gap-1' }, [
+        h(resolveComponent('SipacButton'), {
+          icon: 'i-lucide-eye',
+          variant: 'ghost',
+          color: 'neutral',
+          size: 'xs',
+          'aria-label': 'Ver detalle',
+          onClick: () => openDetail(row.original._id),
+        }),
+        h(resolveComponent('SipacButton'), {
+          icon: 'i-lucide-pencil',
+          variant: 'ghost',
+          color: 'neutral',
+          size: 'xs',
+          'aria-label': 'Editar usuario',
+          onClick: () => openEdit(row.original),
+        }),
+      ])
     },
   },
 ]
@@ -108,7 +142,7 @@ async function loadUsers() {
 await useAsyncData(
   'admin-users-bootstrap',
   async () => {
-    await loadUsers()
+    await Promise.all([loadUsers(), usersStore.fetchStats()])
     return true
   },
   {
@@ -174,21 +208,85 @@ function resetFilters() {
   loadUsers()
 }
 
-const filteredActiveUsers = computed(
-  () => usersStore.users.filter((candidate) => candidate.isActive).length,
-)
-const filteredAdmins = computed(
-  () => usersStore.users.filter((candidate) => candidate.role === 'admin').length,
-)
 const resultCount = computed(() => usersStore.meta?.total ?? usersStore.users.length)
+const globalStats = computed(() => usersStore.stats)
 
-watch([page, roleFilter, statusFilter], () => loadUsers())
+// --- Bulk selection ---
+
+function requestBulkAction(action: string, label: string) {
+  pendingBulkAction.value = { action, label }
+  showBulkConfirm.value = true
+}
+
+async function executeBulkAction() {
+  if (!pendingBulkAction.value || selectedIds.value.size === 0) return
+  bulkSubmitting.value = true
+  try {
+    const result = await usersStore.bulkUpdate(
+      Array.from(selectedIds.value),
+      pendingBulkAction.value.action,
+    )
+    toast.add({
+      title: `${result.modified} usuario(s) actualizados`,
+      icon: 'i-lucide-check-circle',
+      color: 'success',
+    })
+    selectedIds.value.clear()
+    showBulkConfirm.value = false
+    await Promise.all([loadUsers(), usersStore.fetchStats()])
+  } catch (err: unknown) {
+    const message =
+      err && typeof err === 'object' && 'data' in err
+        ? (
+            err as {
+              data?: { data?: { error?: { message?: string } } }
+            }
+          ).data?.data?.error?.message
+        : undefined
+    const msg = message || 'Error en operación masiva'
+    toast.add({ title: 'Error', description: msg, icon: 'i-lucide-circle-alert', color: 'error' })
+  } finally {
+    bulkSubmitting.value = false
+  }
+}
+
+// --- User detail drawer ---
+async function openDetail(userId: string) {
+  showDetail.value = true
+  detailLoading.value = true
+  detailData.value = null
+  try {
+    detailData.value = await usersStore.fetchUserDetail(userId)
+  } catch {
+    toast.add({ title: 'Error al cargar detalle', icon: 'i-lucide-circle-alert', color: 'error' })
+    showDetail.value = false
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return 'Nunca'
+  return new Date(iso).toLocaleDateString('es-CO', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+watch([page, roleFilter, statusFilter], () => {
+  selectedIds.value.clear()
+  loadUsers()
+})
 
 let searchTimeout: ReturnType<typeof setTimeout>
 watch(search, () => {
   clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => {
     page.value = 1
+    selectedIds.value.clear()
     loadUsers()
   }, 400)
 })
@@ -207,11 +305,57 @@ watch(search, () => {
           />
         </div>
 
-        <SipacButton icon="i-lucide-user-plus" size="lg" @click="showCreate = true"
-          >Nuevo usuario</SipacButton
-        >
+        <div class="flex flex-wrap gap-2">
+          <SipacButton
+            icon="i-lucide-download"
+            color="neutral"
+            variant="soft"
+            size="lg"
+            @click="usersStore.exportUsersCSV()"
+          >
+            Exportar CSV
+          </SipacButton>
+          <SipacButton icon="i-lucide-user-plus" size="lg" @click="showCreate = true">
+            Nuevo usuario
+          </SipacButton>
+        </div>
       </div>
     </section>
+
+    <!-- Bulk action bar -->
+    <Transition name="slide-up">
+      <section
+        v-if="selectedIds.size > 0"
+        class="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sipac-200 bg-sipac-50/95 px-5 py-3 shadow-lg backdrop-blur-sm"
+      >
+        <p class="text-sm font-semibold text-sipac-800">
+          {{ selectedIds.size }} usuario{{ selectedIds.size === 1 ? '' : 's' }} seleccionado{{
+            selectedIds.size === 1 ? '' : 's'
+          }}
+        </p>
+        <div class="flex gap-2">
+          <SipacButton
+            size="sm"
+            color="success"
+            variant="soft"
+            @click="requestBulkAction('activate', 'Activar')"
+          >
+            Activar
+          </SipacButton>
+          <SipacButton
+            size="sm"
+            color="error"
+            variant="soft"
+            @click="requestBulkAction('deactivate', 'Desactivar')"
+          >
+            Desactivar
+          </SipacButton>
+          <SipacButton size="sm" color="neutral" variant="ghost" @click="selectedIds.clear()">
+            Cancelar
+          </SipacButton>
+        </div>
+      </section>
+    </Transition>
 
     <section class="page-stage-grid page-stage-grid--tight grid gap-4 lg:grid-cols-3">
       <SipacCard interactive>
@@ -225,22 +369,28 @@ watch(search, () => {
       <SipacCard interactive>
         <template #header>
           <p class="text-xs font-semibold tracking-[0.16em] text-text-soft uppercase">
-            Activos visibles
+            Activos globales
           </p>
         </template>
-        <p class="text-3xl font-semibold tabular-nums text-text">{{ filteredActiveUsers }}</p>
-        <p class="mt-2 text-sm text-text-muted">Cuentas activas dentro del conjunto cargado.</p>
+        <p class="text-3xl font-semibold tabular-nums text-text">
+          {{ globalStats?.active ?? '—' }}
+        </p>
+        <p class="mt-2 text-sm text-text-muted">
+          De {{ globalStats?.total ?? 0 }} registrados · {{ globalStats?.inactive ?? 0 }} inactivos
+        </p>
       </SipacCard>
 
       <SipacCard interactive>
         <template #header>
           <p class="text-xs font-semibold tracking-[0.16em] text-text-soft uppercase">
-            Administradores visibles
+            Administradores
           </p>
         </template>
-        <p class="text-3xl font-semibold tabular-nums text-text">{{ filteredAdmins }}</p>
+        <p class="text-3xl font-semibold tabular-nums text-text">
+          {{ globalStats?.admins ?? '—' }}
+        </p>
         <p class="mt-2 text-sm text-text-muted">
-          Ayuda a revisar balance y privilegios en pantalla.
+          {{ globalStats?.docentes ?? 0 }} docentes en el sistema.
         </p>
       </SipacCard>
     </section>
@@ -329,36 +479,131 @@ watch(search, () => {
           </div>
         </template>
       </SipacCard>
-
-      <div class="space-y-6">
-        <SipacCard class="page-stage-supporting">
-          <template #header>
-            <div class="flex items-center gap-3">
-              <span
-                class="flex size-11 items-center justify-center rounded-2xl bg-earth-50 text-earth-700"
-              >
-                <UIcon name="i-lucide-shield-check" class="size-5" aria-hidden="true" />
-              </span>
-              <div>
-                <h3 class="font-display text-lg font-medium text-text">Buenas prácticas</h3>
-                <p class="text-sm leading-[1.6] text-text-muted">UX y seguridad alineadas</p>
-              </div>
-            </div>
-          </template>
-
-          <div class="space-y-3 text-sm leading-[1.6] text-text-muted">
-            <p>
-              Las acciones visibles están organizadas para facilitar decisiones rápidas y reducir
-              confusiones.
-            </p>
-            <p>
-              La creación y la edición permanecen separadas para mantener una operación más
-              ordenada.
-            </p>
-          </div>
-        </SipacCard>
-      </div>
     </section>
+
+    <!-- User detail slideover -->
+    <USlideover v-model:open="showDetail" title="Detalle de usuario" side="right">
+      <template #body>
+        <div v-if="detailLoading" class="space-y-4 p-4">
+          <div v-for="i in 5" :key="i" class="h-10 rounded-xl skeleton-shimmer bg-surface-muted" />
+        </div>
+        <div v-else-if="detailData" class="space-y-5 p-4">
+          <div class="flex items-center gap-4">
+            <span class="avatar-initials size-14 text-lg">{{
+              detailData.user.fullName
+                ?.split(' ')
+                .map((n: string) => n[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase()
+            }}</span>
+            <div>
+              <p class="text-lg font-semibold text-text">{{ detailData.user.fullName }}</p>
+              <p class="text-sm text-text-muted">{{ detailData.user.email }}</p>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <SipacBadge
+              :color="detailData.user.role === 'admin' ? 'warning' : 'primary'"
+              variant="subtle"
+            >
+              {{ detailData.user.role === 'admin' ? 'Admin' : 'Docente' }}
+            </SipacBadge>
+            <SipacBadge :color="detailData.user.isActive ? 'success' : 'error'" variant="outline">
+              {{ detailData.user.isActive ? 'Activo' : 'Inactivo' }}
+            </SipacBadge>
+            <SipacBadge v-if="detailData.user.twoFactorEnabled" color="primary" variant="subtle">
+              2FA Activo
+            </SipacBadge>
+          </div>
+
+          <div class="space-y-2 rounded-xl border border-border/60 p-4">
+            <h4 class="text-xs font-semibold tracking-[0.16em] text-text-soft uppercase">
+              Información
+            </h4>
+            <div class="grid grid-cols-2 gap-y-2 text-sm">
+              <span class="text-text-muted">Programa</span>
+              <span class="text-text">{{ detailData.user.program || '—' }}</span>
+              <span class="text-text-muted">Último login</span>
+              <span class="text-text">{{ formatDate(detailData.user.lastLoginAt) }}</span>
+              <span class="text-text-muted">Email verificado</span>
+              <span class="text-text">{{ detailData.user.emailVerifiedAt ? 'Sí' : 'No' }}</span>
+              <span class="text-text-muted">Registrado</span>
+              <span class="text-text">{{ formatDate(detailData.user.createdAt) }}</span>
+            </div>
+          </div>
+
+          <div class="space-y-2 rounded-xl border border-border/60 p-4">
+            <h4 class="text-xs font-semibold tracking-[0.16em] text-text-soft uppercase">
+              Producción académica
+            </h4>
+            <div class="grid grid-cols-2 gap-y-2 text-sm">
+              <span class="text-text-muted">Confirmados</span>
+              <span class="font-semibold text-text">{{ detailData.products.confirmed }}</span>
+              <span class="text-text-muted">Borradores</span>
+              <span class="text-text">{{ detailData.products.drafts }}</span>
+              <span class="text-text-muted">Eliminados</span>
+              <span class="text-text">{{ detailData.products.deleted }}</span>
+            </div>
+          </div>
+
+          <div v-if="detailData.recentActivity.length" class="space-y-2">
+            <h4 class="text-xs font-semibold tracking-[0.16em] text-text-soft uppercase">
+              Actividad reciente
+            </h4>
+            <div
+              v-for="log in detailData.recentActivity"
+              :key="log._id"
+              class="rounded-lg border border-border/40 bg-surface-muted/50 px-3 py-2 text-sm"
+            >
+              <span class="font-medium text-text">{{ log.action }}</span>
+              <span class="text-text-muted"> · {{ log.resource }}</span>
+              <p v-if="log.details" class="mt-0.5 truncate text-xs text-text-muted">
+                {{ log.details }}
+              </p>
+            </div>
+          </div>
+
+          <div class="flex gap-2 pt-2">
+            <SipacButton
+              icon="i-lucide-pencil"
+              variant="soft"
+              size="sm"
+              @click="
+                showDetail = false
+                openEdit(detailData!.user)
+              "
+            >
+              Editar
+            </SipacButton>
+          </div>
+        </div>
+      </template>
+    </USlideover>
+
+    <!-- Bulk confirmation modal -->
+    <UModal v-model:open="showBulkConfirm" title="Confirmar acción masiva">
+      <template #body>
+        <p class="text-sm text-text-muted">
+          ¿{{ pendingBulkAction?.label }} {{ selectedIds.size }} usuario{{
+            selectedIds.size === 1 ? '' : 's'
+          }}? Esta acción se aplicará de inmediato.
+        </p>
+        <div class="mt-4 flex justify-end gap-2">
+          <SipacButton variant="ghost" color="neutral" @click="showBulkConfirm = false"
+            >Cancelar</SipacButton
+          >
+          <SipacButton
+            :color="pendingBulkAction?.action === 'deactivate' ? 'error' : 'primary'"
+            :loading="bulkSubmitting"
+            @click="executeBulkAction"
+          >
+            {{ pendingBulkAction?.label }}
+          </SipacButton>
+        </div>
+      </template>
+    </UModal>
 
     <UModal v-model:open="showCreate" title="Nuevo usuario">
       <template #body>

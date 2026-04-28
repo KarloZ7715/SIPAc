@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { h, resolveComponent } from 'vue'
 import type {
   ApiSuccessResponse,
   AuditAction,
@@ -46,6 +47,97 @@ const actionOptions = [
   { label: 'Login fallido', value: 'login_failed' },
 ]
 
+const actionLabels: Record<string, string> = {
+  create: 'Crear',
+  update: 'Actualizar',
+  delete: 'Eliminar',
+  login: 'Login',
+  login_failed: 'Login fallido',
+}
+
+const resourceLabels: Record<string, string> = {
+  academic_product: 'Producto',
+  uploaded_file: 'Archivo',
+  user: 'Usuario',
+  session: 'Sesión',
+  chat_conversation: 'Chat',
+}
+
+const columns = [
+  {
+    accessorKey: 'createdAt' as const,
+    header: 'Fecha',
+    cell: ({ row }: { row: { original: AuditLogPublic } }) => {
+      return formatDate(row.original.createdAt)
+    },
+  },
+  { accessorKey: 'userName' as const, header: 'Usuario' },
+  {
+    accessorKey: 'resource' as const,
+    header: 'Recurso',
+    cell: ({ row }: { row: { original: AuditLogPublic } }) => {
+      return h(resolveComponent('SipacBadge'), {
+        variant: 'subtle',
+        color: 'primary',
+        label: resourceLabels[row.original.resource] ?? row.original.resource,
+        size: 'sm',
+      })
+    },
+  },
+  {
+    accessorKey: 'action' as const,
+    header: 'Acción',
+    cell: ({ row }: { row: { original: AuditLogPublic } }) => {
+      const action = row.original.action
+      const color =
+        action === 'delete' ? 'error' : action === 'login_failed' ? 'warning' : 'neutral'
+      return h(resolveComponent('SipacBadge'), {
+        variant: 'outline',
+        color,
+        label: actionLabels[action] ?? action,
+        size: 'sm',
+      })
+    },
+  },
+  { accessorKey: 'ipAddress' as const, header: 'IP' },
+  {
+    accessorKey: 'details' as const,
+    header: 'Detalle',
+    cell: ({ row }: { row: { original: AuditLogPublic } }) => {
+      const d = row.original.details
+      return d && d.length > 60 ? `${d.slice(0, 60)}…` : d || '—'
+    },
+  },
+  {
+    accessorKey: 'userAgent' as const,
+    header: 'Agente',
+    cell: ({ row }: { row: { original: AuditLogPublic } }) => {
+      return parseUserAgent(row.original.userAgent)
+    },
+  },
+]
+
+function formatDate(iso: string) {
+  const d = new Date(iso)
+  return d.toLocaleDateString('es-CO', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function parseUserAgent(ua?: string) {
+  if (!ua) return '—'
+  // Extract browser + OS in a readable format
+  const browserMatch = ua.match(/(Chrome|Firefox|Safari|Edge|Opera)\/(\d+)/)
+  const osMatch = ua.match(/(Windows|Mac OS X|Linux|Android|iOS)/)
+  const browser = browserMatch ? `${browserMatch[1]} ${browserMatch[2]}` : 'Otro'
+  const os = osMatch?.[1]?.replace('Mac OS X', 'macOS') ?? ''
+  return os ? `${browser} / ${os}` : browser
+}
+
 async function loadAuditLogs() {
   loading.value = true
   try {
@@ -86,6 +178,44 @@ function resetFilters() {
   void loadAuditLogs()
 }
 
+function setDateRange(days: number) {
+  const now = new Date()
+  const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+  filters.from = from.toISOString().slice(0, 10)
+  filters.to = now.toISOString().slice(0, 10)
+}
+
+function exportCSV() {
+  const headers = ['Fecha', 'Usuario', 'Recurso', 'Acción', 'IP', 'Detalle', 'User-Agent']
+  const rows = logs.value.map((l) => [
+    formatDate(l.createdAt),
+    l.userName,
+    resourceLabels[l.resource] ?? l.resource,
+    actionLabels[l.action] ?? l.action,
+    l.ipAddress,
+    l.details || '',
+    parseUserAgent(l.userAgent),
+  ])
+
+  const csvContent = [headers, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+
+  const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `audit_logs_sipac_${new Date().toISOString().slice(0, 10)}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+// Reactive filters (P10 fix)
+watch([() => filters.resource, () => filters.action, () => filters.from, () => filters.to], () => {
+  page.value = 1
+  void loadAuditLogs()
+})
+
 watch(page, () => {
   void loadAuditLogs()
 })
@@ -96,15 +226,24 @@ watch(page, () => {
     <section class="page-stage-hero panel-surface hero-wash p-6 sm:p-8">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-4">
-          <div class="section-chip">M7 · Auditoría</div>
+          <div class="section-chip">Auditoría</div>
           <SipacSectionHeader
             title="Registro de auditoría"
-            description="Consulta acciones críticas del sistema con filtros mínimos y paginación."
+            description="Investigación de acciones del sistema con filtros reactivos y exportación."
             size="md"
           />
         </div>
 
-        <div class="flex flex-wrap gap-3">
+        <div class="flex flex-wrap gap-2">
+          <SipacButton
+            icon="i-lucide-download"
+            color="neutral"
+            variant="soft"
+            :disabled="!logs.length"
+            @click="exportCSV"
+          >
+            Exportar CSV
+          </SipacButton>
           <SipacButton
             color="neutral"
             variant="ghost"
@@ -112,10 +251,7 @@ watch(page, () => {
             :loading="loading"
             @click="resetFilters"
           >
-            Limpiar filtros
-          </SipacButton>
-          <SipacButton icon="i-lucide-filter" :loading="loading" @click="loadAuditLogs">
-            Aplicar filtros
+            Limpiar
           </SipacButton>
         </div>
       </div>
@@ -123,75 +259,45 @@ watch(page, () => {
 
     <SipacCard class="page-stage-primary">
       <template #header>
-        <div class="grid gap-3 md:grid-cols-4">
-          <USelect
-            v-model="filters.resource"
-            color="neutral"
-            variant="outline"
-            :items="resourceOptions"
-          />
-          <USelect
-            v-model="filters.action"
-            color="neutral"
-            variant="outline"
-            :items="actionOptions"
-          />
-          <UInput v-model="filters.from" color="neutral" variant="outline" type="date" />
-          <UInput v-model="filters.to" color="neutral" variant="outline" type="date" />
+        <div class="space-y-3">
+          <div class="grid gap-3 md:grid-cols-4">
+            <USelect
+              v-model="filters.resource"
+              color="neutral"
+              variant="outline"
+              :items="resourceOptions"
+            />
+            <USelect
+              v-model="filters.action"
+              color="neutral"
+              variant="outline"
+              :items="actionOptions"
+            />
+            <UInput v-model="filters.from" color="neutral" variant="outline" type="date" />
+            <UInput v-model="filters.to" color="neutral" variant="outline" type="date" />
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <SipacButton size="xs" color="neutral" variant="soft" @click="setDateRange(0)">
+              Hoy
+            </SipacButton>
+            <SipacButton size="xs" color="neutral" variant="soft" @click="setDateRange(7)">
+              Últimos 7 días
+            </SipacButton>
+            <SipacButton size="xs" color="neutral" variant="soft" @click="setDateRange(30)">
+              Últimos 30 días
+            </SipacButton>
+          </div>
         </div>
       </template>
 
-      <div v-if="loading && !logs.length" class="py-10 text-center text-sm text-text-muted">
-        Cargando registros...
-      </div>
-
-      <div v-else-if="logs.length" class="space-y-3">
-        <article
-          v-for="log in logs"
-          :key="log._id"
-          class="panel-muted space-y-3 rounded-[1rem] p-4"
-        >
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-wrap items-center gap-2">
-              <SipacBadge color="primary" variant="subtle">{{ log.resource }}</SipacBadge>
-              <SipacBadge color="neutral" variant="outline">{{ log.action }}</SipacBadge>
-            </div>
-            <p class="text-xs text-text-soft">{{ log.createdAt }}</p>
-          </div>
-
-          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div>
-              <p class="text-xs font-semibold tracking-[0.12em] text-text-soft uppercase">
-                Usuario
-              </p>
-              <p class="mt-1 text-sm text-text">{{ log.userName }}</p>
-            </div>
-            <div>
-              <p class="text-xs font-semibold tracking-[0.12em] text-text-soft uppercase">IP</p>
-              <p class="mt-1 text-sm text-text">{{ log.ipAddress }}</p>
-            </div>
-            <div>
-              <p class="text-xs font-semibold tracking-[0.12em] text-text-soft uppercase">
-                Resource ID
-              </p>
-              <p class="mt-1 break-all text-sm text-text">{{ log.resourceId || '—' }}</p>
-            </div>
-            <div>
-              <p class="text-xs font-semibold tracking-[0.12em] text-text-soft uppercase">
-                User-Agent
-              </p>
-              <p class="mt-1 break-all text-sm text-text">{{ log.userAgent || '—' }}</p>
-            </div>
-          </div>
-
-          <div
-            v-if="log.details"
-            class="rounded-xl border border-border/60 bg-white/80 p-3 text-sm text-text-muted"
-          >
-            {{ log.details }}
-          </div>
-        </article>
-      </div>
+      <UTable
+        v-if="logs.length || loading"
+        :data="logs"
+        :columns="columns"
+        :loading="loading"
+        class="w-full text-sm"
+      />
 
       <UEmpty
         v-else
@@ -201,7 +307,7 @@ watch(page, () => {
       />
 
       <template #footer>
-        <div class="flex items-center justify-between gap-4">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p class="text-sm text-text-muted">
             {{ meta?.total ?? logs.length }} registro{{
               (meta?.total ?? logs.length) === 1 ? '' : 's'

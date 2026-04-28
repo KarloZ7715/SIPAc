@@ -4,6 +4,7 @@ import UploadedFile from '~~/server/models/UploadedFile'
 import AuditLog from '~~/server/models/AuditLog'
 import Session from '~~/server/models/Session'
 import { toAuditLogPublic } from '~~/server/utils/audit'
+import { requireRole } from '~~/server/utils/authorize'
 import { ok } from '~~/server/utils/response'
 
 export default defineEventHandler(async (event) => {

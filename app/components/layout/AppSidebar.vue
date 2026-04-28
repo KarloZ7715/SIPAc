@@ -93,6 +93,18 @@ const adminSections: SidebarSection[] = [
     label: 'Gestión',
     items: [
       {
+        label: 'Contenido',
+        to: '/admin/content',
+        icon: 'i-lucide-file-text',
+        match: '/admin/content',
+      },
+      {
+        label: 'Sistema',
+        to: '/admin/system',
+        icon: 'i-lucide-server-cog',
+        match: '/admin/system',
+      },
+      {
         label: 'Usuarios',
         to: '/admin/users',
         icon: 'i-lucide-users-round',
