@@ -60,8 +60,8 @@ const emit = defineEmits<{
       <p class="section-chip">Subir archivo</p>
       <p class="text-lg font-semibold text-text sm:text-xl">Tu documento</p>
       <p class="text-sm leading-[1.55] text-text-muted sm:leading-6">
-        Adjunta un PDF, una imagen o un Office (.docx, .xlsx, .pptx, ODF…); en esta misma página lo
-        revisas y lo guardas cuando quieras.
+        Adjunta un PDF, una imagen o un Office (.doc, .xls, .ppt, .docx, .xlsx, .pptx, ODF…); en
+        esta misma página lo revisas y lo guardas cuando quieras.
       </p>
     </div>
 

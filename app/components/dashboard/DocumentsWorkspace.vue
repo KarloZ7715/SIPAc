@@ -37,7 +37,7 @@ watch(selectedFile, async (file) => {
         variant="area"
         layout="list"
         label="Arrastra PDF, imagen u Office"
-        description="PDF, JPG, PNG, .docx, .xlsx, .pptx, ODF… Máx 20MB."
+        description="PDF, JPG, PNG, .doc, .xls, .ppt, .docx, .xlsx, .pptx, ODF… Máx 20MB."
         class="w-full"
       />
     </div>

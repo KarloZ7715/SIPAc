@@ -4,7 +4,7 @@ import type { ProductReviewStatus, ProductType } from './academic-product'
 export const PROCESSING_STATUSES = ['pending', 'processing', 'completed', 'error'] as const
 export type ProcessingStatus = (typeof PROCESSING_STATUSES)[number]
 
-/** OOXML + ODF que `file-type` distingue por firma (sin CFB heredado .doc/.xls). */
+/** Office estructurado (OOXML + ODF) y formatos binarios heredados (CFB: .doc/.xls/.ppt). */
 export const STRUCTURED_OFFICE_MIME_TYPES = [
   'application/vnd.ms-powerpoint.slideshow.macroenabled.12',
   'application/vnd.oasis.opendocument.text',
@@ -26,6 +26,9 @@ export const STRUCTURED_OFFICE_MIME_TYPES = [
   'application/vnd.ms-word.template.macroenabled.12',
   'application/vnd.ms-powerpoint.template.macroenabled.12',
   'application/vnd.ms-powerpoint.presentation.macroenabled.12',
+  'application/msword',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
 ] as const
 
 export type StructuredOfficeMimeType = (typeof STRUCTURED_OFFICE_MIME_TYPES)[number]

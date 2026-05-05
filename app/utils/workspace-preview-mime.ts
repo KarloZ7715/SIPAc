@@ -13,10 +13,13 @@ const OFFICE_EXTENSION_TO_MIME: Record<string, string> = {
   pptm: 'application/vnd.ms-powerpoint.presentation.macroenabled.12',
   potm: 'application/vnd.ms-powerpoint.template.macroenabled.12',
   ppsm: 'application/vnd.ms-powerpoint.slideshow.macroenabled.12',
+  doc: 'application/msword',
   odt: 'application/vnd.oasis.opendocument.text',
   ott: 'application/vnd.oasis.opendocument.text-template',
+  xls: 'application/vnd.ms-excel',
   ods: 'application/vnd.oasis.opendocument.spreadsheet',
   ots: 'application/vnd.oasis.opendocument.spreadsheet-template',
+  ppt: 'application/vnd.ms-powerpoint',
   odp: 'application/vnd.oasis.opendocument.presentation',
   otp: 'application/vnd.oasis.opendocument.presentation-template',
 }

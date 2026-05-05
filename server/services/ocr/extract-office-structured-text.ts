@@ -46,6 +46,10 @@ function isWordOpenXmlFamily(mime: string): boolean {
   )
 }
 
+function isWordBinaryFamily(mime: string): boolean {
+  return mime === 'application/msword'
+}
+
 /** Solo Excel OOXML / macro; ODS/OTS se tratan como ODF (content.xml), no con SheetJS. */
 function isExcelOpenXmlFamily(mime: string): boolean {
   return (
@@ -54,6 +58,10 @@ function isExcelOpenXmlFamily(mime: string): boolean {
     mime === 'application/vnd.ms-excel.sheet.macroenabled.12' ||
     mime === 'application/vnd.ms-excel.template.macroenabled.12'
   )
+}
+
+function isExcelBinaryFamily(mime: string): boolean {
+  return mime === 'application/vnd.ms-excel'
 }
 
 function isPresentationOpenXmlFamily(mime: string): boolean {
@@ -65,6 +73,26 @@ function isPresentationOpenXmlFamily(mime: string): boolean {
     mime === 'application/vnd.ms-powerpoint.template.macroenabled.12' ||
     mime === 'application/vnd.ms-powerpoint.slideshow.macroenabled.12'
   )
+}
+
+function isPresentationBinaryFamily(mime: string): boolean {
+  return mime === 'application/vnd.ms-powerpoint'
+}
+
+function extractLegacyBinaryStrings(buffer: Buffer): string {
+  const latin1View = buffer.toString('latin1')
+  const utf16View = buffer.toString('utf16le')
+
+  const regex = /[\p{L}\p{N}][\p{L}\p{N} .,:;!?()\-_/]{3,}/gu
+
+  const latinMatches = latin1View.match(regex) ?? []
+  const utf16Matches = utf16View.match(regex) ?? []
+
+  const merged = [...new Set([...latinMatches, ...utf16Matches])]
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length >= 4)
+
+  return normalizeOfficeText(merged.join('\n'))
 }
 
 async function extractOpenDocumentContentXmlText(buffer: Buffer): Promise<string> {
@@ -139,6 +167,10 @@ export async function extractOfficeStructuredText(
     return extractWordOpenXmlText(buffer)
   }
 
+  if (isWordBinaryFamily(canonical)) {
+    return extractLegacyBinaryStrings(buffer)
+  }
+
   if (isOpenDocumentTextFamily(canonical)) {
     return extractOpenDocumentContentXmlText(buffer)
   }
@@ -151,8 +183,16 @@ export async function extractOfficeStructuredText(
     return extractSpreadsheetText(buffer)
   }
 
+  if (isExcelBinaryFamily(canonical)) {
+    return extractSpreadsheetText(buffer)
+  }
+
   if (isPresentationOpenXmlFamily(canonical)) {
     return extractOpenXmlPresentationText(buffer)
+  }
+
+  if (isPresentationBinaryFamily(canonical)) {
+    return extractLegacyBinaryStrings(buffer)
   }
 
   if (isOpenDocumentPresentationFamily(canonical)) {

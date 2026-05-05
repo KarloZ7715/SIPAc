@@ -15,7 +15,10 @@ export default defineEventHandler(async (event) => {
   const auth = requireRole(event, 'docente')
 
   const { file, metadata } = await parseUploadMultipartRequest(event)
-  const mimeType = await detectAllowedMimeType(file.data)
+  const mimeType = await detectAllowedMimeType(file.data, {
+    filename: file.filename,
+    declaredMimeType: file.type ?? null,
+  })
   validateUploadedBinary(mimeType, file.data.byteLength)
 
   const user = await User.findById(auth.sub).select('fullName email').lean()

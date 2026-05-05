@@ -14,6 +14,43 @@ interface ParsedUploadRequest {
   metadata: UploadMetadataDTO
 }
 
+const LEGACY_OFFICE_MIME_BY_EXTENSION: Record<string, AllowedMimeType> = {
+  doc: 'application/msword',
+  xls: 'application/vnd.ms-excel',
+  ppt: 'application/vnd.ms-powerpoint',
+}
+
+function normalizeMimeType(raw: string | null | undefined): string {
+  return raw?.split(';')[0]?.trim().toLowerCase() ?? ''
+}
+
+function resolveLegacyOfficeMimeByFilename(
+  filename: string | null | undefined,
+): AllowedMimeType | null {
+  if (!filename) {
+    return null
+  }
+
+  const normalized = filename.trim().toLowerCase()
+  const dot = normalized.lastIndexOf('.')
+  if (dot === -1) {
+    return null
+  }
+
+  const extension = normalized.slice(dot + 1)
+  return LEGACY_OFFICE_MIME_BY_EXTENSION[extension] ?? null
+}
+
+function resolveLegacyOfficeMimeFromDeclaredType(
+  raw: string | null | undefined,
+): AllowedMimeType | null {
+  const mime = normalizeMimeType(raw)
+  if (mime === 'application/msword') return 'application/msword'
+  if (mime === 'application/vnd.ms-excel') return 'application/vnd.ms-excel'
+  if (mime === 'application/vnd.ms-powerpoint') return 'application/vnd.ms-powerpoint'
+  return null
+}
+
 function readTextPart(part: MultiPartData | undefined) {
   return part?.data.toString('utf8').trim() ?? ''
 }
@@ -56,17 +93,34 @@ export async function parseUploadMultipartRequest(
   } satisfies ParsedUploadRequest
 }
 
-export async function detectAllowedMimeType(buffer: Buffer): Promise<AllowedMimeType> {
+export async function detectAllowedMimeType(
+  buffer: Buffer,
+  context?: { filename?: string | null; declaredMimeType?: string | null },
+): Promise<AllowedMimeType> {
   const detected = await fileTypeFromBuffer(buffer)
+  const detectedMime = normalizeMimeType(detected?.mime)
 
-  if (!detected || !ALLOWED_MIME_TYPES.includes(detected.mime as AllowedMimeType)) {
-    throw createBadRequestError(
-      'Tipo de archivo no permitido. Aceptamos PDF, imágenes (JPG/PNG) y Office estructurado (p. ej. .docx, .xlsx, .pptx, ODF). Los formatos antiguos .doc/.xls binarios no están soportados.',
-      detected ? { detectedMimeType: detected.mime } : undefined,
-    )
+  if (detectedMime && ALLOWED_MIME_TYPES.includes(detectedMime as AllowedMimeType)) {
+    return detectedMime as AllowedMimeType
   }
 
-  return detected.mime as AllowedMimeType
+  const canFallbackToLegacyOffice = !detectedMime || detectedMime === 'application/x-cfb'
+  if (canFallbackToLegacyOffice) {
+    const byFilename = resolveLegacyOfficeMimeByFilename(context?.filename)
+    if (byFilename) {
+      return byFilename
+    }
+
+    const byDeclaredType = resolveLegacyOfficeMimeFromDeclaredType(context?.declaredMimeType)
+    if (byDeclaredType) {
+      return byDeclaredType
+    }
+  }
+
+  throw createBadRequestError(
+    'Tipo de archivo no permitido. Aceptamos PDF, imágenes (JPG/PNG), Office moderno (.docx, .xlsx, .pptx, ODF) y Office binario heredado (.doc, .xls, .ppt).',
+    detected ? { detectedMimeType: detected.mime } : undefined,
+  )
 }
 
 export function validateUploadedBinary(mimeType: AllowedMimeType, size: number) {
