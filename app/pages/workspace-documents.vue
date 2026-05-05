@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import type { ApiSuccessResponse, ProductType } from '~~/app/types'
 import { isDuplicateRepositoryUploadError } from '~~/app/types'
-import {
-  type WorkspaceRouteFocusKey,
-  isWorkspaceRouteFocusKey,
-} from '~~/app/types/workspace-route-focus'
+
 import DocumentPreviewWithHighlights from '~~/app/components/dashboard/DocumentPreviewWithHighlights.vue'
 import { WORKSPACE_STAGE_COPY } from '~~/app/config/workspace-stage-copy'
 import { WORKSPACE_MAX_VISIBLE_ANALYSIS_HIGHLIGHTS } from '~~/app/config/workspace-analysis-ui'
@@ -24,7 +21,7 @@ import {
 useSeoMeta({
   title: 'Documentos de trabajo',
   description:
-    'Sube un PDF, una imagen o un documento Office (.docx, .xlsx, .pptx, ODF…), revisa la ficha y confirma tu producción académica.',
+    'Sube un PDF, una imagen o un documento Office (.doc, .xls, .ppt, .docx, .xlsx, .pptx, ODF…), revisa la ficha y confirma tu producción académica.',
 })
 
 const documentsStore = useDocumentsStore()
@@ -42,7 +39,6 @@ const showExpandedPreviewModal = ref(false)
 const hydratingWorkspace = ref(false)
 const savingSnapshot = ref(false)
 const lastShownProcessingError = ref<string | null>(null)
-const activeHighlightKey = ref<string | null>(null)
 
 const productTypeOptions = WORKSPACE_PRODUCT_TYPE_OPTIONS
 
@@ -380,7 +376,6 @@ const hasActiveHighlights = computed(() =>
 async function clearLocalDraft() {
   if (currentStage.value === 'confirmed') {
     resetWorkspaceVisualState()
-    activeHighlightKey.value = null
     documentsStore.clearWorkspaceDraft()
 
     if (route.query.productId) {
@@ -394,7 +389,6 @@ async function clearLocalDraft() {
     try {
       await documentsStore.cancelDraft()
       resetWorkspaceVisualState()
-      activeHighlightKey.value = null
 
       toast.add({
         title: 'Archivo quitado',
@@ -418,64 +412,7 @@ async function clearLocalDraft() {
   }
 
   resetWorkspaceVisualState()
-  activeHighlightKey.value = null
   documentsStore.clearWorkspaceDraft()
-}
-
-function setActiveHighlight(key: string | null) {
-  activeHighlightKey.value = key
-}
-
-function focusFieldFromHighlight(key: string) {
-  const fieldNameByKey: Record<string, string> = {
-    title: 'title',
-    authors: 'authors',
-    year: 'year',
-    institution: 'institution',
-    doi: 'doi',
-    keywords: 'keywords',
-    repositoryUrl: 'repositoryUrl',
-    softwareRepositoryUrl: 'softwareRepositoryUrl',
-  }
-
-  const fieldName = fieldNameByKey[key]
-  if (!fieldName || !import.meta.client) {
-    return
-  }
-
-  setActiveHighlight(key)
-  const target = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-    `[name="${fieldName}"]`,
-  )
-  target?.focus()
-}
-
-function resolveRouteFocusKey(rawValue: unknown): WorkspaceRouteFocusKey | null {
-  if (typeof rawValue !== 'string') {
-    return null
-  }
-
-  const normalized = rawValue.trim()
-  return isWorkspaceRouteFocusKey(normalized) ? normalized : null
-}
-
-async function applyRouteFocusIfNeeded() {
-  if (!import.meta.client) {
-    return
-  }
-
-  const focusKey = resolveRouteFocusKey(route.query.focus)
-
-  if (!focusKey) {
-    return
-  }
-
-  if (!['review', 'ready', 'confirmed'].includes(currentStage.value)) {
-    return
-  }
-
-  await nextTick()
-  requestAnimationFrame(() => focusFieldFromHighlight(focusKey))
 }
 
 function openExpandedPreview() {
@@ -537,8 +474,6 @@ async function loadPersistedDraft() {
           ? 'Aquí tienes el documento que pediste ver.'
           : 'Recuperamos tu borrador para que sigas donde lo dejaste.',
       )
-
-      await applyRouteFocusIfNeeded()
     }
   } finally {
     hydratingWorkspace.value = false
@@ -720,7 +655,6 @@ watch(
       hydratingWorkspace.value = true
       try {
         await documentsStore.loadDraftProduct(productId)
-        await applyRouteFocusIfNeeded()
       } finally {
         hydratingWorkspace.value = false
       }
@@ -732,23 +666,8 @@ watch(
 )
 
 watch(
-  () => route.query.focus,
-  async () => {
-    if (!isWorkspaceRouteActive.value) {
-      return
-    }
-
-    await applyRouteFocusIfNeeded()
-  },
-)
-
-watch(
   currentStage,
   (stage, prev) => {
-    if (!['review', 'ready', 'confirmed'].includes(stage)) {
-      activeHighlightKey.value = null
-    }
-
     if (import.meta.client && stage === 'review' && prev === 'analyzing') {
       if (reviewLiveClearTimeout != null) {
         clearTimeout(reviewLiveClearTimeout)
@@ -999,7 +918,7 @@ onBeforeUnmount(() => {
               :preview-url="currentPreviewUrl"
               :mime-type="currentMimeType"
               :highlight-groups="highlightGroups"
-              :active-highlight-key="activeHighlightKey"
+              :active-highlight-key="null"
               :has-active-highlights="hasActiveHighlights"
               :is-image-draft="isImageDraft"
               :metadata="metadata"
@@ -1016,8 +935,6 @@ onBeforeUnmount(() => {
               :saving-snapshot="savingSnapshot"
               :saving-draft="documentsStore.savingDraft"
               @preview-expand="openExpandedPreview"
-              @highlight-click="focusFieldFromHighlight"
-              @field-focus="setActiveHighlight"
               @save-draft-snapshot="saveDraftSnapshot"
               @save-workspace-result="saveWorkspaceResult"
             />
@@ -1125,10 +1042,7 @@ onBeforeUnmount(() => {
             :preview-url="currentPreviewUrl"
             :mime-type="currentMimeType"
             :groups="['review', 'ready', 'confirmed'].includes(currentStage) ? highlightGroups : []"
-            :active-key="
-              ['review', 'ready', 'confirmed'].includes(currentStage) ? activeHighlightKey : null
-            "
-            @highlight-click="focusFieldFromHighlight"
+            :active-key="null"
           />
         </div>
       </template>
