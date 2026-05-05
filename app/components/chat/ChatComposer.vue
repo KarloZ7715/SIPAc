@@ -40,7 +40,9 @@ const quote = defineModel<string>('quote', { default: '' })
 
 const chatStore = useChatStore()
 
-type ModelSelectEntry = { type: 'label'; label: string } | { label: string; value: string }
+type ModelSelectEntry =
+  | { type: 'label'; label: string }
+  | { label: string; value: string; deprecationBadgeText?: string }
 
 function compareProviderSections(a: ChatModelProvider, b: ChatModelProvider) {
   const ia = CHAT_MODEL_PROVIDER_SECTION_ORDER.indexOf(a)
@@ -82,6 +84,7 @@ const modelItems = computed((): ModelSelectEntry[][] => {
       ...options.map((o) => ({
         label: o.label,
         value: `${o.provider}::${o.modelId}`,
+        deprecationBadgeText: o.deprecationBadgeText,
       })),
     ])
   }
@@ -215,7 +218,21 @@ function onKeydown(e: KeyboardEvent) {
             :loading="chatStore.providersLoading"
             class="min-w-0 flex-1"
             aria-label="Modo de respuesta (opcional)"
-          />
+          >
+            <template #item-label="{ item }">
+              <span class="inline-flex min-w-0 items-center gap-1.5">
+                <span class="truncate">{{ item.label }}</span>
+                <span
+                  v-if="'deprecationBadgeText' in item && item.deprecationBadgeText"
+                  class="inline-flex size-4 shrink-0 items-center justify-center rounded-full border border-warning/35 bg-warning/10 text-warning"
+                  :title="item.deprecationBadgeText"
+                  :aria-label="item.deprecationBadgeText"
+                >
+                  <UIcon name="i-lucide-clock-3" class="size-2.5" />
+                </span>
+              </span>
+            </template>
+          </USelect>
         </div>
         <span v-else class="hidden min-w-0 sm:block sm:flex-1" />
         <span id="chat-model-hint-composer" class="sr-only">

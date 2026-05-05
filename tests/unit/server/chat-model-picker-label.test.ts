@@ -10,12 +10,11 @@ describe('publicChatModelPickerLabel', () => {
     expect(publicChatModelPickerLabel('cerebras', 'qwen-3-235b-a22b-instruct-2507')).toBe(
       'Qwen 3 235B Instruct',
     )
-    expect(publicChatModelPickerLabel('nvidia', 'moonshotai/kimi-k2-thinking')).toBe(
-      'Kimi K2 Thinking',
+    expect(publicChatModelPickerLabel('nvidia', 'z-ai/glm-5.1')).toBe('GLM 5.1')
+    expect(publicChatModelPickerLabel('nvidia', 'deepseek-ai/deepseek-v4-pro')).toBe(
+      'DeepSeek V4 Pro',
     )
-    expect(publicChatModelPickerLabel('nvidia', 'moonshotai/kimi-k2-instruct-0905')).toBe(
-      'Kimi K2 Instruct',
-    )
+    expect(publicChatModelPickerLabel('nvidia', 'moonshotai/kimi-k2.6')).toBe('Kimi K2.6')
     expect(publicChatModelPickerLabel('openrouter', 'nvidia/nemotron-3-super-120b-a12b:free')).toBe(
       'Nemotron 3 Super 120B (preview)',
     )

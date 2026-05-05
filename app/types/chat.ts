@@ -154,6 +154,8 @@ export interface ChatModelOptionPublic {
   enabledForAuto: boolean
   enabledForManual: boolean
   disabledReason?: string
+  deprecationDateIso?: string
+  deprecationBadgeText?: string
 }
 
 export interface ChatModelSelection {

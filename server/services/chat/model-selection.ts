@@ -5,8 +5,10 @@ import {
   type ChatModelSelection,
 } from '~~/app/types'
 import {
+  CEREBRAS_QWEN_DEPRECATION_DATE_ISO,
   getChatModelCandidates,
   getExperimentalChatModelCandidates,
+  isCerebrasQwenDeprecated,
   type StructuredModelCandidate,
 } from '~~/server/services/llm/provider'
 import { createBadRequestError } from '~~/server/utils/errors'
@@ -18,13 +20,12 @@ const CHAT_MODEL_PICKER_LABELS: Record<string, string> = {
   'cerebras::qwen-3-235b-a22b-instruct-2507': 'Qwen 3 235B Instruct',
   'gemini::gemini-3.1-flash-lite-preview': 'Gemini 3.1 Flash Lite (preview)',
   'gemini::gemma-4-31b-it': 'Gemma 4 31B (preview)',
-  'nvidia::z-ai/glm4.7': 'GLM 4.7',
-  'nvidia::deepseek-ai/deepseek-v3.1-terminus': 'DeepSeek V3.1 Terminus',
-  'nvidia::mistralai/mistral-large-3-675b-instruct-2512': 'Mistral Large 3',
-  'nvidia::deepseek-ai/deepseek-v3.2': 'DeepSeek V3.2',
-  'nvidia::moonshotai/kimi-k2-thinking': 'Kimi K2 Thinking',
-  'nvidia::moonshotai/kimi-k2-instruct-0905': 'Kimi K2 Instruct',
+  'nvidia::z-ai/glm-5.1': 'GLM 5.1',
+  'nvidia::deepseek-ai/deepseek-v4-pro': 'DeepSeek V4 Pro',
+  'nvidia::moonshotai/kimi-k2.6': 'Kimi K2.6',
   'nvidia::minimaxai/minimax-m2.7': 'MiniMax M2.7',
+  'nvidia::mistralai/mistral-large-3-675b-instruct-2512': 'Mistral Large 3',
+  'nvidia::z-ai/glm4.7': 'GLM 4.7',
   'openrouter::minimax/minimax-m2.5:free': 'MiniMax M2.5 (gratis)',
   'openrouter::openai/gpt-oss-120b:free': 'GPT-OSS 120B (gratis)',
   'openrouter::nvidia/nemotron-3-super-120b-a12b:free': 'Nemotron 3 Super 120B (preview)',
@@ -59,10 +60,11 @@ function inferReasoningTier(
     candidate.modelId.includes('120b') ||
     candidate.modelId.includes('235b') ||
     candidate.modelId.includes('675b') ||
-    candidate.modelId.includes('k2-thinking') ||
+    candidate.modelId.includes('k2.6') ||
     candidate.modelId.includes('m2.7') ||
     candidate.modelId.includes('glm4.7') ||
-    candidate.modelId.includes('deepseek-v3.2')
+    candidate.modelId.includes('glm-5.1') ||
+    candidate.modelId.includes('deepseek-v4')
   ) {
     return 'high'
   }
@@ -72,6 +74,17 @@ function inferReasoningTier(
   }
 
   return 'medium'
+}
+
+function getDeprecationBadgeText(candidate: StructuredModelCandidate): string | undefined {
+  const isCerebrasQwen =
+    candidate.name === 'cerebras' && candidate.modelId === 'qwen-3-235b-a22b-instruct-2507'
+
+  if (!isCerebrasQwen || isCerebrasQwenDeprecated()) {
+    return undefined
+  }
+
+  return 'Se depreca el 27 may 2026'
 }
 
 function toOption(
@@ -92,6 +105,10 @@ function toOption(
     enabledForAuto,
     enabledForManual,
     disabledReason,
+    deprecationDateIso: getDeprecationBadgeText(candidate)
+      ? CEREBRAS_QWEN_DEPRECATION_DATE_ISO
+      : undefined,
+    deprecationBadgeText: getDeprecationBadgeText(candidate),
   }
 }
 

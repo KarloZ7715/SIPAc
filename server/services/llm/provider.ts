@@ -8,6 +8,8 @@ export type StructuredLlmProvider = 'gemini' | 'cerebras' | 'groq' | 'openrouter
 const GROQ_GPT_OSS_120B_MODEL_ID = 'openai/gpt-oss-120b'
 const GROQ_GPT_OSS_20B_MODEL_ID = 'openai/gpt-oss-20b'
 const CEREBRAS_QWEN_MODEL_ID = 'qwen-3-235b-a22b-instruct-2507'
+export const CEREBRAS_QWEN_DEPRECATION_DATE_ISO = '2026-05-27T00:00:00.000Z'
+const CEREBRAS_QWEN_DEPRECATION_AT_MS = Date.parse(CEREBRAS_QWEN_DEPRECATION_DATE_ISO)
 const GEMINI_CHAT_MODEL_ID = 'gemini-3.1-flash-lite-preview'
 const GEMINI_CHAT_GEMMA_PREVIEW_MODEL_ID = 'gemma-4-31b-it'
 
@@ -48,13 +50,12 @@ const CHAT_OPENROUTER_MODEL_IDS_ORDERED = [
 ] as const
 
 const CHAT_NVIDIA_MODEL_IDS_ORDERED = [
-  'moonshotai/kimi-k2-thinking',
-  'moonshotai/kimi-k2-instruct-0905',
+  'z-ai/glm-5.1',
+  'deepseek-ai/deepseek-v4-pro',
+  'moonshotai/kimi-k2.6',
   'minimaxai/minimax-m2.7',
   'mistralai/mistral-large-3-675b-instruct-2512',
   'z-ai/glm4.7',
-  'deepseek-ai/deepseek-v3.1-terminus',
-  'deepseek-ai/deepseek-v3.2',
 ] as const
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
@@ -119,6 +120,10 @@ function pushCandidate(
   }
   seen.add(key)
   list.push(candidate)
+}
+
+export function isCerebrasQwenDeprecated(nowMs = Date.now()): boolean {
+  return nowMs >= CEREBRAS_QWEN_DEPRECATION_AT_MS
 }
 
 /**
@@ -274,7 +279,7 @@ export function getChatModelCandidates(): StructuredModelCandidate[] {
     }
   }
 
-  if (cerebras) {
+  if (cerebras && !isCerebrasQwenDeprecated()) {
     pushCandidate(seen, candidates, {
       name: 'cerebras',
       modelId: CEREBRAS_QWEN_MODEL_ID,
@@ -340,7 +345,7 @@ export function getExperimentalChatModelCandidates(): StructuredModelCandidate[]
         })
       : null
 
-  if (cerebras) {
+  if (cerebras && !isCerebrasQwenDeprecated()) {
     pushCandidate(seen, candidates, {
       name: 'cerebras',
       modelId: CEREBRAS_QWEN_MODEL_ID,

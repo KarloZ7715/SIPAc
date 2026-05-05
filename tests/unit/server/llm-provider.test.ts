@@ -1,5 +1,5 @@
 import type { LanguageModel } from 'ai'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockCreateGoogleGenerativeAI, mockCreateOpenAICompatible, mockValidateEnv } = vi.hoisted(
   () => ({
@@ -45,6 +45,8 @@ const baseEnv = {
 describe('LLM provider candidates', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-01T00:00:00.000Z'))
     vi.stubGlobal('useRuntimeConfig', () => ({}))
 
     mockCreateGoogleGenerativeAI.mockReturnValue((modelId: string) => ({
@@ -55,6 +57,10 @@ describe('LLM provider candidates', () => {
     mockCreateOpenAICompatible.mockImplementation(({ name }: { name: string }) => {
       return (modelId: string) => ({ provider: name, modelId })
     })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('NER: cadena Gemini solo Flash por defecto, luego Groq cuando hay GROQ_API_KEY', async () => {
@@ -194,6 +200,45 @@ describe('LLM provider candidates', () => {
     ])
   })
 
+  it('chat: prioriza GLM 5.1 como primer candidato cuando NVIDIA está habilitado', async () => {
+    mockValidateEnv.mockReturnValue({
+      ...baseEnv,
+      nvidiaApiKey: 'nv-key',
+    })
+
+    const { getChatModelCandidates } = await import('../../../server/services/llm/provider')
+
+    const chat = getChatModelCandidates()
+    const nvidiaIds = chat.filter((candidate) => candidate.name === 'nvidia').map((c) => c.modelId)
+
+    expect(nvidiaIds[0]).toBe('z-ai/glm-5.1')
+    expect(chat.some((candidate) => candidate.name === 'cerebras')).toBe(true)
+  })
+
+  it('chat: excluye Qwen de Cerebras al llegar la fecha de deprecación', async () => {
+    vi.setSystemTime(new Date('2026-05-27T00:00:00.000Z'))
+    mockValidateEnv.mockReturnValue(baseEnv)
+
+    const { getChatModelCandidates, getExperimentalChatModelCandidates } =
+      await import('../../../server/services/llm/provider')
+
+    const defaultChain = getChatModelCandidates()
+    const manual = getExperimentalChatModelCandidates()
+
+    expect(
+      defaultChain.some(
+        (candidate) =>
+          candidate.name === 'cerebras' && candidate.modelId === 'qwen-3-235b-a22b-instruct-2507',
+      ),
+    ).toBe(false)
+    expect(
+      manual.some(
+        (candidate) =>
+          candidate.name === 'cerebras' && candidate.modelId === 'qwen-3-235b-a22b-instruct-2507',
+      ),
+    ).toBe(false)
+  })
+
   it('chat experimental: expone proveedores adicionales cuando hay credenciales y omite Groq', async () => {
     mockValidateEnv.mockReturnValue({
       ...baseEnv,
@@ -225,16 +270,44 @@ describe('LLM provider candidates', () => {
     ).toBe(true)
     expect(
       experimental.some(
-        (candidate) =>
-          candidate.name === 'nvidia' && candidate.modelId === 'moonshotai/kimi-k2-thinking',
+        (candidate) => candidate.name === 'nvidia' && candidate.modelId === 'z-ai/glm-5.1',
       ),
     ).toBe(true)
     expect(
       experimental.some(
         (candidate) =>
-          candidate.name === 'nvidia' && candidate.modelId === 'minimaxai/minimax-m2.7',
+          candidate.name === 'nvidia' && candidate.modelId === 'deepseek-ai/deepseek-v4-pro',
       ),
     ).toBe(true)
+    expect(
+      experimental.some(
+        (candidate) => candidate.name === 'nvidia' && candidate.modelId === 'moonshotai/kimi-k2.6',
+      ),
+    ).toBe(true)
+    expect(
+      experimental.some(
+        (candidate) =>
+          candidate.name === 'nvidia' && candidate.modelId === 'deepseek-ai/deepseek-v3.1-terminus',
+      ),
+    ).toBe(false)
+    expect(
+      experimental.some(
+        (candidate) =>
+          candidate.name === 'nvidia' && candidate.modelId === 'deepseek-ai/deepseek-v3.2',
+      ),
+    ).toBe(false)
+    expect(
+      experimental.some(
+        (candidate) =>
+          candidate.name === 'nvidia' && candidate.modelId === 'moonshotai/kimi-k2-thinking',
+      ),
+    ).toBe(false)
+    expect(
+      experimental.some(
+        (candidate) =>
+          candidate.name === 'nvidia' && candidate.modelId === 'moonshotai/kimi-k2-instruct-0905',
+      ),
+    ).toBe(false)
     expect(
       experimental.some(
         (candidate) =>
