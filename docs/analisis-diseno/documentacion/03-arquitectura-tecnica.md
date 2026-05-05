@@ -304,12 +304,13 @@ El siguiente diagrama describe el pipeline completo desde la carga del archivo h
 
 ```mermaid
 flowchart TD
-    A(["👤 Usuario carga archivo (PDF / JPG / PNG)"]) --> B["/api/upload (Nuxt API Route)"]
+    A(["👤 Usuario carga archivo (PDF / JPG / PNG / Office)"]) --> B["/api/upload (Nuxt API Route)"]
     B --> C["Guardar archivo en MongoDB GridFS Crear doc en uploaded_files estado: 'pendiente'"]
     C --> D{{"¿Tipo de archivo?"}}
 
     D -- "PDF" --> E{{"¿PDF nativo (tiene texto incrustado)?"}}
     D -- "JPG / PNG" --> H
+    D -- "Office" --> O
 
     E -- "Sí" --> F["pdfjs-dist-Node.js — sin API externa Extrae texto plano"]
     E -- "No (escaneado)" --> G{{"OCR_PROVIDER en .env"}}
@@ -320,6 +321,7 @@ flowchart TD
     F --> J["Texto plano disponible"]
     H --> J
     I --> J
+    O["Office native extractor (.doc/.xls/.ppt, .docx/.xlsx/.pptx, ODF) → texto"] --> J
 
     J --> K["Cadena NER de candidatos\ngemini family -> nvidia -> openrouter -> groq"]
     K --> L["Objeto TypeScript validado { titulo, autores, doi, indexacion, nombreEvento, fecha, ... }"]

@@ -61,6 +61,8 @@
 | GET    | `/api/upload/:id/file`   | Autenticado (propio) | —                                                                                                         | `Archivo binario (stream autenticado para preview/descarga)`                                                                                                                              | 401, 403, 404    | RF-028, RF-101  | Implementado |
 | DELETE | `/api/upload/:id`        | Autenticado (propio) | —                                                                                                         | `{ message }` — eliminación lógica del archivo y de **todos** los `academic_products` asociados a ese `sourceFile`                                                                        | 401, 403, 404    | RF-029          | Implementado |
 
+> **Formatos admitidos en `POST /api/upload`:** PDF, imágenes (JPG/JPEG/PNG), Office moderno (`.docx/.xlsx/.pptx`, ODF) y Office binario heredado (`.doc/.xls/.ppt`).
+
 ---
 
 ## 4. M5A — Productos Académicos (`/api/products/`)

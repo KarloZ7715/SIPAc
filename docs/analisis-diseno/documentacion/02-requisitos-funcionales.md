@@ -45,7 +45,7 @@ El sistema está orientado a la **Maestría en Innovación Educativa con Tecnolo
 | **NLP**                  | Natural Language Processing — procesamiento de lenguaje natural                                                                                                                                         |
 | **NER**                  | Named Entity Recognition — identificación de entidades en texto (personas, lugares, fechas)                                                                                                             |
 | **Producto Académico**   | Cualquier output intelectual verificable: artículo, ponencia, tesis, certificado, etc.                                                                                                                  |
-| **Documento Probatorio** | Archivo (PDF/imagen) que certifica la existencia de un producto académico                                                                                                                               |
+| **Documento Probatorio** | Archivo (PDF, imagen u Office) que certifica la existencia de un producto académico                                                                                                                     |
 | **Pipeline**             | Secuencia automatizada de pasos de procesamiento: carga → OCR → NER → almacenamiento                                                                                                                    |
 | **JWT**                  | JSON Web Token — mecanismo de autenticación sin estado                                                                                                                                                  |
 | **Rol**                  | Nivel de acceso y permisos asignado a un usuario del sistema                                                                                                                                            |
@@ -183,7 +183,7 @@ mindmap
 
 | ID     | Descripción                                                                                                                                                                  | Prioridad | Estado     |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
-| RF-020 | El sistema debe permitir a usuarios con rol `docente` cargar archivos en formato PDF                                                                                         | Alta      | Completado |
+| RF-020 | El sistema debe permitir a usuarios con rol `docente` cargar archivos en formato PDF y Office (moderno: `.docx/.xlsx/.pptx`, ODF; heredado: `.doc/.xls/.ppt`)                | Alta      | Completado |
 | RF-021 | El sistema debe permitir a usuarios con rol `docente` cargar archivos en formato JPG, JPEG y PNG                                                                             | Alta      | Completado |
 | RF-022 | El sistema debe validar el tipo MIME real del archivo cargado (no solo la extensión) antes de aceptarlo                                                                      | Alta      | Completado |
 | RF-023 | El sistema debe rechazar archivos cuyo tamaño supere los 20 MB, mostrando un mensaje de error descriptivo                                                                    | Alta      | Completado |
@@ -301,15 +301,15 @@ mindmap
 
 > Transversal a todos los módulos · Base: Semana 2 (sanitización y log inicial junto a M1) · Continuación completa: Semana 9 (hardening global, auditoría integral y rate limiting en todos los endpoints)
 
-| ID     | Descripción                                                                                                                      | Prioridad | Estado     |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
-| RF-077 | El sistema debe sanitizar todas las entradas de usuario para prevenir ataques de tipo XSS (Cross-Site Scripting)                 | Alta      | Completado |
-| RF-078 | El sistema debe sanitizar todas las entradas de usuario para prevenir ataques de inyección de código                             | Alta      | Completado |
-| RF-079 | El sistema debe registrar en un log de auditoría cada operación crítica: creación, edición y eliminación de productos académicos | Alta      | Completado |
-| RF-080 | El log de auditoría debe registrar para cada evento: usuario que lo ejecutó, tipo de acción, timestamp y dirección IP            | Alta      | Completado |
-| RF-081 | El log de auditoría debe ser de solo lectura para todos los usuarios; solo el `admin` puede consultarlo                          | Alta      | Completado |
-| RF-082 | El sistema debe implementar rate limiting en los endpoints de autenticación: máximo 10 peticiones por minuto por IP              | Alta      | Completado |
-| RF-083 | El sistema debe rechazar cualquier archivo cuya extensión real no corresponda a los formatos permitidos (PDF, JPG, JPEG, PNG)    | Alta      | Completado |
+| ID     | Descripción                                                                                                                                                               | Prioridad | Estado     |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
+| RF-077 | El sistema debe sanitizar todas las entradas de usuario para prevenir ataques de tipo XSS (Cross-Site Scripting)                                                          | Alta      | Completado |
+| RF-078 | El sistema debe sanitizar todas las entradas de usuario para prevenir ataques de inyección de código                                                                      | Alta      | Completado |
+| RF-079 | El sistema debe registrar en un log de auditoría cada operación crítica: creación, edición y eliminación de productos académicos                                          | Alta      | Completado |
+| RF-080 | El log de auditoría debe registrar para cada evento: usuario que lo ejecutó, tipo de acción, timestamp y dirección IP                                                     | Alta      | Completado |
+| RF-081 | El log de auditoría debe ser de solo lectura para todos los usuarios; solo el `admin` puede consultarlo                                                                   | Alta      | Completado |
+| RF-082 | El sistema debe implementar rate limiting en los endpoints de autenticación: máximo 10 peticiones por minuto por IP                                                       | Alta      | Completado |
+| RF-083 | El sistema debe rechazar cualquier archivo cuya extensión real no corresponda a los formatos permitidos (PDF, JPG, JPEG, PNG, `.doc/.xls/.ppt`, `.docx/.xlsx/.pptx`, ODF) | Alta      | Completado |
 
 > **Nota RF-082 (actualizado al 23/03/2026):** La protección actual combina el rate limiting global de `nuxt-security` (150 tokens por 5 minutos) con un rate limiting específico en `server/api/auth/*` de **10 solicitudes por minuto por IP**, incluyendo encabezados `X-RateLimit-Limit`, `X-RateLimit-Remaining` y `Retry-After` cuando aplica.
 

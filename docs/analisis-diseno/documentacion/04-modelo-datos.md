@@ -225,7 +225,19 @@ export interface IUploadedFile extends Document {
     | 'technical_report'
     | 'software'
     | 'patent'
-  mimeType: 'application/pdf' | 'image/jpeg' | 'image/png'
+  mimeType:
+    | 'application/pdf'
+    | 'image/jpeg'
+    | 'image/png'
+    | 'application/msword'
+    | 'application/vnd.ms-excel'
+    | 'application/vnd.ms-powerpoint'
+    | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    | 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    | 'application/vnd.oasis.opendocument.text'
+    | 'application/vnd.oasis.opendocument.spreadsheet'
+    | 'application/vnd.oasis.opendocument.presentation'
   fileSizeBytes: number
   processingStatus: 'pending' | 'processing' | 'completed' | 'error'
   processingError?: string
@@ -299,7 +311,20 @@ const uploadedFileSchema = new Schema<IUploadedFile>(
       type: String,
       required: true,
       enum: {
-        values: ['application/pdf', 'image/jpeg', 'image/png'],
+        values: [
+          'application/pdf',
+          'image/jpeg',
+          'image/png',
+          'application/msword',
+          'application/vnd.ms-excel',
+          'application/vnd.ms-powerpoint',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'application/vnd.oasis.opendocument.text',
+          'application/vnd.oasis.opendocument.spreadsheet',
+          'application/vnd.oasis.opendocument.presentation',
+        ],
         message: 'Tipo MIME {VALUE} no permitido',
       },
     },
