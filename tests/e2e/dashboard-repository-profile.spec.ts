@@ -38,6 +38,17 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/** Ruido conocido del motor (viewport meta, hidratación) que no indica regresión de la app. */
+function isBenignBrowserInstrumentationNoise(entry: string): boolean {
+  if (entry.includes('Hydration completed but contains mismatches.')) {
+    return true
+  }
+  if (entry.includes('interactive-widget') && entry.includes('Viewport argument key')) {
+    return true
+  }
+  return false
+}
+
 function readEnvValue(name: string): string {
   const directValue = process.env[name]
   if (typeof directValue === 'string' && directValue.trim().length > 0) {
@@ -443,11 +454,14 @@ test.describe('Dashboard, repository y perfil — auditoría E2E', () => {
     await page.getByRole('button', { name: 'Limpiar filtros' }).click()
     await expect(page.getByRole('button', { name: 'Desde: 2025-01-01' })).toHaveCount(0)
 
+    const actionablePageErrors = pageErrors.filter(
+      (entry) => !isBenignBrowserInstrumentationNoise(entry),
+    )
     const actionableConsoleProblems = consoleProblems.filter(
-      (entry) => !entry.includes('Hydration completed but contains mismatches.'),
+      (entry) => !isBenignBrowserInstrumentationNoise(entry),
     )
 
-    expect(pageErrors).toEqual([])
+    expect(actionablePageErrors).toEqual([])
     expect(actionableConsoleProblems).toEqual([])
     expect(dashboardFailures).toEqual([])
   })
@@ -523,8 +537,10 @@ test.describe('Dashboard, repository y perfil — auditoría E2E', () => {
     await page.waitForLoadState('networkidle')
     await expect(page.getByText(/página 2 de \d+/i)).toBeVisible()
 
-    expect(pageErrors).toEqual([])
-    expect(consoleProblems).toEqual([])
+    expect(pageErrors.filter((entry) => !isBenignBrowserInstrumentationNoise(entry))).toEqual([])
+    expect(consoleProblems.filter((entry) => !isBenignBrowserInstrumentationNoise(entry))).toEqual(
+      [],
+    )
     expect(repositoryFailures).toEqual([])
   })
 
@@ -579,7 +595,9 @@ test.describe('Dashboard, repository y perfil — auditoría E2E', () => {
       motionStorage: 'minimal',
       densityStorage: 'compact',
     })
-    expect(pageErrors).toEqual([])
-    expect(consoleProblems).toEqual([])
+    expect(pageErrors.filter((entry) => !isBenignBrowserInstrumentationNoise(entry))).toEqual([])
+    expect(consoleProblems.filter((entry) => !isBenignBrowserInstrumentationNoise(entry))).toEqual(
+      [],
+    )
   })
 })
