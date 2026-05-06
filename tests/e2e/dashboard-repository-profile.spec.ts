@@ -454,7 +454,9 @@ test.describe('Dashboard, repository y perfil — auditoría E2E', () => {
     await page.getByRole('button', { name: 'Limpiar filtros' }).click()
     await expect(page.getByRole('button', { name: 'Desde: 2025-01-01' })).toHaveCount(0)
 
-    const actionablePageErrors = pageErrors.filter((entry) => !isBenignBrowserInstrumentationNoise(entry))
+    const actionablePageErrors = pageErrors.filter(
+      (entry) => !isBenignBrowserInstrumentationNoise(entry),
+    )
     const actionableConsoleProblems = consoleProblems.filter(
       (entry) => !isBenignBrowserInstrumentationNoise(entry),
     )
@@ -536,7 +538,9 @@ test.describe('Dashboard, repository y perfil — auditoría E2E', () => {
     await expect(page.getByText(/página 2 de \d+/i)).toBeVisible()
 
     expect(pageErrors.filter((entry) => !isBenignBrowserInstrumentationNoise(entry))).toEqual([])
-    expect(consoleProblems.filter((entry) => !isBenignBrowserInstrumentationNoise(entry))).toEqual([])
+    expect(consoleProblems.filter((entry) => !isBenignBrowserInstrumentationNoise(entry))).toEqual(
+      [],
+    )
     expect(repositoryFailures).toEqual([])
   })
 
@@ -592,6 +596,8 @@ test.describe('Dashboard, repository y perfil — auditoría E2E', () => {
       densityStorage: 'compact',
     })
     expect(pageErrors.filter((entry) => !isBenignBrowserInstrumentationNoise(entry))).toEqual([])
-    expect(consoleProblems.filter((entry) => !isBenignBrowserInstrumentationNoise(entry))).toEqual([])
+    expect(consoleProblems.filter((entry) => !isBenignBrowserInstrumentationNoise(entry))).toEqual(
+      [],
+    )
   })
 })
