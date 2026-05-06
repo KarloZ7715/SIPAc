@@ -24,7 +24,6 @@ mongosh --eval 'db.getSiblingDB("sipac").users.updateOne({email:"admin@sipac.loc
 ### Gotchas
 
 - `pnpm install` may show a warning about ignored build scripts (`@sentry/cli`, `cloudflared`, `unrs-resolver`, `vue-demi`). This does **not** break lint or tests — safe to ignore.
-- 4 tests in `tests/unit/server/chat-endpoint.test.ts` fail on `main` (pre-existing); all other tests pass.
 - The `nuxt-security` module is disabled in dev/test (`NODE_ENV !== 'production'`), so CSP headers won't apply locally.
 
 ### Commands reference

@@ -271,7 +271,16 @@ export default defineEventHandler(async (event) => {
 
   const existingConversation = await getUserChatConversation(auth.sub, chatId)
 
-  const messagesForProcessing = sanitizeChatMessages(incomingMessages)
+  const sanitizedIncoming = sanitizeChatMessages(incomingMessages)
+  const sanitizedPersisted = sanitizeChatMessages(
+    (existingConversation?.messages ?? []) as ChatUiMessage[],
+  )
+  const messagesForProcessing =
+    trigger === 'regenerate-message' &&
+    sanitizedIncoming.length === 0 &&
+    sanitizedPersisted.length > 0
+      ? sanitizedPersisted
+      : sanitizedIncoming
 
   if (trigger === 'submit-message' || !trigger) {
     if (!latestIncomingUserMessage) {
