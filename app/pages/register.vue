@@ -81,10 +81,14 @@ async function resend() {
     <div class="hero-warm absolute inset-0 -z-10" />
 
     <div
-      class="mx-auto grid min-h-screen max-w-[75rem] items-stretch px-4 py-6 lg:grid-cols-[28rem_minmax(0,1.05fr)] lg:px-6 lg:py-8"
+      class="mx-auto grid min-h-screen max-w-[75rem] items-stretch px-3 py-4 sm:px-4 sm:py-6 lg:grid-cols-[28rem_minmax(0,1.05fr)] lg:px-6 lg:py-8"
     >
-      <section class="order-2 hidden items-center justify-center lg:order-1 lg:flex">
-        <SipacCard id="register-form" variant="subtle" class="page-stage-primary w-full max-w-md">
+      <section class="flex items-center justify-center py-4 sm:py-6 lg:py-0">
+        <SipacCard
+          id="register-form"
+          variant="subtle"
+          class="page-stage-primary w-full max-w-[calc(100vw-2rem)] sm:max-w-md"
+        >
           <SipacSectionHeader
             v-if="step === 'form'"
             eyebrow="Crear cuenta institucional"
@@ -240,7 +244,7 @@ async function resend() {
         </SipacCard>
       </section>
 
-      <section class="order-1 flex flex-col justify-between px-0 py-8 lg:order-2 lg:px-8">
+      <section class="hidden lg:flex lg:min-h-full lg:flex-col lg:justify-between lg:px-8 lg:py-8">
         <div class="page-stage-hero space-y-6">
           <div class="section-chip">Onboarding académico</div>
           <div class="max-w-2xl space-y-4">
