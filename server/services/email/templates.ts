@@ -37,7 +37,7 @@ export function changeEmailTemplate(input: { fullName: string; token: string; ne
   subject: string
   html: string
 } {
-  const link = `${appUrl()}/profile/confirm-email?token=${encodeURIComponent(input.token)}`
+  const link = `${appUrl()}/confirm-email-change?token=${encodeURIComponent(input.token)}`
   const html = baseLayout(`
     <h1 style="font-size:22px;margin:0 0 16px;">Confirma tu nuevo correo</h1>
     <p style="font-size:15px;line-height:1.6;">Hola ${input.fullName}, solicitaste cambiar tu correo en SIPAc a <strong>${input.newEmail}</strong>.</p>
