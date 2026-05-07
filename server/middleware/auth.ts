@@ -22,7 +22,10 @@ const PUBLIC_ROUTES = [
   '/api/auth/2fa/verify',
   '/api/auth/google/start',
   '/api/auth/google/callback',
+  /** Post público: token en body + rate limit en handler */
   '/api/profile/confirm-email',
+  /** Bearer CLEANUP_CRON_SECRET en handler; sin JWT de usuario */
+  '/api/system/cleanup-drafts',
 ]
 
 export default defineEventHandler(async (event: H3Event) => {
