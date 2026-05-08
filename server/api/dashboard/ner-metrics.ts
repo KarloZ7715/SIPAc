@@ -2,8 +2,10 @@ import { defineEventHandler } from 'h3'
 import AcademicProductModel from '~~/server/models/AcademicProduct'
 import { PRODUCT_METADATA_LAYOUT } from '~~/app/utils/product-metadata-layout'
 import type { ProductType, IUploadedFile } from '~~/app/types'
+import { requireRole } from '~~/server/utils/authorize'
 
-export default defineEventHandler(async (_event) => {
+export default defineEventHandler(async (event) => {
+  requireRole(event, 'admin')
   const products = await AcademicProductModel.find({ isDeleted: false })
     .populate<{ sourceFile: IUploadedFile }>('sourceFile')
     .lean()

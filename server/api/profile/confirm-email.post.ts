@@ -1,25 +1,27 @@
 import User from '~~/server/models/User'
+import { verifyEmailSchema } from '~~/server/utils/schemas/auth'
+import { enforceAuthRateLimit } from '~~/server/utils/auth-rate-limit'
+import { createAuthenticationError, createValidationError } from '~~/server/utils/errors'
+import { ok } from '~~/server/utils/response'
+import { logAudit } from '~~/server/utils/audit'
 import { revokeAllSessionsForUser, clearSessionCookie } from '~~/server/utils/session'
 
 export default defineEventHandler(async (event) => {
-  const { token } = getQuery(event) as { token?: string }
-  if (!token) {
-    throw createValidationError({
-      issues: [{ path: ['token'], message: 'Token requerido' }],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+  enforceAuthRateLimit(event, 'profile:confirm-email')
+
+  const body = await readBody(event)
+  const parsed = verifyEmailSchema.safeParse(body)
+  if (!parsed.success) {
+    throw createValidationError(parsed.error)
   }
 
   const user = await User.findOne({
-    pendingEmailToken: token,
+    pendingEmailToken: parsed.data.token,
     pendingEmailExpires: { $gt: new Date() },
   }).select('+pendingEmailToken +pendingEmailExpires')
 
   if (!user || !user.pendingEmail) {
-    throw createValidationError({
-      issues: [{ path: ['token'], message: 'Token inválido o expirado' }],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    throw createAuthenticationError('Enlace de confirmación inválido o expirado')
   }
 
   const newEmail = user.pendingEmail

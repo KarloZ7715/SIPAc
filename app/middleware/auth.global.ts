@@ -18,13 +18,16 @@ export default defineNuxtRouteMiddleware(async (to) => {
     authStore.setUser(data.value?.data?.user ?? null)
   }
 
-  const publicRoutes = ['/login', '/register', '/verify-email']
+  const publicRoutes = ['/login', '/register', '/verify-email', '/confirm-email-change']
+
+  /** Rutas de solo invitado: si ya hay sesión, ir al panel (no aplicar a flujos tipo confirm-email-change). */
+  const guestOnlyRoutes = ['/login', '/register', '/verify-email']
 
   if (!auth.isAuthenticated.value && !publicRoutes.includes(to.path)) {
     return navigateTo('/login')
   }
 
-  if (auth.isAuthenticated.value && publicRoutes.includes(to.path)) {
+  if (auth.isAuthenticated.value && guestOnlyRoutes.includes(to.path)) {
     return navigateTo('/')
   }
 })

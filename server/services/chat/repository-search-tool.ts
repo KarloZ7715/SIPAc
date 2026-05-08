@@ -43,6 +43,9 @@ function compactText(values: Array<string | undefined>) {
     .map((value) => value.trim())
 }
 
+/** Evita crecimiento ilimitado del Map en procesos de larga duración. */
+const TOOL_SEARCH_CACHE_MAX_ENTRIES = 200
+
 export function createRepositorySearchToolExecutor() {
   const toolCache = new Map<string, ChatSearchToolOutput>()
 
@@ -60,6 +63,13 @@ export function createRepositorySearchToolExecutor() {
       return {
         ...cached,
         deduplicated: true,
+      }
+    }
+
+    if (toolCache.size >= TOOL_SEARCH_CACHE_MAX_ENTRIES) {
+      const oldestKey = toolCache.keys().next().value
+      if (oldestKey !== undefined) {
+        toolCache.delete(oldestKey)
       }
     }
 

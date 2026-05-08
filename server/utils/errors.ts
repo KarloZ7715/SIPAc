@@ -135,3 +135,16 @@ export function createAccountLockedError(retryAfterMinutes: number) {
     },
   })
 }
+
+export function createServiceUnavailableError(
+  message = 'Servicio temporalmente no disponible. Intenta de nuevo en unos segundos.',
+) {
+  return createError({
+    statusCode: 503,
+    message,
+    data: {
+      success: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message },
+    },
+  })
+}

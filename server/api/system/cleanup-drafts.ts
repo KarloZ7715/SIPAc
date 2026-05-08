@@ -1,9 +1,26 @@
-import { defineEventHandler } from 'h3'
+import { defineEventHandler, getHeader, type H3Event } from 'h3'
 import AcademicProductModel from '~~/server/models/AcademicProduct'
 import UploadedFileModel from '~~/server/models/UploadedFile'
 import { deleteFileFromGridFs } from '~~/server/services/storage/gridfs'
+import { createAuthenticationError } from '~~/server/utils/errors'
 
-export default defineEventHandler(async (_event) => {
+function assertCleanupCronAuthorized(event: H3Event) {
+  const secret = process.env.CLEANUP_CRON_SECRET?.trim()
+  if (!secret) {
+    throw createAuthenticationError()
+  }
+  const authHeader = getHeader(event, 'authorization')
+  const bearer =
+    typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7).trim()
+      : ''
+  if (bearer !== secret) {
+    throw createAuthenticationError()
+  }
+}
+
+export default defineEventHandler(async (event) => {
+  assertCleanupCronAuthorized(event)
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 

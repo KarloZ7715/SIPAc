@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
 import cleanupDraftsEndpoint from '../../server/api/system/cleanup-drafts'
 
+const CLEANUP_SECRET = 'test-cleanup-secret'
+
+function mockCleanupEvent(authorization?: string) {
+  const headers: Record<string, string | undefined> = {}
+  if (authorization !== undefined) {
+    headers.authorization = authorization
+  }
+  return { node: { req: { headers } } } as never
+}
+
 const {
   mockAcademicProductFind,
   mockAcademicProductFindByIdAndDelete,
@@ -51,6 +61,7 @@ vi.mock('../../server/services/storage/gridfs', () => ({
 describe('System Cleanup Endpoint', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    process.env.CLEANUP_CRON_SECRET = CLEANUP_SECRET
     mockAcademicProductCountDocuments.mockResolvedValue(0)
     mockAcademicProductExists.mockResolvedValue(null)
     mockAcademicProductDeleteMany.mockResolvedValue({ deletedCount: 0 })
@@ -61,6 +72,20 @@ describe('System Cleanup Endpoint', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    delete process.env.CLEANUP_CRON_SECRET
+  })
+
+  it('rechaza peticiones sin Bearer válido', async () => {
+    await expect(cleanupDraftsEndpoint(mockCleanupEvent())).rejects.toMatchObject({
+      statusCode: 401,
+    })
+    expect(mockAcademicProductFind).not.toHaveBeenCalled()
+  })
+
+  it('rechaza Bearer incorrecto', async () => {
+    await expect(
+      cleanupDraftsEndpoint(mockCleanupEvent('Bearer wrong-secret')),
+    ).rejects.toMatchObject({ statusCode: 401 })
   })
 
   it('deletes soft-deleted drafts older than 30 days and their associated files', async () => {
@@ -77,8 +102,7 @@ describe('System Cleanup Endpoint', () => {
     })
     mockUploadedFileFind.mockResolvedValueOnce([]) // No orphan files in pass 2
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await cleanupDraftsEndpoint({} as any)
+    const result = await cleanupDraftsEndpoint(mockCleanupEvent(`Bearer ${CLEANUP_SECRET}`))
 
     expect(mockAcademicProductFind).toHaveBeenCalledTimes(1)
     expect(mockUploadedFileFindById).toHaveBeenCalledWith(uploadedFileId)
@@ -103,8 +127,7 @@ describe('System Cleanup Endpoint', () => {
     // Hay al menos un producto confirmado ligado al archivo
     mockAcademicProductExists.mockResolvedValueOnce({ _id: 'confirmed123' })
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await cleanupDraftsEndpoint({} as any)
+    const result = await cleanupDraftsEndpoint(mockCleanupEvent(`Bearer ${CLEANUP_SECRET}`))
 
     // Should skip deletion
     expect(mockDeleteFileFromGridFs).not.toHaveBeenCalled()
@@ -126,8 +149,7 @@ describe('System Cleanup Endpoint', () => {
 
     mockAcademicProductExists.mockResolvedValueOnce(null)
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await cleanupDraftsEndpoint({} as any)
+    const result = await cleanupDraftsEndpoint(mockCleanupEvent(`Bearer ${CLEANUP_SECRET}`))
 
     expect(mockDeleteFileFromGridFs).toHaveBeenCalledWith(gridfsId)
     expect(mockUploadedFileFindByIdAndDelete).toHaveBeenCalledWith(uploadedFileId)
