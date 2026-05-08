@@ -49,6 +49,7 @@ ehthumbs.db
 
 # ─── Archivos cargados por usuarios ─────────────────
 uploads/
+docs/informe-final-pasantia/*
 
 # ─── Testing ────────────────────────────────────────
 coverage/
