@@ -156,7 +156,9 @@ test.describe('Layout shell regression', () => {
         const toggle = document.querySelector(
           "aside.sidebar-shell[data-mobile='false'] button.sidebar-toggle",
         ) as HTMLElement | null
-        return Boolean(toggle && (toggle as { __vueParentComponent?: unknown }).__vueParentComponent)
+        return Boolean(
+          toggle && (toggle as { __vueParentComponent?: unknown }).__vueParentComponent,
+        )
       })
 
       const collapseToggle = desktopSidebarToggle
@@ -179,7 +181,9 @@ test.describe('Layout shell regression', () => {
         const toggle = document.querySelector(
           "aside.sidebar-shell[data-mobile='false'] button.sidebar-toggle",
         ) as HTMLElement | null
-        return Boolean(toggle && (toggle as { __vueParentComponent?: unknown }).__vueParentComponent)
+        return Boolean(
+          toggle && (toggle as { __vueParentComponent?: unknown }).__vueParentComponent,
+        )
       })
 
       const expandToggle = page
@@ -222,7 +226,9 @@ test.describe('Layout shell regression', () => {
         await page.mouse.up()
         await page.waitForTimeout(250)
 
-        resizedSidebarWidth = Number((await sidebarResizeHandle.getAttribute('aria-valuenow')) ?? '0')
+        resizedSidebarWidth = Number(
+          (await sidebarResizeHandle.getAttribute('aria-valuenow')) ?? '0',
+        )
         if (Math.abs(resizedSidebarWidth - initialSidebarWidth) > 0.75) {
           break
         }
