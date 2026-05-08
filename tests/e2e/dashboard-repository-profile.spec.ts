@@ -34,8 +34,14 @@ const minimalPdfBuffer = Buffer.from(
   'utf8',
 )
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+async function ensureRepositoryFiltersVisible(page: Page) {
+  const reveal = page.getByRole('button', { name: /^Mostrar filtros/i })
+  if (await reveal.isVisible().catch(() => false)) {
+    await reveal.click()
+    await expect(
+      page.getByRole('switch', { name: 'Mostrar únicamente tus productos' }),
+    ).toBeVisible({ timeout: 15_000 })
+  }
 }
 
 /** Ruido conocido del motor (viewport meta, hidratación) que no indica regresión de la app. */
@@ -505,9 +511,10 @@ test.describe('Dashboard, repository y perfil — auditoría E2E', () => {
 
     await page.getByRole('textbox', { name: 'Búsqueda en el catálogo' }).fill(seededRepositoryTitle)
     await page.getByRole('button', { name: 'Buscar' }).click()
-    const repositoryTitleButton = page.getByRole('button', {
-      name: new RegExp(`^${escapeRegExp(seededRepositoryTitle)}(?:\\s|$)`),
-    })
+    const repositoryTitleButton = page
+      .locator('button')
+      .filter({ has: page.getByText(seededRepositoryTitle, { exact: true }) })
+      .first()
     await expect(repositoryTitleButton).toBeVisible()
 
     await repositoryTitleButton.click()
@@ -522,6 +529,7 @@ test.describe('Dashboard, repository y perfil — auditoría E2E', () => {
       page.getByText(new RegExp(`de\\s+${seededCatalogProductsTotal}\\s+resultados`)),
     ).toBeVisible()
 
+    await ensureRepositoryFiltersVisible(page)
     await page.getByRole('switch', { name: 'Mostrar únicamente tus productos' }).click()
     await expect(
       page.getByText(new RegExp(`de\\s+${ownerConfirmedProductsTotal}\\s+resultados`)),

@@ -71,6 +71,7 @@ watch(
       mobileTab.value = 'ficha'
     }
   },
+  { immediate: true },
 )
 </script>
 
