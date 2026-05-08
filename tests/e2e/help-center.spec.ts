@@ -140,15 +140,17 @@ test.describe('Centro de ayuda', () => {
       await expect(page.getByRole('heading', { level: 1, name: guide.heading })).toBeVisible()
     }
 
-    const firstFaqButton = page
+    await page.goto('/help')
+    await page.waitForLoadState('domcontentloaded')
+    await page.waitForLoadState('networkidle')
+
+    const faqSection = page.locator('section').filter({ hasText: 'Preguntas frecuentes' })
+    const firstFaqButton = faqSection
       .getByRole('button', {
         name: '¿Qué tipos de archivo puedo subir?',
       })
-      .filter({ visible: true })
       .first()
     const firstFaqPanel = page.locator('#faq-panel-0').filter({ visible: true }).first()
-    await page.goto('/help')
-    await page.waitForLoadState('domcontentloaded')
     await expect(firstFaqButton).toBeVisible()
     await firstFaqButton.scrollIntoViewIfNeeded()
 
@@ -156,8 +158,10 @@ test.describe('Centro de ayuda', () => {
       if ((await firstFaqButton.getAttribute('aria-expanded')) === 'true') {
         break
       }
-      await firstFaqButton.click({ force: true })
-      await page.waitForTimeout(180)
+      await firstFaqButton.evaluate((element) => {
+        ;(element as HTMLButtonElement).click()
+      })
+      await page.waitForTimeout(220)
     }
 
     await expect(firstFaqButton).toHaveAttribute('aria-expanded', 'true')

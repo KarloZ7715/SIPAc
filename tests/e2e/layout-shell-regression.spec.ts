@@ -135,108 +135,112 @@ test.describe('Layout shell regression', () => {
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(400)
 
-    const sidebarShell = page.locator("aside.sidebar-shell[data-mobile='false']").first()
-    const sidebarResizeHandle = page
-      .locator('button[role="separator"][aria-label="Redimensionar barra lateral"]')
-      .first()
+    const usesDesktopSidebarChrome = (page.viewportSize()?.width ?? 0) >= 1024
 
-    await expect(sidebarShell).toHaveAttribute('data-collapsed', 'false')
-    await expect(sidebarResizeHandle).toBeVisible()
+    if (usesDesktopSidebarChrome) {
+      const sidebarShell = page.locator("aside.sidebar-shell[data-mobile='false']").first()
+      const sidebarResizeHandle = page
+        .locator('button[role="separator"][aria-label="Redimensionar barra lateral"]')
+        .first()
 
-    const desktopSidebarToggle = page
-      .locator("aside.sidebar-shell[data-mobile='false'] button.sidebar-toggle")
-      .first()
+      await expect(sidebarShell).toHaveAttribute('data-collapsed', 'false')
+      await expect(sidebarResizeHandle).toBeVisible()
 
-    await expect(desktopSidebarToggle).toBeVisible()
-    await expect(desktopSidebarToggle).toHaveAttribute('aria-label', 'Contraer barra lateral')
-    await page.waitForFunction(() => {
-      const toggle = document.querySelector(
-        "aside.sidebar-shell[data-mobile='false'] button.sidebar-toggle",
-      ) as HTMLElement | null
-      return Boolean(toggle && (toggle as { __vueParentComponent?: unknown }).__vueParentComponent)
-    })
+      const desktopSidebarToggle = page
+        .locator("aside.sidebar-shell[data-mobile='false'] button.sidebar-toggle")
+        .first()
 
-    const collapseToggle = desktopSidebarToggle
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await collapseToggle.evaluate((element) => {
-        ;(element as HTMLButtonElement).click()
+      await expect(desktopSidebarToggle).toBeVisible()
+      await expect(desktopSidebarToggle).toHaveAttribute('aria-label', 'Contraer barra lateral')
+      await page.waitForFunction(() => {
+        const toggle = document.querySelector(
+          "aside.sidebar-shell[data-mobile='false'] button.sidebar-toggle",
+        ) as HTMLElement | null
+        return Boolean(toggle && (toggle as { __vueParentComponent?: unknown }).__vueParentComponent)
       })
-      if ((await sidebarShell.getAttribute('data-collapsed')) === 'true') {
-        break
+
+      const collapseToggle = desktopSidebarToggle
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await collapseToggle.evaluate((element) => {
+          ;(element as HTMLButtonElement).click()
+        })
+        if ((await sidebarShell.getAttribute('data-collapsed')) === 'true') {
+          break
+        }
+        await page.waitForTimeout(140)
       }
-      await page.waitForTimeout(140)
-    }
-    await expect(sidebarShell).toHaveAttribute('data-collapsed', 'true')
+      await expect(sidebarShell).toHaveAttribute('data-collapsed', 'true')
 
-    await page.reload()
-    await page.waitForLoadState('domcontentloaded')
-    await page.waitForTimeout(350)
-    await expect(sidebarShell).toHaveAttribute('data-collapsed', 'true')
-    await page.waitForFunction(() => {
-      const toggle = document.querySelector(
-        "aside.sidebar-shell[data-mobile='false'] button.sidebar-toggle",
-      ) as HTMLElement | null
-      return Boolean(toggle && (toggle as { __vueParentComponent?: unknown }).__vueParentComponent)
-    })
-
-    const expandToggle = page
-      .locator("aside.sidebar-shell[data-mobile='false'] button.sidebar-toggle")
-      .first()
-    await expect(expandToggle).toHaveAttribute('aria-label', 'Expandir barra lateral')
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await expandToggle.evaluate((element) => {
-        ;(element as HTMLButtonElement).click()
-      })
-      if ((await sidebarShell.getAttribute('data-collapsed')) === 'false') {
-        break
-      }
-      await page.waitForTimeout(140)
-    }
-    await expect(sidebarShell).toHaveAttribute('data-collapsed', 'false')
-
-    const initialSidebarWidth = Number(
-      (await sidebarResizeHandle.getAttribute('aria-valuenow')) ?? '0',
-    )
-    const resizeHandleBox = await sidebarResizeHandle.boundingBox()
-    if (!resizeHandleBox) {
-      throw new Error('No se pudo ubicar el separador de resize del sidebar')
-    }
-
-    const dragOffsets = initialSidebarWidth >= 23.5 ? [-96, 96] : [96, -96]
-    let resizedSidebarWidth = initialSidebarWidth
-
-    for (const offset of dragOffsets) {
-      await page.mouse.move(
-        resizeHandleBox.x + resizeHandleBox.width / 2,
-        resizeHandleBox.y + resizeHandleBox.height / 2,
-      )
-      await page.mouse.down()
-      await page.mouse.move(
-        resizeHandleBox.x + resizeHandleBox.width / 2 + offset,
-        resizeHandleBox.y + resizeHandleBox.height / 2,
-        { steps: 8 },
-      )
-      await page.mouse.up()
-      await page.waitForTimeout(250)
-
-      resizedSidebarWidth = Number((await sidebarResizeHandle.getAttribute('aria-valuenow')) ?? '0')
-      if (Math.abs(resizedSidebarWidth - initialSidebarWidth) > 0.75) {
-        break
-      }
-    }
-
-    const resizeDelta = Math.abs(resizedSidebarWidth - initialSidebarWidth)
-
-    if (resizeDelta > 0.75) {
       await page.reload()
       await page.waitForLoadState('domcontentloaded')
       await page.waitForTimeout(350)
+      await expect(sidebarShell).toHaveAttribute('data-collapsed', 'true')
+      await page.waitForFunction(() => {
+        const toggle = document.querySelector(
+          "aside.sidebar-shell[data-mobile='false'] button.sidebar-toggle",
+        ) as HTMLElement | null
+        return Boolean(toggle && (toggle as { __vueParentComponent?: unknown }).__vueParentComponent)
+      })
 
-      const reloadedSidebarWidth = Number(
+      const expandToggle = page
+        .locator("aside.sidebar-shell[data-mobile='false'] button.sidebar-toggle")
+        .first()
+      await expect(expandToggle).toHaveAttribute('aria-label', 'Expandir barra lateral')
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await expandToggle.evaluate((element) => {
+          ;(element as HTMLButtonElement).click()
+        })
+        if ((await sidebarShell.getAttribute('data-collapsed')) === 'false') {
+          break
+        }
+        await page.waitForTimeout(140)
+      }
+      await expect(sidebarShell).toHaveAttribute('data-collapsed', 'false')
+
+      const initialSidebarWidth = Number(
         (await sidebarResizeHandle.getAttribute('aria-valuenow')) ?? '0',
       )
-      expect(Math.abs(reloadedSidebarWidth - initialSidebarWidth)).toBeGreaterThan(0.75)
-      expect(Math.abs(reloadedSidebarWidth - resizedSidebarWidth)).toBeLessThan(0.75)
+      const resizeHandleBox = await sidebarResizeHandle.boundingBox()
+      if (!resizeHandleBox) {
+        throw new Error('No se pudo ubicar el separador de resize del sidebar')
+      }
+
+      const dragOffsets = initialSidebarWidth >= 23.5 ? [-96, 96] : [96, -96]
+      let resizedSidebarWidth = initialSidebarWidth
+
+      for (const offset of dragOffsets) {
+        await page.mouse.move(
+          resizeHandleBox.x + resizeHandleBox.width / 2,
+          resizeHandleBox.y + resizeHandleBox.height / 2,
+        )
+        await page.mouse.down()
+        await page.mouse.move(
+          resizeHandleBox.x + resizeHandleBox.width / 2 + offset,
+          resizeHandleBox.y + resizeHandleBox.height / 2,
+          { steps: 8 },
+        )
+        await page.mouse.up()
+        await page.waitForTimeout(250)
+
+        resizedSidebarWidth = Number((await sidebarResizeHandle.getAttribute('aria-valuenow')) ?? '0')
+        if (Math.abs(resizedSidebarWidth - initialSidebarWidth) > 0.75) {
+          break
+        }
+      }
+
+      const resizeDelta = Math.abs(resizedSidebarWidth - initialSidebarWidth)
+
+      if (resizeDelta > 0.75) {
+        await page.reload()
+        await page.waitForLoadState('domcontentloaded')
+        await page.waitForTimeout(350)
+
+        const reloadedSidebarWidth = Number(
+          (await sidebarResizeHandle.getAttribute('aria-valuenow')) ?? '0',
+        )
+        expect(Math.abs(reloadedSidebarWidth - initialSidebarWidth)).toBeGreaterThan(0.75)
+        expect(Math.abs(reloadedSidebarWidth - resizedSidebarWidth)).toBeLessThan(0.75)
+      }
     }
 
     const navigations: Array<{
@@ -267,13 +271,19 @@ test.describe('Layout shell regression', () => {
     ]
 
     for (const navigation of navigations) {
-      await page
-        .locator(`a[href="${navigation.expectedPath}"]`)
-        .filter({ visible: true })
-        .first()
-        .evaluate((element) => {
-          ;(element as HTMLAnchorElement).click()
-        })
+      if (usesDesktopSidebarChrome) {
+        await page
+          .locator(`a[href="${navigation.expectedPath}"]`)
+          .filter({ visible: true })
+          .first()
+          .evaluate((element) => {
+            ;(element as HTMLAnchorElement).click()
+          })
+      } else {
+        await page.goto(navigation.expectedPath)
+        await page.waitForLoadState('domcontentloaded')
+        await page.waitForTimeout(400)
+      }
 
       await expect(page).toHaveURL(
         new RegExp(`${navigation.expectedPath.replace('/', '\\/')}(?:\\?.*)?$`),

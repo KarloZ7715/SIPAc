@@ -401,6 +401,11 @@ ${pageErrors.join('\n') || '(sin errores)'}
     await expect(page).toHaveURL(/\/chat(?:\?.*)?$/)
     await page.waitForLoadState('networkidle')
 
+    const openPrimaryNav = page.getByRole('button', { name: 'Abrir navegación principal' })
+    if (await openPrimaryNav.isVisible()) {
+      await openPrimaryNav.click()
+    }
+
     await expect(page.getByRole('region', { name: 'Conversaciones' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Nueva conversación' })).toBeVisible()
     await expect(page.getByRole('button', { name: seededConversationTitle })).toBeVisible()
