@@ -29,8 +29,15 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Format check
-        run: pnpm format:check
+      - name: Prettier (format & fail if tree dirty)
+        run: |
+          pnpm format
+          if ! git diff --quiet; then
+            echo "::error::The repo is not formatted. CI ran \`pnpm format\`; run the same locally, commit, and push."
+            git --no-pager diff --stat
+            git --no-pager diff
+            exit 1
+          fi
 
       - name: Typecheck
         run: pnpm typecheck
