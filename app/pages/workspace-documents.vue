@@ -1031,7 +1031,7 @@ onBeforeUnmount(() => {
 
     <UModal
       v-model:open="showExpandedPreviewModal"
-      title="Documento en grande"
+      title="Documento maximizado"
       :ui="{ content: 'max-w-[94vw]' }"
     >
       <template #body>
