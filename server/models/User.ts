@@ -60,12 +60,12 @@ const userSchema = new Schema<IUser, Record<string, never>, IUserMethods>(
           defaultLanding: {
             type: String,
             enum: [...DEFAULT_LANDING_ROUTES],
-            default: 'dashboard',
+            default: 'home',
           },
         },
         { _id: false },
       ),
-      default: () => ({ defaultLanding: 'dashboard' }),
+      default: () => ({ defaultLanding: 'home' }),
     },
     // --- Security / identity ---
     tokenVersion: { type: Number, default: 0 },

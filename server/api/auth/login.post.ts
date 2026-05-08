@@ -106,6 +106,6 @@ export default defineEventHandler(async (event) => {
   return ok({
     token,
     user: user.toJSON(),
-    defaultLanding: user.preferences?.defaultLanding || 'dashboard',
+    defaultLanding: user.preferences?.defaultLanding || 'home',
   })
 })

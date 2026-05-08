@@ -350,6 +350,7 @@ const densityOptions: Array<{ label: string; value: UiDensityPreference }> = [
   { label: 'Compacta', value: 'compact' },
 ]
 const landingOptions: Array<{ label: string; value: DefaultLandingRoute }> = [
+  { label: 'Página de bienvenida', value: 'home' },
   { label: 'Panel de control', value: 'dashboard' },
   { label: 'Asistente IA', value: 'chat' },
   { label: 'Repositorio', value: 'repository' },
@@ -384,7 +385,7 @@ const selectedUnderlineLinks = computed({
 })
 
 const selectedLanding = ref<DefaultLandingRoute>(
-  profileSummary.value?.user.preferences?.defaultLanding ?? 'dashboard',
+  profileSummary.value?.user.preferences?.defaultLanding ?? 'home',
 )
 const landingSaving = ref(false)
 

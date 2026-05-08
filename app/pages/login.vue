@@ -32,28 +32,17 @@ const valuePillars = [
   },
 ]
 
-// Cookie para evitar redirecciones múltiples en la misma sesión
-const lastLoginLanding = useCookie('last-login-landing', {
-  maxAge: 60 * 10, // 10 minutos
-  sameSite: 'strict',
-})
+function resolveLandingPath(landing: string | null | undefined): string {
+  if (!landing || landing === 'home') return '/'
+  return `/${landing}`
+}
 
 async function onSubmit() {
   errorMsg.value = ''
   try {
     const outcome = await login(state)
     if (outcome.kind === 'success') {
-      // Verificar si es un login "fresco" (primera navegación post-login)
-      const isFreshLogin = !lastLoginLanding.value
-
-      if (isFreshLogin && loginLanding.value) {
-        // Primera navegación: usar preferencia del usuario
-        lastLoginLanding.value = loginLanding.value
-        await navigateTo(`/${loginLanding.value}`)
-      } else {
-        // Ya navegado o preferencia no disponible: ir a home
-        await navigateTo('/')
-      }
+      await navigateTo(resolveLandingPath(loginLanding.value), { replace: true })
       return
     }
     if (outcome.kind === '2fa') {
@@ -86,17 +75,7 @@ async function onSubmit2FA() {
   errorMsg.value = ''
   try {
     await verify2FA(challengeId.value, otpCode.value)
-    // Verificar si es un login "fresco" (primera navegación post-login)
-    const isFreshLogin = !lastLoginLanding.value
-
-    if (isFreshLogin && loginLanding.value) {
-      // Primera navegación: usar preferencia del usuario
-      lastLoginLanding.value = loginLanding.value
-      await navigateTo(`/${loginLanding.value}`)
-    } else {
-      // Ya navegado o preferencia no disponible: ir a home
-      await navigateTo('/')
-    }
+    await navigateTo(resolveLandingPath(loginLanding.value), { replace: true })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const msg = err?.data?.data?.error?.message || err?.data?.statusMessage || 'Código inválido'

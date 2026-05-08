@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
       program: user.program,
       lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
       preferences: {
-        defaultLanding: user.preferences?.defaultLanding ?? 'dashboard',
+        defaultLanding: user.preferences?.defaultLanding ?? 'home',
       },
       emailVerifiedAt: user.emailVerifiedAt ? user.emailVerifiedAt.toISOString() : null,
       pendingEmail: user.pendingEmail ?? null,

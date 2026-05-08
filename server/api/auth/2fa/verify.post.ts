@@ -55,5 +55,9 @@ export default defineEventHandler(async (event) => {
     details: 'Login 2FA verificado',
   })
 
-  return ok({ token, user: user.toJSON() })
+  return ok({
+    token,
+    user: user.toJSON(),
+    defaultLanding: user.preferences?.defaultLanding || 'home',
+  })
 })

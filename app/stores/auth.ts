@@ -72,9 +72,9 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       // Login exitoso: guardar landing y usuario
-      loginLanding.value = (payload.defaultLanding as string) || 'dashboard'
+      loginLanding.value = (payload.defaultLanding as string) || 'home'
       user.value = (payload.user as UserPublic) ?? null
-      user.value.preferences = user.value.preferences || { defaultLanding: 'dashboard' }
+      user.value.preferences = user.value.preferences || { defaultLanding: 'home' }
 
       return { kind: 'success', user: user.value!, defaultLanding: loginLanding.value }
     } finally {
@@ -90,6 +90,8 @@ export const useAuthStore = defineStore('auth', () => {
         body: { challengeId, code },
       })
       user.value = data.data.user
+      loginLanding.value =
+        data.data.defaultLanding || user.value.preferences?.defaultLanding || 'home'
       return data.data.user
     } finally {
       loading.value = false

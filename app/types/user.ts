@@ -5,6 +5,7 @@ export const USER_ROLES = ['admin', 'docente'] as const
 export type UserRole = (typeof USER_ROLES)[number]
 
 export const DEFAULT_LANDING_ROUTES = [
+  'home',
   'dashboard',
   'chat',
   'repository',
@@ -111,6 +112,7 @@ export interface LoginDTO {
 export interface LoginResponse {
   token: string
   user: UserPublic
+  defaultLanding?: string
 }
 
 export interface LoginChallengeResponse {
