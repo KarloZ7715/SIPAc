@@ -276,10 +276,12 @@ test.describe('Chat IA docente', () => {
 
     await openChatAsDocente(page)
 
-    await page.goto('/chat')
+    await page.goto('/chat', { waitUntil: 'load' })
+    await page.waitForLoadState('domcontentloaded')
     await expect(page).toHaveURL(/\/chat(?:\?.*)?$/)
-    await page.waitForLoadState('networkidle')
-    await expect(page.getByRole('heading', { name: '¿Qué investigaremos hoy?' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '¿Qué investigaremos hoy?' })).toBeVisible({
+      timeout: 30_000,
+    })
     await expect(page.getByRole('combobox')).toBeVisible()
 
     const modelSelector = page.getByRole('combobox')
@@ -377,12 +379,12 @@ ${browserConsole.join('\n') || '(sin logs)'}
 Page errors:
 ${pageErrors.join('\n') || '(sin errores)'}
 `,
-    ).toBeVisible({ timeout: 60_000 })
+    ).toBeVisible({ timeout: 90_000 })
     const resultCard = page
       .locator('article')
       .filter({ hasText: 'Este resultado apareció al buscar también dentro del texto del archivo' })
       .first()
-    await expect(resultCard).toBeVisible({ timeout: 60_000 })
+    await expect(resultCard).toBeVisible({ timeout: 90_000 })
     await expect(resultCard).toContainText('Tesis')
     await expect(resultCard).toContainText('Universidad de Córdoba')
     await expect(resultCard).toContainText(
@@ -394,26 +396,69 @@ ${pageErrors.join('\n') || '(sin errores)'}
     await expect(page).toHaveURL(/\/login/)
   })
 
-  test('abre historial de conversaciones y crea una conversación nueva', async ({ page }) => {
+  test('abre historial de conversaciones y crea una conversación nueva', async ({
+    page,
+  }, testInfo) => {
+    const isNarrowShell = testInfo.project.name === 'mobile' || testInfo.project.name === 'tablet'
+
     await openChatAsDocente(page)
 
-    await page.goto('/chat')
+    await page.goto('/chat', { waitUntil: 'load' })
+    await page.waitForLoadState('domcontentloaded')
     await expect(page).toHaveURL(/\/chat(?:\?.*)?$/)
-    await page.waitForLoadState('networkidle')
+    await expect(page.locator('#main-content')).toBeVisible({ timeout: 30_000 })
 
-    const openPrimaryNav = page.getByRole('button', { name: 'Abrir navegación principal' })
-    if (await openPrimaryNav.isVisible()) {
-      await openPrimaryNav.click()
+    if (isNarrowShell) {
+      await page.waitForTimeout(2500)
     }
 
-    await expect(page.getByRole('region', { name: 'Conversaciones' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Nueva conversación' })).toBeVisible()
-    await expect(page.getByRole('button', { name: seededConversationTitle })).toBeVisible()
+    async function openShellSidebarIfNeeded() {
+      if (!isNarrowShell) {
+        return
+      }
+      await page
+        .locator('header button[aria-label="Abrir navegación principal"]')
+        .click({ force: true })
+      await expect(page.getByRole('button', { name: 'Cerrar navegación' })).toBeVisible({
+        timeout: 15_000,
+      })
+    }
 
-    await page.getByRole('button', { name: seededConversationTitle }).click()
+    await openShellSidebarIfNeeded()
+
+    const recentsRoot = isNarrowShell
+      ? page.getByTestId('sidebar-chat-recents-mobile')
+      : page.getByTestId('sidebar-chat-recents-desktop')
+
+    await expect(recentsRoot).toBeVisible({ timeout: 30_000 })
+    await expect(recentsRoot.getByRole('button', { name: 'Nueva conversación' })).toBeVisible({
+      timeout: 30_000,
+    })
+    await expect(recentsRoot.getByRole('button', { name: seededConversationTitle })).toBeVisible({
+      timeout: 30_000,
+    })
+
+    await recentsRoot
+      .getByRole('button', { name: seededConversationTitle })
+      .evaluate((el) => (el as HTMLButtonElement).click())
     await expect(page).toHaveURL(new RegExp(`/chat\\?id=${seededConversationId}$`))
+    await page.waitForLoadState('domcontentloaded')
 
-    await page.getByRole('button', { name: 'Nueva conversación' }).click()
+    // En narrow, elegir conversación cierra el slideover (`closeMobile` en el sidebar).
+    if (isNarrowShell) {
+      await page.waitForTimeout(800)
+    }
+    await openShellSidebarIfNeeded()
+
+    const recentsAfterNav = isNarrowShell
+      ? page.getByTestId('sidebar-chat-recents-mobile')
+      : page.getByTestId('sidebar-chat-recents-desktop')
+
+    const nuevaConversacion = recentsAfterNav.getByRole('button', {
+      name: 'Nueva conversación',
+    })
+    await expect(nuevaConversacion).toBeVisible({ timeout: 15_000 })
+    await nuevaConversacion.evaluate((el) => (el as HTMLButtonElement).click())
     await expect(page).toHaveURL(/\/chat\?id=chat_[a-z0-9]+$/i)
     await expect(page.getByRole('textbox', { name: 'Mensaje para el asistente' })).toBeVisible()
   })

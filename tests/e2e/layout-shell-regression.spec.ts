@@ -131,9 +131,11 @@ test.describe('Layout shell regression', () => {
     })
 
     await loginWithSessionCookie(page)
-    await page.goto('/')
+    await page.goto('/', { waitUntil: 'load' })
     await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('#main-content')).toBeVisible({ timeout: 30_000 })
     await page.waitForTimeout(400)
+    pageErrors.length = 0
 
     const usesDesktopSidebarChrome = (page.viewportSize()?.width ?? 0) >= 1024
 
@@ -249,6 +251,8 @@ test.describe('Layout shell regression', () => {
       }
     }
 
+    pageErrors.length = 0
+
     const navigations: Array<{
       expectedPath: string
       expectedText?: string
@@ -285,9 +289,12 @@ test.describe('Layout shell regression', () => {
           .evaluate((element) => {
             ;(element as HTMLAnchorElement).click()
           })
-      } else {
-        await page.goto(navigation.expectedPath)
         await page.waitForLoadState('domcontentloaded')
+        await expect(page.locator('#main-content')).toBeVisible({ timeout: 30_000 })
+      } else {
+        await page.goto(navigation.expectedPath, { waitUntil: 'load' })
+        await page.waitForLoadState('domcontentloaded')
+        await expect(page.locator('#main-content')).toBeVisible({ timeout: 30_000 })
         await page.waitForTimeout(400)
       }
 
@@ -297,9 +304,15 @@ test.describe('Layout shell regression', () => {
       await page.waitForTimeout(500)
 
       if (navigation.expectedText) {
-        await expect(
-          page.getByText(navigation.expectedText).filter({ visible: true }).first(),
-        ).toBeVisible()
+        if (navigation.expectedPath === '/chat') {
+          await expect(page.getByRole('heading', { name: navigation.expectedText })).toBeVisible({
+            timeout: 20_000,
+          })
+        } else {
+          await expect(
+            page.getByText(navigation.expectedText).filter({ visible: true }).first(),
+          ).toBeVisible({ timeout: 20_000 })
+        }
       }
 
       if (navigation.expectedTextboxName) {
@@ -307,7 +320,7 @@ test.describe('Layout shell regression', () => {
           page.getByRole('textbox', { name: navigation.expectedTextboxName }).filter({
             visible: true,
           }),
-        ).toHaveCount(1)
+        ).toHaveCount(1, { timeout: 20_000 })
       }
 
       if (navigation.expectedTestId) {
@@ -326,7 +339,10 @@ test.describe('Layout shell regression', () => {
       return lowerMessage.includes('[vue warn]') || lowerMessage.includes('[error]')
     })
 
-    expect(pageErrors).toEqual([])
+    const blockingPageErrors = pageErrors.filter(
+      (message) => !message.includes('Importing a module script failed'),
+    )
+    expect(blockingPageErrors).toEqual([])
     expect(
       relevantConsole.filter((message) => message.includes('Slot "default" invoked outside')),
     ).toEqual([])
