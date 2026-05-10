@@ -6,6 +6,25 @@ const resolvedGoogleApiKey = resolveGoogleApiKeyFromProcessEnv()
 const playwrightPort = Number(process.env.PLAYWRIGHT_PORT ?? 4173)
 const playwrightBaseUrl = `http://127.0.0.1:${playwrightPort}`
 
+const mobileChromiumView = {
+  ...devices['Desktop Chrome'],
+  viewport: devices['iPhone 13'].viewport,
+  screen: devices['iPhone 13'].screen,
+  userAgent: devices['iPhone 13'].userAgent,
+  deviceScaleFactor: devices['iPhone 13'].deviceScaleFactor,
+  isMobile: devices['iPhone 13'].isMobile,
+  hasTouch: devices['iPhone 13'].hasTouch,
+}
+
+const tabletChromiumView = {
+  ...devices['Desktop Chrome'],
+  viewport: devices['iPad Mini'].viewport,
+  userAgent: devices['iPad Mini'].userAgent,
+  deviceScaleFactor: devices['iPad Mini'].deviceScaleFactor,
+  isMobile: devices['iPad Mini'].isMobile,
+  hasTouch: devices['iPad Mini'].hasTouch,
+}
+
 function readDotEnvFile(filePath: string): Record<string, string> {
   if (!existsSync(filePath)) {
     return {}
@@ -56,14 +75,14 @@ const resolvedWebServerEnv = {
 const projects = process.env.CI
   ? [
       { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-      { name: 'mobile', use: { ...devices['iPhone 13'] } },
-      { name: 'tablet', use: { ...devices['iPad Mini'] } },
+      { name: 'mobile', use: mobileChromiumView },
+      { name: 'tablet', use: tabletChromiumView },
     ]
   : [
       { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
       { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-      { name: 'mobile', use: { ...devices['iPhone 13'] } },
-      { name: 'tablet', use: { ...devices['iPad Mini'] } },
+      { name: 'mobile', use: mobileChromiumView },
+      { name: 'tablet', use: tabletChromiumView },
     ]
 
 export default defineConfig({
@@ -82,7 +101,7 @@ export default defineConfig({
   webServer: {
     command: `pnpm exec nuxt dev --port ${playwrightPort} --host 127.0.0.1`,
     url: playwrightBaseUrl,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.PLAYWRIGHT_WEBSERVER_REUSE !== '0',
     timeout: 120_000,
     env: resolvedWebServerEnv,
   },
