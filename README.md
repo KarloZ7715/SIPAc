@@ -10,7 +10,7 @@
 
 <p align="center"><strong>Sistema Inteligente de Productividad Académica</strong></p>
 
-<p align="center">Automatización inteligente para la gestión, extracción y análisis de la producción intelectual de docentes y estudiantes de posgrado.</p>
+<p align="center">Automatización inteligente para la gestión, extracción y análisis de la producción intelectual de docentes.</p>
 
 <p align="center"><em>Maestría en Innovación Educativa con Tecnología e IA — Universidad de Córdoba, Colombia</em></p>
 
@@ -20,7 +20,7 @@
 
 ## Visión General
 
-SIPAc transforma un proceso que hoy es **completamente manual** en un flujo automatizado e inteligente. El docente o estudiante sube un documento (PDF, imagen escaneada, Office o LibreOffice) y el sistema gestiona el resto: extracción de texto mediante OCR multimodal, clasificación automática del tipo de producto académico, extracción de entidades (NER) con múltiples modelos de lenguaje en cadena de fallback, revisión humana de los metadatos extraídos y almacenamiento estructurado en un repositorio consultable.
+SIPAc transforma un proceso que hoy es **completamente manual** en un flujo automatizado e inteligente. El docente sube un documento (PDF, imagen escaneada, Office o LibreOffice) y el sistema gestiona el resto: extracción de texto mediante OCR multimodal, clasificación automática del tipo de producto académico, extracción de entidades (NER) con múltiples modelos de lenguaje en cadena de fallback, revisión humana de los metadatos extraídos y almacenamiento estructurado en un repositorio consultable.
 
 ```mermaid
 graph LR
