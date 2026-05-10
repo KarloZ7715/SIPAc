@@ -127,6 +127,7 @@ const shouldShowBootLoading = computed(
 <template>
   <section
     :data-collapsed="props.collapsed ? 'true' : 'false'"
+    :data-testid="props.mobile ? 'sidebar-chat-recents-mobile' : 'sidebar-chat-recents-desktop'"
     class="sidebar-chat-recents overflow-x-hidden mt-5 border-t border-border/50 pt-4 transition-all duration-300"
     aria-labelledby="sidebar-chat-recents-heading"
   >
@@ -169,13 +170,7 @@ const shouldShowBootLoading = computed(
       />
     </div>
 
-    <TransitionGroup
-      v-else-if="chatStore.conversations.length"
-      name="sidebar-recents"
-      tag="ul"
-      class="space-y-1"
-      role="list"
-    >
+    <ul v-else-if="chatStore.conversations.length" class="space-y-1" role="list">
       <li v-for="c in visibleConversations" :key="c.id">
         <div
           class="group flex items-start gap-1 rounded-lg border transition-all duration-200"
@@ -221,7 +216,7 @@ const shouldShowBootLoading = computed(
           </UDropdownMenu>
         </div>
       </li>
-    </TransitionGroup>
+    </ul>
 
     <p v-else-if="!chatStore.conversationsLoading" class="text-sm text-text-muted">
       Sin conversaciones aún.
@@ -282,42 +277,3 @@ const shouldShowBootLoading = computed(
     </UModal>
   </section>
 </template>
-
-<style scoped>
-.sidebar-recents-enter-active,
-.sidebar-recents-leave-active {
-  transition:
-    opacity var(--motion-normal, 220ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1)),
-    transform var(--motion-normal, 220ms) var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1));
-}
-
-.sidebar-recents-leave-active {
-  position: absolute;
-  width: 100%;
-}
-
-.sidebar-recents-enter-from,
-.sidebar-recents-leave-to {
-  opacity: 0;
-  transform: translateY(6px);
-}
-
-.sidebar-recents-move {
-  transition: transform var(--motion-normal, 220ms)
-    var(--ease-sipac, cubic-bezier(0.22, 1, 0.36, 1));
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sidebar-recents-enter-active,
-  .sidebar-recents-leave-active,
-  .sidebar-recents-move {
-    transition-duration: 1ms;
-  }
-}
-
-:global(:root[data-motion='minimal']) .sidebar-recents-enter-active,
-:global(:root[data-motion='minimal']) .sidebar-recents-leave-active,
-:global(:root[data-motion='minimal']) .sidebar-recents-move {
-  transition: none;
-}
-</style>

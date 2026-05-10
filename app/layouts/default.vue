@@ -346,8 +346,9 @@ const mainColumnClass = computed(() =>
 )
 
 watch(
-  () => route.fullPath,
-  () => {
+  () => route.path,
+  (nextPath, previousPath) => {
+    if (nextPath === previousPath) return
     mobileSidebarOpen.value = false
   },
 )
