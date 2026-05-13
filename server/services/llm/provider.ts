@@ -10,11 +10,11 @@ const GROQ_GPT_OSS_20B_MODEL_ID = 'openai/gpt-oss-20b'
 const CEREBRAS_QWEN_MODEL_ID = 'qwen-3-235b-a22b-instruct-2507'
 export const CEREBRAS_QWEN_DEPRECATION_DATE_ISO = '2026-05-27T00:00:00.000Z'
 const CEREBRAS_QWEN_DEPRECATION_AT_MS = Date.parse(CEREBRAS_QWEN_DEPRECATION_DATE_ISO)
-const GEMINI_CHAT_MODEL_ID = 'gemini-3.1-flash-lite-preview'
+const GEMINI_CHAT_MODEL_ID = 'gemini-3.1-flash-lite'
 const GEMINI_CHAT_GEMMA_PREVIEW_MODEL_ID = 'gemma-4-31b-it'
 
 const GEMINI_FLASH_PIPELINE_MODEL_IDS = [
-  'gemini-3.1-flash-lite-preview',
+  'gemini-3.1-flash-lite',
   'gemini-3-flash-preview',
   'gemini-2.5-flash-lite',
   'gemini-2.5-flash',
