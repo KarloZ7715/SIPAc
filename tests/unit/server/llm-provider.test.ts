@@ -78,7 +78,7 @@ describe('LLM provider candidates', () => {
       'groq',
     ])
     expect(structured.map((c) => c.modelId)).toEqual([
-      'gemini-3.1-flash-lite',
+      'gemini-3.1-flash-lite-preview',
       'gemini-3-flash-preview',
       'gemini-2.5-flash-lite',
       'gemini-2.5-flash',
@@ -95,7 +95,7 @@ describe('LLM provider candidates', () => {
     const structured = getStructuredModelCandidates()
     const geminiIds = structured.filter((c) => c.name === 'gemini').map((c) => c.modelId)
     expect(geminiIds).toEqual([
-      'gemini-3.1-flash-lite',
+      'gemini-3.1-flash-lite-preview',
       'gemini-3-flash-preview',
       'gemini-2.5-flash-lite',
       'gemini-2.5-flash',
@@ -163,7 +163,7 @@ describe('LLM provider candidates', () => {
 
     const vision = getGoogleVisionModelCandidates()
     expect(vision.map((v) => v.modelId)).toEqual([
-      'gemini-3.1-flash-lite',
+      'gemini-3.1-flash-lite-preview',
       'gemini-3-flash-preview',
       'gemini-2.5-flash-lite',
       'gemini-2.5-flash',
@@ -177,7 +177,7 @@ describe('LLM provider candidates', () => {
 
     const vision = getGoogleVisionModelCandidates()
     expect(vision.map((v) => v.modelId)).toEqual([
-      'gemini-3.1-flash-lite',
+      'gemini-3.1-flash-lite-preview',
       'gemini-3-flash-preview',
       'gemini-2.5-flash-lite',
       'gemini-2.5-flash',
@@ -195,7 +195,7 @@ describe('LLM provider candidates', () => {
     expect(chat.map((candidate) => candidate.name)).toEqual(['cerebras', 'gemini', 'gemini'])
     expect(chat.map((candidate) => candidate.modelId)).toEqual([
       'qwen-3-235b-a22b-instruct-2507',
-      'gemini-3.1-flash-lite',
+      'gemini-3.1-flash-lite-preview',
       'gemma-4-31b-it',
     ])
   })
@@ -260,7 +260,7 @@ describe('LLM provider candidates', () => {
     expect(
       experimental.some(
         (candidate) =>
-          candidate.name === 'gemini' && candidate.modelId === 'gemini-3.1-flash-lite',
+          candidate.name === 'gemini' && candidate.modelId === 'gemini-3.1-flash-lite-preview',
       ),
     ).toBe(true)
     expect(

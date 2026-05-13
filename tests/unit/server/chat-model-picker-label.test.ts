@@ -3,7 +3,7 @@ import { publicChatModelPickerLabel } from '~~/server/services/chat/model-select
 
 describe('publicChatModelPickerLabel', () => {
   it('devuelve nombres legibles del modelo (sin IDs) para entradas conocidas', () => {
-    expect(publicChatModelPickerLabel('gemini', 'gemini-3.1-flash-lite')).toBe(
+    expect(publicChatModelPickerLabel('gemini', 'gemini-3.1-flash-lite-preview')).toBe(
       'Gemini 3.1 Flash Lite (preview)',
     )
     expect(publicChatModelPickerLabel('gemini', 'gemma-4-31b-it')).toBe('Gemma 4 31B (preview)')

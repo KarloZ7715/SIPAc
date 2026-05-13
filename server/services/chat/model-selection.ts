@@ -18,7 +18,7 @@ import { createBadRequestError } from '~~/server/utils/errors'
  */
 const CHAT_MODEL_PICKER_LABELS: Record<string, string> = {
   'cerebras::qwen-3-235b-a22b-instruct-2507': 'Qwen 3 235B Instruct',
-  'gemini::gemini-3.1-flash-lite': 'Gemini 3.1 Flash Lite (preview)',
+  'gemini::gemini-3.1-flash-lite-preview': 'Gemini 3.1 Flash Lite (preview)',
   'gemini::gemma-4-31b-it': 'Gemma 4 31B (preview)',
   'nvidia::z-ai/glm-5.1': 'GLM 5.1',
   'nvidia::deepseek-ai/deepseek-v4-pro': 'DeepSeek V4 Pro',
