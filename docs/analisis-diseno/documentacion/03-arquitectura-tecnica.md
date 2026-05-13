@@ -278,11 +278,11 @@ flowchart TB
 
 ### ADR-09 — Estrategia multi-proveedor LLM con fallback por tarea (M4 y M9)
 
-**Decisión:** El NER implementado utiliza structured outputs del AI SDK (`generateText` + `Output.object`) con cadena condicionada por entorno: familia Gemini (`gemini-3.1-flash-lite-preview` → `gemini-3-flash-preview` → `gemini-2.5-flash-lite` → `gemini-2.5-flash`, y variantes Pro cuando aplica) seguida por NVIDIA, OpenRouter y Groq cuando sus API keys están disponibles. El Chat IA (M9) opera con una cadena automática multi-proveedor `qwen-3-235b-a22b-instruct-2507` (Cerebras) → candidatos NVIDIA → candidatos Groq → candidatos OpenRouter. `gemini-2.5-flash` queda fuera del flujo automático, pero se conserva en catálogo manual experimental.
+**Decisión:** El NER implementado utiliza structured outputs del AI SDK (`generateText` + `Output.object`) con cadena condicionada por entorno: familia Gemini (`gemini-3.1-flash-lite` → `gemini-3-flash-preview` → `gemini-2.5-flash-lite` → `gemini-2.5-flash`, y variantes Pro cuando aplica) seguida por NVIDIA, OpenRouter y Groq cuando sus API keys están disponibles. El Chat IA (M9) opera con una cadena automática multi-proveedor `qwen-3-235b-a22b-instruct-2507` (Cerebras) → candidatos NVIDIA → candidatos Groq → candidatos OpenRouter. `gemini-2.5-flash` queda fuera del flujo automático, pero se conserva en catálogo manual experimental.
 
 **Justificación técnica:** Un único proveedor LLM para NER y Chat representa un punto de falla en un sistema multiusuario académico. El fallback por tarea reduce ese riesgo y permite optimizar por compatibilidad de salida estructurada y disponibilidad:
 
-- familia Gemini (`gemini-3.1-flash-lite-preview`, `gemini-3-flash-preview`, `gemini-2.5-flash-lite`, `gemini-2.5-flash`) como primera capa NER.
+- familia Gemini (`gemini-3.1-flash-lite`, `gemini-3-flash-preview`, `gemini-2.5-flash-lite`, `gemini-2.5-flash`) como primera capa NER.
 - candidatos NVIDIA y OpenRouter como capas intermedias NER cuando están habilitados por entorno.
 - candidatos Groq (`openai/gpt-oss-120b`, `openai/gpt-oss-20b`) como última capa NER.
 - `qwen-3-235b-a22b-instruct-2507` (Cerebras): primer intento automático actual para Chat.
@@ -480,14 +480,14 @@ export function getExperimentalChatModelCandidates() {
 
 | Flujo    | Orden de fallback implementado                                                                                                                                                                     | Observación operativa                                                                              |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **NER**  | Gemini (`gemini-3.1-flash-lite-preview` → `gemini-3-flash-preview` → `gemini-2.5-flash-lite` → `gemini-2.5-flash`) → candidatos NVIDIA → candidatos OpenRouter → candidatos Groq                   | NVIDIA/OpenRouter/Groq entran cuando sus API keys están disponibles                                |
+| **NER**  | Gemini (`gemini-3.1-flash-lite` → `gemini-3-flash-preview` → `gemini-2.5-flash-lite` → `gemini-2.5-flash`) → candidatos NVIDIA → candidatos OpenRouter → candidatos Groq                   | NVIDIA/OpenRouter/Groq entran cuando sus API keys están disponibles                                |
 | **Chat** | `qwen-3-235b-a22b-instruct-2507` (Cerebras) → candidatos NVIDIA (`z-ai/glm4.7`, `deepseek-v3.1-terminus`, `deepseek-v3.2`, `mistral-large-*`, `kimi-k2`) → candidatos Groq → candidatos OpenRouter | Gemini se mantiene fuera del fallback automático; queda disponible como opción manual experimental |
 
 #### Estado actual de modelos LLM (2026-04)
 
 | Proveedor  | Nombre comercial              | Model ID                                 | Uso en SIPAc (fallback)                                        |
 | ---------- | ----------------------------- | ---------------------------------------- | -------------------------------------------------------------- |
-| Google     | Gemini 3.1 Flash Lite Preview | `gemini-3.1-flash-lite-preview`          | Primer candidato NER en cadena actual                          |
+| Google     | Gemini 3.1 Flash Lite Preview | `gemini-3.1-flash-lite`          | Primer candidato NER en cadena actual                          |
 | Google     | Gemini 3 Flash Preview        | `gemini-3-flash-preview`                 | Segundo candidato NER en cadena actual                         |
 | Google     | Gemini 2.5 Flash-Lite         | `gemini-2.5-flash-lite`                  | Candidato NER en capa Gemini                                   |
 | Google     | Gemini 2.5 Flash              | `gemini-2.5-flash`                       | Candidato NER en capa Gemini; opción manual experimental chat  |
@@ -507,7 +507,7 @@ export function getExperimentalChatModelCandidates() {
 
 | Fase                      | OCR (`OCR_PROVIDER`)   | NER estructurado (orden actual)                                                                                                                 | Chat (`M9`, orden actual)                                                              |
 | ------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **Desarrollo / Pasantía** | `gemini` (default)     | Gemini (`gemini-3.1-flash-lite-preview` → `gemini-3-flash-preview` → `gemini-2.5-flash-lite` → `gemini-2.5-flash`) → NVIDIA → OpenRouter → Groq | `qwen-3-235b-a22b-instruct-2507` → NVIDIA → Groq → OpenRouter                          |
+| **Desarrollo / Pasantía** | `gemini` (default)     | Gemini (`gemini-3.1-flash-lite` → `gemini-3-flash-preview` → `gemini-2.5-flash-lite` → `gemini-2.5-flash`) → NVIDIA → OpenRouter → Groq | `qwen-3-235b-a22b-instruct-2507` → NVIDIA → Groq → OpenRouter                          |
 | **Producción inicial**    | `gemini` (default)     | Misma cadena; degradación automática al siguiente candidato ante error de proveedor                                                             | Misma cadena automática; el catálogo manual expone solo modelos habilitados al usuario |
 | **Documentos complejos**  | `mistral` ($0,002/pág) | Sin cambio                                                                                                                                      | Sin cambio                                                                             |
 
