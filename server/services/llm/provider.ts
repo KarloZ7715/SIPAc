@@ -7,13 +7,12 @@ export type StructuredLlmProvider = 'gemini' | 'cerebras' | 'groq' | 'openrouter
 
 const GROQ_GPT_OSS_120B_MODEL_ID = 'openai/gpt-oss-120b'
 const GROQ_GPT_OSS_20B_MODEL_ID = 'openai/gpt-oss-20b'
-const CEREBRAS_QWEN_MODEL_ID = 'qwen-3-235b-a22b-instruct-2507'
-export const CEREBRAS_QWEN_DEPRECATION_DATE_ISO = '2026-05-27T00:00:00.000Z'
-const CEREBRAS_QWEN_DEPRECATION_AT_MS = Date.parse(CEREBRAS_QWEN_DEPRECATION_DATE_ISO)
+const CEREBRAS_GLM_47_MODEL_ID = 'zai-glm-4.7'
 const GEMINI_CHAT_MODEL_ID = 'gemini-3.1-flash-lite'
 const GEMINI_CHAT_GEMMA_PREVIEW_MODEL_ID = 'gemma-4-31b-it'
 
 const GEMINI_FLASH_PIPELINE_MODEL_IDS = [
+  'gemini-3.5-flash',
   'gemini-3.1-flash-lite',
   'gemini-3-flash-preview',
   'gemini-2.5-flash-lite',
@@ -29,34 +28,65 @@ function resolveGeminiPipelineModelIds(env: EnvConfig): string[] {
   return [...GEMINI_FLASH_PIPELINE_MODEL_IDS]
 }
 
-const NER_NVIDIA_MODEL_IDS_ORDERED = [
-  'z-ai/glm4.7',
-  'deepseek-ai/deepseek-v3.1-terminus',
-  // deepseek-ai/deepseek-v3.1 se excluye por bad request recurrente en chat.
-  'mistralai/mistral-large-3-675b-instruct-2512',
-  'deepseek-ai/deepseek-v3.2',
-] as const
-
-const NER_OPENROUTER_MODEL_IDS_ORDERED = [
-  'minimax/minimax-m2.5:free',
-  'openai/gpt-oss-120b:free',
-] as const
-
-/** Modelos extra solo en chat (no alteran la cadena NER). */
-const CHAT_OPENROUTER_MODEL_IDS_ORDERED = [
-  ...NER_OPENROUTER_MODEL_IDS_ORDERED,
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'z-ai/glm-4.5-air:free',
-] as const
-
-const CHAT_NVIDIA_MODEL_IDS_ORDERED = [
+// Cadena unificada NVIDIA NIM para NER y ChatAI.
+// Modelos retirados de NIM (quitados): z-ai/glm4.7, deepseek-ai/deepseek-v3.1-terminus,
+// deepseek-ai/deepseek-v3.2, nvidia/nemotron-3-super-120b-a12b, minimax/minimax-m2.5.
+const NVIDIA_MODEL_IDS_ORDERED = [
   'z-ai/glm-5.1',
+  'deepseek-ai/deepseek-v4-flash',
   'deepseek-ai/deepseek-v4-pro',
+  'nvidia/nemotron-3-ultra-550b-a55b',
   'moonshotai/kimi-k2.6',
   'minimaxai/minimax-m2.7',
   'mistralai/mistral-large-3-675b-instruct-2512',
-  'z-ai/glm4.7',
 ] as const
+
+const OPENROUTER_MODEL_IDS_ORDERED = [
+  'moonshotai/kimi-k2.6:free',
+  'openai/gpt-oss-120b:free',
+] as const
+
+/**
+ * Catálogo de modelos marcados como deprecados. Cada entrada incluye la fecha de
+ * deprecación (ISO) y el texto del badge a mostrar en la UI. Se omite la entrada
+ * cuando el modelo aún no está deprecado.
+ *
+ * El helper `isModelDeprecated(provider, modelId, nowMs)` permite reutilizar este
+ * mecanismo con cualquier modelo en el futuro (no solo los aquí listados).
+ */
+export interface ModelDeprecationEntry {
+  provider: StructuredLlmProvider
+  modelId: string
+  deprecationDateIso: string
+  badgeText: string
+}
+
+const MODEL_DEPRECATIONS: readonly ModelDeprecationEntry[] = []
+
+export function getModelDeprecations(): readonly ModelDeprecationEntry[] {
+  return MODEL_DEPRECATIONS
+}
+
+export function isModelDeprecated(
+  provider: StructuredLlmProvider,
+  modelId: string,
+  nowMs = Date.now(),
+): boolean {
+  const entry = MODEL_DEPRECATIONS.find(
+    (item) => item.provider === provider && item.modelId === modelId,
+  )
+  if (!entry) {
+    return false
+  }
+  return nowMs >= Date.parse(entry.deprecationDateIso)
+}
+
+export function getModelDeprecation(
+  provider: StructuredLlmProvider,
+  modelId: string,
+): ModelDeprecationEntry | undefined {
+  return MODEL_DEPRECATIONS.find((item) => item.provider === provider && item.modelId === modelId)
+}
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 
@@ -122,8 +152,11 @@ function pushCandidate(
   list.push(candidate)
 }
 
-export function isCerebrasQwenDeprecated(nowMs = Date.now()): boolean {
-  return nowMs >= CEREBRAS_QWEN_DEPRECATION_AT_MS
+// Mantenido por compatibilidad hacia atrás: reexporta la API genérica de
+// deprecación. Cualquier modelo puede marcarse vía `MODEL_DEPRECATIONS`.
+export {
+  isModelDeprecated as isCerebrasQwenDeprecated,
+  getModelDeprecation as getCerebrasQwenDeprecation,
 }
 
 /**
@@ -183,7 +216,7 @@ export function getStructuredModelCandidates(): StructuredModelCandidate[] {
   }
 
   if (nvidia) {
-    for (const modelId of NER_NVIDIA_MODEL_IDS_ORDERED) {
+    for (const modelId of NVIDIA_MODEL_IDS_ORDERED) {
       pushCandidate(seen, candidates, {
         name: 'nvidia',
         modelId,
@@ -193,7 +226,7 @@ export function getStructuredModelCandidates(): StructuredModelCandidate[] {
   }
 
   if (openrouter) {
-    for (const modelId of NER_OPENROUTER_MODEL_IDS_ORDERED) {
+    for (const modelId of OPENROUTER_MODEL_IDS_ORDERED) {
       pushCandidate(seen, candidates, {
         name: 'openrouter',
         modelId,
@@ -260,7 +293,7 @@ export function getChatModelCandidates(): StructuredModelCandidate[] {
   const seen = new Set<string>()
 
   if (nvidia) {
-    for (const modelId of CHAT_NVIDIA_MODEL_IDS_ORDERED) {
+    for (const modelId of NVIDIA_MODEL_IDS_ORDERED) {
       pushCandidate(seen, candidates, {
         name: 'nvidia',
         modelId,
@@ -270,7 +303,7 @@ export function getChatModelCandidates(): StructuredModelCandidate[] {
   }
 
   if (openrouter) {
-    for (const modelId of CHAT_OPENROUTER_MODEL_IDS_ORDERED) {
+    for (const modelId of OPENROUTER_MODEL_IDS_ORDERED) {
       pushCandidate(seen, candidates, {
         name: 'openrouter',
         modelId,
@@ -279,11 +312,11 @@ export function getChatModelCandidates(): StructuredModelCandidate[] {
     }
   }
 
-  if (cerebras && !isCerebrasQwenDeprecated()) {
+  if (cerebras && !isModelDeprecated('cerebras', CEREBRAS_GLM_47_MODEL_ID)) {
     pushCandidate(seen, candidates, {
       name: 'cerebras',
-      modelId: CEREBRAS_QWEN_MODEL_ID,
-      model: cerebras(CEREBRAS_QWEN_MODEL_ID),
+      modelId: CEREBRAS_GLM_47_MODEL_ID,
+      model: cerebras(CEREBRAS_GLM_47_MODEL_ID),
     })
   }
 
@@ -345,16 +378,16 @@ export function getExperimentalChatModelCandidates(): StructuredModelCandidate[]
         })
       : null
 
-  if (cerebras && !isCerebrasQwenDeprecated()) {
+  if (cerebras && !isModelDeprecated('cerebras', CEREBRAS_GLM_47_MODEL_ID)) {
     pushCandidate(seen, candidates, {
       name: 'cerebras',
-      modelId: CEREBRAS_QWEN_MODEL_ID,
-      model: cerebras(CEREBRAS_QWEN_MODEL_ID),
+      modelId: CEREBRAS_GLM_47_MODEL_ID,
+      model: cerebras(CEREBRAS_GLM_47_MODEL_ID),
     })
   }
 
   if (nvidia) {
-    for (const modelId of CHAT_NVIDIA_MODEL_IDS_ORDERED) {
+    for (const modelId of NVIDIA_MODEL_IDS_ORDERED) {
       pushCandidate(seen, candidates, {
         name: 'nvidia',
         modelId,
@@ -364,7 +397,7 @@ export function getExperimentalChatModelCandidates(): StructuredModelCandidate[]
   }
 
   if (openrouter) {
-    for (const modelId of CHAT_OPENROUTER_MODEL_IDS_ORDERED) {
+    for (const modelId of OPENROUTER_MODEL_IDS_ORDERED) {
       pushCandidate(seen, candidates, {
         name: 'openrouter',
         modelId,
@@ -373,7 +406,6 @@ export function getExperimentalChatModelCandidates(): StructuredModelCandidate[]
     }
   }
 
-  // Gemini 3.1 Flash Lite se expone para uso manual y como fallback final.
   pushCandidate(seen, candidates, {
     name: 'gemini',
     modelId: GEMINI_CHAT_MODEL_ID,
@@ -397,7 +429,6 @@ export function getGoogleVisionModelCandidates(): GoogleVisionModelCandidate[] {
   }))
 }
 
-/** Primer modelo de la cadena OCR visión (compatibilidad). */
 export function getGoogleVisionModel(): LanguageModel {
   const [first] = getGoogleVisionModelCandidates()
   if (!first) {
@@ -407,7 +438,6 @@ export function getGoogleVisionModel(): LanguageModel {
   return first.model
 }
 
-/** Un modelo Gemini por id (p. ej. segmentación barata). */
 export function getGeminiModelById(modelId: string): LanguageModel {
   const env = validateEnv(getRuntimeConfigSafe())
   return createGoogleGenerativeAI({ apiKey: env.googleApiKey })(modelId)

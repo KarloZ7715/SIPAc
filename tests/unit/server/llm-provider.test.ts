@@ -259,8 +259,7 @@ describe('LLM provider candidates', () => {
     expect(experimental.some((candidate) => candidate.name === 'gemini')).toBe(true)
     expect(
       experimental.some(
-        (candidate) =>
-          candidate.name === 'gemini' && candidate.modelId === 'gemini-3.1-flash-lite',
+        (candidate) => candidate.name === 'gemini' && candidate.modelId === 'gemini-3.1-flash-lite',
       ),
     ).toBe(true)
     expect(

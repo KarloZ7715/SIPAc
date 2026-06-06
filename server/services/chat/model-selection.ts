@@ -5,10 +5,10 @@ import {
   type ChatModelSelection,
 } from '~~/app/types'
 import {
-  CEREBRAS_QWEN_DEPRECATION_DATE_ISO,
   getChatModelCandidates,
   getExperimentalChatModelCandidates,
-  isCerebrasQwenDeprecated,
+  getModelDeprecation,
+  type StructuredLlmProvider,
   type StructuredModelCandidate,
 } from '~~/server/services/llm/provider'
 import { createBadRequestError } from '~~/server/utils/errors'
@@ -17,19 +17,19 @@ import { createBadRequestError } from '~~/server/utils/errors'
  * Nombres legibles del modelo (sin IDs en pantalla). Clave: `${provider}::${modelId}`
  */
 const CHAT_MODEL_PICKER_LABELS: Record<string, string> = {
-  'cerebras::qwen-3-235b-a22b-instruct-2507': 'Qwen 3 235B Instruct',
+  'cerebras::zai-glm-4.7': 'GLM 4.7 (Cerebras)',
+  'gemini::gemini-3.5-flash': 'Gemini 3.5 Flash',
   'gemini::gemini-3.1-flash-lite': 'Gemini 3.1 Flash Lite (preview)',
   'gemini::gemma-4-31b-it': 'Gemma 4 31B (preview)',
   'nvidia::z-ai/glm-5.1': 'GLM 5.1',
+  'nvidia::deepseek-ai/deepseek-v4-flash': 'DeepSeek V4 Flash',
   'nvidia::deepseek-ai/deepseek-v4-pro': 'DeepSeek V4 Pro',
+  'nvidia::nvidia/nemotron-3-ultra-550b-a55b': 'Nemotron 3 Ultra 550B',
   'nvidia::moonshotai/kimi-k2.6': 'Kimi K2.6',
   'nvidia::minimaxai/minimax-m2.7': 'MiniMax M2.7',
   'nvidia::mistralai/mistral-large-3-675b-instruct-2512': 'Mistral Large 3',
-  'nvidia::z-ai/glm4.7': 'GLM 4.7',
-  'openrouter::minimax/minimax-m2.5:free': 'MiniMax M2.5 (gratis)',
+  'openrouter::moonshotai/kimi-k2.6:free': 'Kimi K2.6 (gratis)',
   'openrouter::openai/gpt-oss-120b:free': 'GPT-OSS 120B (gratis)',
-  'openrouter::nvidia/nemotron-3-super-120b-a12b:free': 'Nemotron 3 Super 120B (preview)',
-  'openrouter::z-ai/glm-4.5-air:free': 'GLM 4.5 Air (gratis)',
 }
 
 export function publicChatModelPickerLabel(provider: ChatModelProvider, modelId: string): string {
@@ -59,6 +59,7 @@ function inferReasoningTier(
   if (
     candidate.modelId.includes('120b') ||
     candidate.modelId.includes('235b') ||
+    candidate.modelId.includes('550b') ||
     candidate.modelId.includes('675b') ||
     candidate.modelId.includes('k2.6') ||
     candidate.modelId.includes('m2.7') ||
@@ -76,15 +77,18 @@ function inferReasoningTier(
   return 'medium'
 }
 
-function getDeprecationBadgeText(candidate: StructuredModelCandidate): string | undefined {
-  const isCerebrasQwen =
-    candidate.name === 'cerebras' && candidate.modelId === 'qwen-3-235b-a22b-instruct-2507'
-
-  if (!isCerebrasQwen || isCerebrasQwenDeprecated()) {
+function getDeprecation(
+  provider: StructuredLlmProvider,
+  modelId: string,
+): { deprecationDateIso: string; badgeText: string } | undefined {
+  const entry = getModelDeprecation(provider, modelId)
+  if (!entry) {
     return undefined
   }
-
-  return 'Se depreca el 27 may 2026'
+  return {
+    deprecationDateIso: entry.deprecationDateIso,
+    badgeText: entry.badgeText,
+  }
 }
 
 function toOption(
@@ -94,6 +98,7 @@ function toOption(
   enabledForManual: boolean,
   disabledReason?: string,
 ): ChatModelOptionPublic {
+  const deprecation = getDeprecation(candidate.name, candidate.modelId)
   return {
     provider: candidate.name,
     modelId: candidate.modelId,
@@ -105,10 +110,8 @@ function toOption(
     enabledForAuto,
     enabledForManual,
     disabledReason,
-    deprecationDateIso: getDeprecationBadgeText(candidate)
-      ? CEREBRAS_QWEN_DEPRECATION_DATE_ISO
-      : undefined,
-    deprecationBadgeText: getDeprecationBadgeText(candidate),
+    deprecationDateIso: deprecation?.deprecationDateIso,
+    deprecationBadgeText: deprecation?.badgeText,
   }
 }
 
