@@ -42,7 +42,12 @@ const chatStore = useChatStore()
 
 type ModelSelectEntry =
   | { type: 'label'; label: string }
-  | { label: string; value: string; deprecationBadgeText?: string }
+  | {
+      label: string
+      value: string
+      deprecationDateIso?: string
+      deprecationBadgeText?: string
+    }
 
 function compareProviderSections(a: ChatModelProvider, b: ChatModelProvider) {
   const ia = CHAT_MODEL_PROVIDER_SECTION_ORDER.indexOf(a)
@@ -84,6 +89,7 @@ const modelItems = computed((): ModelSelectEntry[][] => {
       ...options.map((o) => ({
         label: o.label,
         value: `${o.provider}::${o.modelId}`,
+        deprecationDateIso: o.deprecationDateIso,
         deprecationBadgeText: o.deprecationBadgeText,
       })),
     ])
@@ -222,14 +228,11 @@ function onKeydown(e: KeyboardEvent) {
             <template #item-label="{ item }">
               <span class="inline-flex min-w-0 items-center gap-1.5">
                 <span class="truncate">{{ item.label }}</span>
-                <span
-                  v-if="'deprecationBadgeText' in item && item.deprecationBadgeText"
-                  class="inline-flex size-4 shrink-0 items-center justify-center rounded-full border border-warning/35 bg-warning/10 text-warning"
-                  :title="item.deprecationBadgeText"
-                  :aria-label="item.deprecationBadgeText"
-                >
-                  <UIcon name="i-lucide-clock-3" class="size-2.5" />
-                </span>
+                <DeprecationBadge
+                  v-if="'deprecationDateIso' in item && item.deprecationDateIso"
+                  :deprecation-date-iso="item.deprecationDateIso"
+                  :badge-text="item.deprecationBadgeText"
+                />
               </span>
             </template>
           </USelect>
