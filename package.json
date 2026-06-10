@@ -82,7 +82,7 @@
     "@nuxt/test-utils": "^4.0.0",
     "@playwright/test": "^1.58.2",
     "@types/bcrypt": "^6.0.0",
-    "@vitest/coverage-v8": "4.0.18",
+    "@vitest/coverage-v8": "^4.1.0",
     "@vue/test-utils": "^2.4.6",
     "cloudflared": "^0.7.1",
     "eslint": "^9.0.0",
@@ -95,7 +95,7 @@
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
-    "vitest": "^4.0.18",
+    "vitest": "^4.1.0",
     "vue-tsc": "^3.1.1"
   }
 }

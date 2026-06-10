@@ -1,4 +1,7 @@
 overrides:
+  shell-quote: 1.8.4
+  js-cookie: 3.0.6
+  devalue: 5.8.1
   simple-git: 3.36.0
   serialize-javascript: 7.0.4
   tar: 7.5.11
@@ -25,21 +28,20 @@ overrides:
   '@xmldom/xmldom': 0.8.13
   'ajv>fast-uri': 3.1.2
 
-ignoredBuiltDependencies:
-  - '@parcel/watcher'
-  - bcrypt
-  - esbuild
-
 onlyBuiltDependencies:
-  - bcrypt
-  - esbuild
   - '@parcel/watcher'
+  - '@sentry/cli'
+  - bcrypt
+  - cloudflared
+  - esbuild
+  - unrs-resolver
+  - vue-demi
 
 allowBuilds:
-  '@parcel/watcher': set this to true or false
-  '@sentry/cli': set this to true or false
-  bcrypt: set this to true or false
-  cloudflared: set this to true or false
-  esbuild: set this to true or false
-  unrs-resolver: set this to true or false
-  vue-demi: set this to true or false
+  '@parcel/watcher': true
+  '@sentry/cli': true
+  bcrypt: true
+  cloudflared: true
+  esbuild: true
+  unrs-resolver: true
+  vue-demi: true
