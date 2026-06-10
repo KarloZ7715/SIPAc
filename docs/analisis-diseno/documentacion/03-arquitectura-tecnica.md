@@ -480,14 +480,14 @@ export function getExperimentalChatModelCandidates() {
 
 | Flujo    | Orden de fallback implementado                                                                                                                                                                     | Observación operativa                                                                              |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-|| **NER**  | Gemini (`gemini-3.1-flash-lite` → `gemini-3-flash-preview` → `gemini-2.5-flash-lite` → `gemini-2.5-flash`) → candidatos NVIDIA → candidatos OpenRouter → candidatos Groq                   | NVIDIA/OpenRouter/Groq entran cuando sus API keys están disponibles                                |
+| **NER**  | Gemini (`gemini-3.1-flash-lite` → `gemini-3-flash-preview` → `gemini-2.5-flash-lite` → `gemini-2.5-flash`) → candidatos NVIDIA → candidatos OpenRouter → candidatos Groq                           | NVIDIA/OpenRouter/Groq entran cuando sus API keys están disponibles                                |
 | **Chat** | `qwen-3-235b-a22b-instruct-2507` (Cerebras) → candidatos NVIDIA (`z-ai/glm4.7`, `deepseek-v3.1-terminus`, `deepseek-v3.2`, `mistral-large-*`, `kimi-k2`) → candidatos Groq → candidatos OpenRouter | Gemini se mantiene fuera del fallback automático; queda disponible como opción manual experimental |
 
 #### Estado actual de modelos LLM (2026-04)
 
 | Proveedor  | Nombre comercial              | Model ID                                 | Uso en SIPAc (fallback)                                        |
 | ---------- | ----------------------------- | ---------------------------------------- | -------------------------------------------------------------- |
-| Google     | Gemini 3.1 Flash Lite Preview | `gemini-3.1-flash-lite`          | Primer candidato NER en cadena actual                          |
+| Google     | Gemini 3.1 Flash Lite Preview | `gemini-3.1-flash-lite`                  | Primer candidato NER en cadena actual                          |
 | Google     | Gemini 3 Flash Preview        | `gemini-3-flash-preview`                 | Segundo candidato NER en cadena actual                         |
 | Google     | Gemini 2.5 Flash-Lite         | `gemini-2.5-flash-lite`                  | Candidato NER en capa Gemini                                   |
 | Google     | Gemini 2.5 Flash              | `gemini-2.5-flash`                       | Candidato NER en capa Gemini; opción manual experimental chat  |
@@ -505,11 +505,11 @@ export function getExperimentalChatModelCandidates() {
 
 ### 5.3 Plan de costos y variables de entorno
 
-| Fase                      | OCR (`OCR_PROVIDER`)   | NER estructurado (orden actual)                                                                                                                 | Chat (`M9`, orden actual)                                                              |
-| ------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Fase                      | OCR (`OCR_PROVIDER`)   | NER estructurado (orden actual)                                                                                                         | Chat (`M9`, orden actual)                                                              |
+| ------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | **Desarrollo / Pasantía** | `gemini` (default)     | Gemini (`gemini-3.1-flash-lite` → `gemini-3-flash-preview` → `gemini-2.5-flash-lite` → `gemini-2.5-flash`) → NVIDIA → OpenRouter → Groq | `qwen-3-235b-a22b-instruct-2507` → NVIDIA → Groq → OpenRouter                          |
-| **Producción inicial**    | `gemini` (default)     | Misma cadena; degradación automática al siguiente candidato ante error de proveedor                                                             | Misma cadena automática; el catálogo manual expone solo modelos habilitados al usuario |
-| **Documentos complejos**  | `mistral` ($0,002/pág) | Sin cambio                                                                                                                                      | Sin cambio                                                                             |
+| **Producción inicial**    | `gemini` (default)     | Misma cadena; degradación automática al siguiente candidato ante error de proveedor                                                     | Misma cadena automática; el catálogo manual expone solo modelos habilitados al usuario |
+| **Documentos complejos**  | `mistral` ($0,002/pág) | Sin cambio                                                                                                                              | Sin cambio                                                                             |
 
 **Lógica de fallback:** El servicio recorre candidatos en orden y usa el primer modelo que responda correctamente. Ante error del candidato activo (rate limit, disponibilidad u otro error de proveedor), reintenta automáticamente con el siguiente.
 
