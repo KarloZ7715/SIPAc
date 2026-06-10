@@ -7,16 +7,14 @@ describe('publicChatModelPickerLabel', () => {
       'Gemini 3.1 Flash Lite (preview)',
     )
     expect(publicChatModelPickerLabel('gemini', 'gemma-4-31b-it')).toBe('Gemma 4 31B (preview)')
-    expect(publicChatModelPickerLabel('cerebras', 'qwen-3-235b-a22b-instruct-2507')).toBe(
-      'Qwen 3 235B Instruct',
-    )
+    expect(publicChatModelPickerLabel('cerebras', 'zai-glm-4.7')).toBe('GLM 4.7 (Cerebras)')
     expect(publicChatModelPickerLabel('nvidia', 'z-ai/glm-5.1')).toBe('GLM 5.1')
     expect(publicChatModelPickerLabel('nvidia', 'deepseek-ai/deepseek-v4-pro')).toBe(
       'DeepSeek V4 Pro',
     )
     expect(publicChatModelPickerLabel('nvidia', 'moonshotai/kimi-k2.6')).toBe('Kimi K2.6')
-    expect(publicChatModelPickerLabel('openrouter', 'nvidia/nemotron-3-super-120b-a12b:free')).toBe(
-      'Nemotron 3 Super 120B (preview)',
+    expect(publicChatModelPickerLabel('openrouter', 'moonshotai/kimi-k2.6:free')).toBe(
+      'Kimi K2.6 (gratis)',
     )
   })
 

@@ -74,10 +74,12 @@ describe('LLM provider candidates', () => {
       'gemini',
       'gemini',
       'gemini',
+      'gemini',
       'groq',
       'groq',
     ])
     expect(structured.map((c) => c.modelId)).toEqual([
+      'gemini-3.5-flash',
       'gemini-3.1-flash-lite',
       'gemini-3-flash-preview',
       'gemini-2.5-flash-lite',
@@ -95,6 +97,7 @@ describe('LLM provider candidates', () => {
     const structured = getStructuredModelCandidates()
     const geminiIds = structured.filter((c) => c.name === 'gemini').map((c) => c.modelId)
     expect(geminiIds).toEqual([
+      'gemini-3.5-flash',
       'gemini-3.1-flash-lite',
       'gemini-3-flash-preview',
       'gemini-2.5-flash-lite',
@@ -118,9 +121,9 @@ describe('LLM provider candidates', () => {
     expect(structured.some((c) => c.name === 'nvidia')).toBe(true)
     expect(structured.some((c) => c.name === 'openrouter')).toBe(true)
     const nvidiaIds = structured.filter((c) => c.name === 'nvidia').map((c) => c.modelId)
-    expect(nvidiaIds[0]).toBe('z-ai/glm4.7')
+    expect(nvidiaIds[0]).toBe('z-ai/glm-5.1')
     const orIds = structured.filter((c) => c.name === 'openrouter').map((c) => c.modelId)
-    expect(orIds).toEqual(['minimax/minimax-m2.5:free', 'openai/gpt-oss-120b:free'])
+    expect(orIds).toEqual(['moonshotai/kimi-k2.6:free', 'openai/gpt-oss-120b:free'])
   })
 
   it('omite Groq en NER si GROQ_API_KEY esta vacia', async () => {
@@ -130,7 +133,7 @@ describe('LLM provider candidates', () => {
 
     const structured = getStructuredModelCandidates()
     expect(structured.every((c) => c.name !== 'groq')).toBe(true)
-    expect(structured).toHaveLength(4)
+    expect(structured).toHaveLength(5)
   })
 
   it('reorderCandidatesForSecondPass prioriza otros modelos antes que el ganador de pasada 1', async () => {
@@ -163,6 +166,7 @@ describe('LLM provider candidates', () => {
 
     const vision = getGoogleVisionModelCandidates()
     expect(vision.map((v) => v.modelId)).toEqual([
+      'gemini-3.5-flash',
       'gemini-3.1-flash-lite',
       'gemini-3-flash-preview',
       'gemini-2.5-flash-lite',
@@ -177,6 +181,7 @@ describe('LLM provider candidates', () => {
 
     const vision = getGoogleVisionModelCandidates()
     expect(vision.map((v) => v.modelId)).toEqual([
+      'gemini-3.5-flash',
       'gemini-3.1-flash-lite',
       'gemini-3-flash-preview',
       'gemini-2.5-flash-lite',
@@ -186,7 +191,7 @@ describe('LLM provider candidates', () => {
     ])
   })
 
-  it('chat: usa una cadena inteligente multi-proveedor con Gemini Flash Lite + Gemma preview', async () => {
+  it('chat: usa una cadena inteligente multi-proveedor con GLM 4.7 + Gemini Flash Lite + Gemma preview', async () => {
     mockValidateEnv.mockReturnValue(baseEnv)
 
     const { getChatModelCandidates } = await import('../../../server/services/llm/provider')
@@ -194,7 +199,7 @@ describe('LLM provider candidates', () => {
     const chat = getChatModelCandidates()
     expect(chat.map((candidate) => candidate.name)).toEqual(['cerebras', 'gemini', 'gemini'])
     expect(chat.map((candidate) => candidate.modelId)).toEqual([
-      'qwen-3-235b-a22b-instruct-2507',
+      'zai-glm-4.7',
       'gemini-3.1-flash-lite',
       'gemma-4-31b-it',
     ])
@@ -215,28 +220,27 @@ describe('LLM provider candidates', () => {
     expect(chat.some((candidate) => candidate.name === 'cerebras')).toBe(true)
   })
 
-  it('chat: excluye Qwen de Cerebras al llegar la fecha de deprecación', async () => {
-    vi.setSystemTime(new Date('2026-05-27T00:00:00.000Z'))
+  it('chat: incluye GLM 4.7 de Cerebras cuando no está deprecado', async () => {
     mockValidateEnv.mockReturnValue(baseEnv)
 
-    const { getChatModelCandidates, getExperimentalChatModelCandidates } =
+    const { getChatModelCandidates, getExperimentalChatModelCandidates, isModelDeprecated } =
       await import('../../../server/services/llm/provider')
+
+    expect(isModelDeprecated('cerebras', 'zai-glm-4.7')).toBe(false)
 
     const defaultChain = getChatModelCandidates()
     const manual = getExperimentalChatModelCandidates()
 
     expect(
       defaultChain.some(
-        (candidate) =>
-          candidate.name === 'cerebras' && candidate.modelId === 'qwen-3-235b-a22b-instruct-2507',
+        (candidate) => candidate.name === 'cerebras' && candidate.modelId === 'zai-glm-4.7',
       ),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       manual.some(
-        (candidate) =>
-          candidate.name === 'cerebras' && candidate.modelId === 'qwen-3-235b-a22b-instruct-2507',
+        (candidate) => candidate.name === 'cerebras' && candidate.modelId === 'zai-glm-4.7',
       ),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('chat experimental: expone proveedores adicionales cuando hay credenciales y omite Groq', async () => {

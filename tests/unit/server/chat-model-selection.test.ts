@@ -1,3 +1,4 @@
+import type * as LlmProvider from '~~/server/services/llm/provider'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getChatModelCandidatesMock, getExperimentalChatModelCandidatesMock } = vi.hoisted(() => ({
@@ -5,12 +6,14 @@ const { getChatModelCandidatesMock, getExperimentalChatModelCandidatesMock } = v
   getExperimentalChatModelCandidatesMock: vi.fn(),
 }))
 
-vi.mock('~~/server/services/llm/provider', () => ({
-  CEREBRAS_QWEN_DEPRECATION_DATE_ISO: '2026-05-27T00:00:00.000Z',
-  isCerebrasQwenDeprecated: vi.fn(() => false),
-  getChatModelCandidates: getChatModelCandidatesMock,
-  getExperimentalChatModelCandidates: getExperimentalChatModelCandidatesMock,
-}))
+vi.mock('~~/server/services/llm/provider', async (importOriginal) => {
+  const actual = await importOriginal<typeof LlmProvider>()
+  return {
+    ...actual,
+    getChatModelCandidates: getChatModelCandidatesMock,
+    getExperimentalChatModelCandidates: getExperimentalChatModelCandidatesMock,
+  }
+})
 
 describe('chat model selection', () => {
   beforeEach(() => {
@@ -24,9 +27,9 @@ describe('chat model selection', () => {
     vi.useRealTimers()
   })
 
-  it('incluye Qwen con badge de deprecación en opciones manuales antes de su fecha límite', async () => {
+  it('incluye GLM 4.7 de Cerebras en opciones manuales sin badge de deprecación', async () => {
     getExperimentalChatModelCandidatesMock.mockReturnValue([
-      { name: 'cerebras', modelId: 'qwen-3-235b-a22b-instruct-2507', model: {} },
+      { name: 'cerebras', modelId: 'zai-glm-4.7', model: {} },
       { name: 'nvidia', modelId: 'z-ai/glm-5.1', model: {} },
     ])
 
@@ -34,15 +37,42 @@ describe('chat model selection', () => {
       await import('../../../server/services/chat/model-selection')
 
     const manual = getManualChatModelOptions()
-    const qwen = manual.find(
-      (option) =>
-        option.provider === 'cerebras' && option.modelId === 'qwen-3-235b-a22b-instruct-2507',
+    const glm = manual.find(
+      (option) => option.provider === 'cerebras' && option.modelId === 'zai-glm-4.7',
     )
 
-    expect(qwen?.deprecationBadgeText).toBe('Se depreca el 27 may 2026')
-    expect(qwen?.deprecationDateIso).toBe('2026-05-27T00:00:00.000Z')
+    expect(glm?.label).toBe('GLM 4.7 (Cerebras)')
+    expect(glm?.deprecationBadgeText).toBeUndefined()
+    expect(glm?.deprecationDateIso).toBeUndefined()
     expect(manual.map((option) => option.provider)).toEqual(['cerebras', 'nvidia'])
     expect(getDisabledChatModelOptions()).toEqual([])
+  })
+
+  it('muestra badge de deprecación cuando getModelDeprecation devuelve una entrada', async () => {
+    getExperimentalChatModelCandidatesMock.mockReturnValue([
+      { name: 'cerebras', modelId: 'zai-glm-4.7', model: {} },
+    ])
+
+    const provider = await import('../../../server/services/llm/provider')
+    const deprecationSpy = vi.spyOn(provider, 'getModelDeprecation').mockReturnValue({
+      provider: 'cerebras',
+      modelId: 'zai-glm-4.7',
+      deprecationDateIso: '2026-05-27T00:00:00.000Z',
+      badgeText: 'Se depreca el 27 may 2026',
+    })
+
+    const { getManualChatModelOptions } =
+      await import('../../../server/services/chat/model-selection')
+
+    const manual = getManualChatModelOptions()
+    const glm = manual.find(
+      (option) => option.provider === 'cerebras' && option.modelId === 'zai-glm-4.7',
+    )
+
+    expect(glm?.deprecationBadgeText).toBe('Se depreca el 27 may 2026')
+    expect(glm?.deprecationDateIso).toBe('2026-05-27T00:00:00.000Z')
+
+    deprecationSpy.mockRestore()
   })
 
   it('permite seleccionar manualmente un modelo NVIDIA nuevo cuando está habilitado', async () => {
