@@ -6,12 +6,15 @@ overrides:
   serialize-javascript: 7.0.4
   tar: 7.5.11
   flatted: 3.4.2
+  esbuild: '>=0.28.1'
+  ws: '>=8.21.0'
+  vite: '>=7.3.5'
   'h3@^1.15.0': 1.15.9
   'h3@>=2.0.0-0 <2.0.1-rc.23': 2.0.1-rc.22
   'h3@2.0.1-rc.11': 2.0.1-rc.22
   '@nuxt/test-utils>h3-next': 'npm:h3@2.0.1-rc.22'
   svgo: 4.0.1
-  'vitest>vite': 7.3.2
+  'vitest>vite': 7.3.5
   'h3>defu': 6.1.5
   '@nuxt/ui>defu': 6.1.5
   'nuxt-security>defu': 6.1.5
