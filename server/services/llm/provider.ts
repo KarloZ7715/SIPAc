@@ -38,6 +38,7 @@ const NVIDIA_MODEL_IDS_ORDERED = [
   'nvidia/nemotron-3-ultra-550b-a55b',
   'moonshotai/kimi-k2.6',
   'minimaxai/minimax-m2.7',
+  'minimaxai/minimax-m3',
   'mistralai/mistral-large-3-675b-instruct-2512',
 ] as const
 

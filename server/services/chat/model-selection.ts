@@ -27,6 +27,7 @@ const CHAT_MODEL_PICKER_LABELS: Record<string, string> = {
   'nvidia::nvidia/nemotron-3-ultra-550b-a55b': 'Nemotron 3 Ultra 550B',
   'nvidia::moonshotai/kimi-k2.6': 'Kimi K2.6',
   'nvidia::minimaxai/minimax-m2.7': 'MiniMax M2.7',
+  'nvidia::minimaxai/minimax-m3': 'MiniMax M3',
   'nvidia::mistralai/mistral-large-3-675b-instruct-2512': 'Mistral Large 3',
   'openrouter::moonshotai/kimi-k2.6:free': 'Kimi K2.6 (gratis)',
   'openrouter::openai/gpt-oss-120b:free': 'GPT-OSS 120B (gratis)',
@@ -63,6 +64,7 @@ function inferReasoningTier(
     candidate.modelId.includes('675b') ||
     candidate.modelId.includes('k2.6') ||
     candidate.modelId.includes('m2.7') ||
+    candidate.modelId.includes('m3') ||
     candidate.modelId.includes('glm4.7') ||
     candidate.modelId.includes('glm-5.1') ||
     candidate.modelId.includes('deepseek-v4')
